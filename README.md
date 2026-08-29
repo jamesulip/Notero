@@ -4,9 +4,15 @@ Private, local, real-time Tagalog/Taglish transcription. Audio never leaves the
 machine. See [docs/PLAN.md](docs/PLAN.md) for the full build plan and
 [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) for verified machine facts.
 
-**Status: Phase 1 (vertical slice).** Fixed 5 s chunks, no VAD, no overlap, no
-commit policy. The point of this phase is to measure the real-time factor, not
-to transcribe well.
+**Status: Phase 1 complete.** Fixed 5 s chunks, no VAD, no overlap, no commit
+policy — the point of this phase was to measure the real-time factor, not to
+transcribe well. Audio streams end to end and words come back.
+
+Measured RTF: **0.059** at a 15 s window, **0.103** at 5 s chunks.
+
+Phase 1 turned up three things that change the plan — a model-ID trap, silent
+decode drops, and a concurrency ceiling well below section 7's cap of 3. Read
+[docs/FINDINGS.md](docs/FINDINGS.md) before starting Phase 2.
 
 ## Layout
 
