@@ -81,7 +81,12 @@ async def main() -> None:
             if len(audio) < need:
                 print(f"{window_ms/1000:>7.1f}s  (audio shorter than window, skipped)")
                 continue
-            pcm = audio[:need]
+            # Take the window from the middle, not the head. A file's first
+            # moments are atypical -- recordings open with room tone, and
+            # synthetic audio opens mid-phoneme -- and either way the first
+            # window is not representative of what a live hop sees.
+            offset = ((len(audio) - need) // 2) & ~1  # keep sample alignment
+            pcm = audio[offset:offset + need]
         else:
             pcm = synthetic(window_ms)
 
