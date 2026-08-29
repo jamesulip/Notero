@@ -1,0 +1,17 @@
+# python
+.venv/
+__pycache__/
+*.pyc
+# node
+node_modules/
+dist/
+# data — never commit audio or transcripts
+data/
+*.wav
+*.sqlite
+*.db
+eval/audio/*
+!eval/audio/.gitkeep
+# models
+models/
+.build/
