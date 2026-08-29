@@ -136,6 +136,53 @@ First model load compiles CoreML for the ANE and took **284 s**. Subsequent
 loads hit the cache at **9-11 s**. Worth knowing before assuming a restart is
 cheap.
 
+## 5. Phase 2: the commit policy stalls permanently if the window slides
+
+LocalAgreement compares the *prefixes* of consecutive hypotheses. That only
+works while consecutive windows start at the same point in the audio. The first
+build slid the ring buffer freely, so each pass began a second or two later than
+the last, their first words described different audio, the agreed prefix was
+empty, and nothing committed -- ever. The provisional tail grew to 200+
+characters while `committed=+0` repeated on every hop.
+
+It is not a degraded mode that recovers. Once the window passes the committed
+point the misalignment is self-sustaining.
+
+Two changes fix it:
+
+1. `RingBuffer.trim_to()` anchors the window to the last commit, so passes share
+   an origin.
+2. `LocalAgreement.force_commit_before()` handles the case where the buffer hits
+   its cap anyway. Audio about to be discarded is committed unagreed, which
+   trades the agreement guarantee for liveness on that span and keeps the window
+   anchored. It is counted as `forced_commits`; a high rate means the window and
+   hop are mistuned, not that the audio was hard.
+
+## 6. Phase 2 exit criterion: met, at a 1.5 s hop rather than 1.0 s
+
+Replaying the fixture through the real streaming path and scoring it against a
+whole-clip offline call on the same model:
+
+| Hop | Hops dropped | Forced commits | Live WER | Gap vs offline |
+|---|---:|---:|---:|---:|
+| 1.0 s (section 7) | 23 / 34 (68%) | 5 | 41.4% | **+14.1** |
+| **1.5 s** | 5 / 33 (15%) | 10 | **28.9%** | **+1.6** |
+| 2.0 s | 0 / 28 (0%) | 15 | 45.3% | +18.0 |
+
+Offline on the same clip: 27.3%.
+
+At 1.0 s the hop is shorter than the ~0.9 s a 15 s window costs, so two thirds
+of hops are dropped and "consecutive" passes are anything but -- finding 4's
+throughput ceiling showing up as an accuracy problem rather than a latency one.
+
+At 2.0 s nothing is dropped and it is *worse*: 29 deletions against 9 at 1.5 s.
+The buffer outruns agreement, so commits get forced instead of agreed, and
+forced commits take whatever the newest pass said. There is a sweet spot, and
+1.0 s and 2.0 s sit on opposite sides of it for opposite reasons.
+
+**`hop_ms` now defaults to 1500.** Re-derive it on real audio -- the mechanism
+is real but the optimum depends on the material.
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a
@@ -143,7 +190,22 @@ Taglish script — close in phonology, wrong in acoustics. It also begins at ful
 amplitude at sample 0 with no lead-in, which is not how real recordings behave
 and which is partly why the first window is unusually hostile.
 
-So: findings 1 and 2 are structural and hold regardless of audio. Finding 3
-matches the plan's own prediction and is very likely real, but the *specific*
-threshold and fallback values must be tuned against your own eval set before
-they mean anything. That is Phase 2 work and it needs `eval/audio/` populated.
+So: findings 1, 2, 4 and 5 are structural and hold regardless of audio. Finding
+3 matches the plan's own prediction and is very likely real.
+
+Finding 6 needs the most care. The 27.3% offline WER is the fixture's fault, not
+the model's -- an Indonesian voice reading Taglish is not what the model was
+measured on. The *gap* between live and offline is the meaningful number, and
+the mechanism behind the curve (too fast drops hops, too slow forces commits)
+is real. But the specific optimum, and the decode threshold values in finding 2,
+must be re-derived against your own recordings.
+
+`eval/replay.py` and `eval/score.py` do exactly that once `eval/audio/` and
+`eval/manifest.json` point at real clips:
+
+```
+./.venv/bin/python eval/replay.py --out /tmp/off --offline
+./.venv/bin/python eval/replay.py --out /tmp/live --hop 1500
+./.venv/bin/python eval/score.py /tmp/off  --label offline
+./.venv/bin/python eval/score.py /tmp/live --label live
+```

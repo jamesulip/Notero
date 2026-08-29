@@ -4,15 +4,18 @@ Private, local, real-time Tagalog/Taglish transcription. Audio never leaves the
 machine. See [docs/PLAN.md](docs/PLAN.md) for the full build plan and
 [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) for verified machine facts.
 
-**Status: Phase 1 complete.** Fixed 5 s chunks, no VAD, no overlap, no commit
-policy — the point of this phase was to measure the real-time factor, not to
-transcribe well. Audio streams end to end and words come back.
+**Status: Phase 2 complete.** Rolling 15 s context on a 1.5 s hop, Silero VAD
+gating and boundary detection, LocalAgreement-2 commit, partial/final split.
+Committed text never changes.
 
-Measured RTF: **0.059** at a 15 s window, **0.103** at 5 s chunks.
+Live WER lands **1.6 points** above the whole-clip offline ceiling on the
+synthetic fixture — inside the ±5 target — but that has to be re-derived on real
+recordings before it means anything.
 
-Phase 1 turned up three things that change the plan — a model-ID trap, silent
-decode drops, and a concurrency ceiling well below section 7's cap of 3. Read
-[docs/FINDINGS.md](docs/FINDINGS.md) before starting Phase 2.
+Six findings so far change the plan: a model-ID trap, silently dropped decode
+windows, a concurrency ceiling well below section 7's cap of 3, and a hop
+interval of 1.5 s rather than 1.0 s. Read
+[docs/FINDINGS.md](docs/FINDINGS.md).
 
 ## Layout
 
@@ -58,6 +61,15 @@ weights into `models/`.
 
 Microphone capture needs a secure context. `localhost` is fine; testing from a
 phone will fail silently until TLS lands in Phase 3.
+
+## Evaluate
+
+Populate `eval/audio/` and `eval/manifest.json`, then compare the live path
+against a whole-clip offline call on the same model:
+
+```bash
+./.venv/bin/python eval/replay.py --out /tmp/off --offline && ./.venv/bin/python eval/replay.py --out /tmp/live && ./.venv/bin/python eval/score.py /tmp/off --label offline && ./.venv/bin/python eval/score.py /tmp/live --label live
+```
 
 ## Measure
 

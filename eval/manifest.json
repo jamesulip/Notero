@@ -1,0 +1,8 @@
+[
+  {
+    "id": "synthetic-taglish",
+    "audio": "audio/synthetic-taglish.wav",
+    "ref": "synthetic-taglish.txt",
+    "category": "mixed"
+  }
+]
