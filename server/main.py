@@ -166,6 +166,15 @@ async def _transcribe_chunk(ws: WebSocket, send, session: Session,
     )
 
     text = result.text
+    if not text:
+        # Never let a dropped window pass silently. WhisperKit returns an empty
+        # result when a decode threshold trips, which in a live stream is
+        # indistinguishable from silence unless it is said out loud.
+        log.warning(
+            "chunk %d returned no text (%d ms of audio, %d ms inference) -- "
+            "decode threshold likely tripped",
+            session.chunks, audio_ms, result.infer_ms,
+        )
     if text:
         await send({
             "type": "final",

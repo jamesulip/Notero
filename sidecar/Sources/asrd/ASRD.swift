@@ -81,6 +81,15 @@ struct ASRD {
         let model = argument("model", default: "openai_whisper-large-v3-v20240930_turbo")!
         let language = argument("language", default: "tl")!
         let downloadBase = argument("download-base")
+        let verbose = CommandLine.arguments.contains("--verbose")
+
+        if verbose {
+            // Route WhisperKit's own diagnostics to stderr; stdout is protocol-only.
+            Logging.shared.loggingCallback = { message in
+                FileHandle.standardError.write(Data("[whisperkit] \(message)\n".utf8))
+            }
+            Logging.shared.logLevel = .debug
+        }
 
         note("loading model \(model) (language=\(language))")
         let loadStarted = Date()
@@ -90,7 +99,8 @@ struct ASRD {
             let config = WhisperKitConfig(
                 model: model,
                 downloadBase: downloadBase.map { URL(fileURLWithPath: $0) },
-                verbose: false,
+                verbose: verbose,
+                logLevel: verbose ? .debug : .none,
                 prewarm: true,
                 load: true,
                 download: true
@@ -110,16 +120,37 @@ struct ASRD {
         // language, and no conditioning on previous text (promptTokens left nil)
         // because it risks hallucination loops when streaming.
         var options = DecodingOptions()
-        options.verbose = false
+        options.verbose = verbose
         options.task = .transcribe
         options.language = language
         options.detectLanguage = false
         options.temperature = 0.0
-        options.temperatureFallbackCount = 0
-        options.usePrefillPrompt = true
+        // Section 7 asks for temperature 0 with the fallback ladder reserved for
+        // offline cleanup. Taken literally (fallbackCount 0) that is a silent
+        // data-loss bug: WhisperKit's firstTokenLogProbThreshold discards any
+        // window whose first token looks improbable, and with no fallback left
+        // the whole window returns empty rather than being retried. Removing the
+        // threshold instead is worse -- it lets repetition loops through. So keep
+        // the quality gates and give them somewhere to fall back to.
+        options.temperatureFallbackCount = Int(argument("fallbacks", default: "2")!) ?? 2
+        options.temperatureIncrementOnFallback = 0.2
+        options.usePrefillPrompt = !CommandLine.arguments.contains("--no-prefill")
         options.skipSpecialTokens = true
-        options.withoutTimestamps = false
-        options.wordTimestamps = true
+        options.withoutTimestamps = CommandLine.arguments.contains("--without-timestamps")
+        options.wordTimestamps = !CommandLine.arguments.contains("--no-word-timestamps")
+        let args = CommandLine.arguments
+        if args.contains("--no-thresholds") || args.contains("--no-nospeech") {
+            options.noSpeechThreshold = nil
+        }
+        if args.contains("--no-thresholds") || args.contains("--no-logprob") {
+            options.logProbThreshold = nil
+        }
+        if args.contains("--no-thresholds") || args.contains("--no-firsttoken") {
+            options.firstTokenLogProbThreshold = nil
+        }
+        if args.contains("--no-thresholds") || args.contains("--no-compression") {
+            options.compressionRatioThreshold = nil
+        }
         options.chunkingStrategy = nil
 
         var sequence = 0

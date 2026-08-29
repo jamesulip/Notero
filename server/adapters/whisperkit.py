@@ -38,11 +38,20 @@ class WhisperKitAdapter(ASRAdapter):
         language: str = "tl",
         binary: Path = SIDECAR_BIN,
         models_dir: Path = MODELS_DIR,
+        fallbacks: int = 2,
+        extra_args: list[str] | None = None,
     ) -> None:
         self.model = model
         self.language = language
         self.binary = binary
         self.models_dir = models_dir
+        # Section 7 says temperature 0 with no fallback ladder. Taken literally
+        # that is silent data loss: WhisperKit discards any window whose first
+        # token looks improbable, and with nothing to fall back to the window
+        # returns empty rather than being retried. Sliding windows start
+        # mid-word every hop, so this fires often. See docs/FINDINGS.md.
+        self.fallbacks = fallbacks
+        self.extra_args = extra_args or []
         self._proc: asyncio.subprocess.Process | None = None
         self._lock = asyncio.Lock()
         self._stderr_task: asyncio.Task | None = None
@@ -66,6 +75,8 @@ class WhisperKitAdapter(ASRAdapter):
             "--model", self.model,
             "--language", self.language,
             "--download-base", str(self.models_dir),
+            "--fallbacks", str(self.fallbacks),
+            *self.extra_args,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
