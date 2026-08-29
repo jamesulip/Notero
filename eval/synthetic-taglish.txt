@@ -1,0 +1,9 @@
+Kumusta kayong lahat, welcome sa meeting natin ngayong umaga. Bago tayo magsimula,
+gusto ko lang i-confirm kung kumpleto na ang attendance. Okay, mukhang nandito na
+lahat. So ang agenda natin today ay tatlong bagay lang. Una, yung update sa project
+timeline. Pangalawa, ang budget review para sa next quarter. At panghuli, yung mga
+concerns na na-raise last week tungkol sa deployment. Sige, let us start with the
+timeline. Base sa report ni Maria, medyo delayed tayo ng one week pero manageable pa
+naman. Ang problema kasi, hindi pa tapos yung testing sa staging environment. Kailangan
+natin i-prioritize yun this week para hindi tayo ma-block sa release. May tanong ba
+kayo bago tayo mag-move on sa budget? Wala? Okay, sige, next topic na tayo.
