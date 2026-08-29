@@ -1,0 +1,182 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Live Transcriber — Phase 1</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #16181d; --muted: #7c8494;
+    --line: #e3e6eb; --accent: #2f6feb; --bad: #c0392b; --panel: #f6f7f9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14161a; --fg: #e8eaee; --muted: #8b93a3;
+            --line: #2a2e36; --accent: #6ea8fe; --bad: #ff6b6b; --panel: #1b1e24; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.6 ui-sans-serif, -apple-system, system-ui, sans-serif; }
+  header { display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+           padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 auto 0 0; }
+  button { font: inherit; padding: 7px 14px; border-radius: 7px;
+           border: 1px solid var(--line); background: var(--panel);
+           color: var(--fg); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .45; cursor: default; }
+  #meter { width: 110px; height: 7px; border-radius: 4px; background: var(--panel);
+           overflow: hidden; border: 1px solid var(--line); }
+  #meter > i { display: block; height: 100%; width: 0%; background: var(--accent);
+               transition: width .06s linear; }
+  #state { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+  main { padding: 20px 18px 80px; max-width: 760px; margin: 0 auto; font-size: 17px; }
+  /* Section 8 design contract: muted text may change, foreground text never will. */
+  #finals span { }
+  #partial { color: var(--muted); }
+  #stats { position: fixed; bottom: 0; left: 0; right: 0; padding: 9px 18px;
+           border-top: 1px solid var(--line); background: var(--panel);
+           color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums;
+           display: flex; gap: 18px; flex-wrap: wrap; }
+  .err { color: var(--bad); }
+</style>
+
+<header>
+  <h1>Live Transcriber <span style="color:var(--muted);font-weight:400">Phase 1</span></h1>
+  <div id="meter" title="mic level"><i></i></div>
+  <span id="state">idle</span>
+  <button id="mute" disabled>Mute</button>
+  <button id="go" class="primary">Start</button>
+</header>
+
+<main><div id="finals"></div><span id="partial"></span></main>
+
+<div id="stats">
+  <span>chunks <b id="s-chunks">0</b></span>
+  <span>audio <b id="s-audio">0.0</b>s</span>
+  <span>last RTF <b id="s-rtf">—</b></span>
+  <span>mean RTF <b id="s-mean">—</b></span>
+  <span>capture <b id="s-rate">—</b></span>
+  <span id="s-msg"></span>
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const goBtn = $('go'), muteBtn = $('mute');
+
+let ws = null, ctx = null, node = null, stream = null;
+let running = false, muted = false;
+let chunks = 0, audioMs = 0, inferMs = 0;
+
+function setState(text, bad = false) {
+  $('state').textContent = text;
+  $('state').className = bad ? 'err' : '';
+}
+function msg(text, bad = false) {
+  $('s-msg').textContent = text;
+  $('s-msg').className = bad ? 'err' : '';
+}
+
+async function start() {
+  // Section 8: getUserMedia is undefined on plain HTTP from anything but
+  // localhost. Say so plainly instead of failing silently on a phone.
+  if (!navigator.mediaDevices?.getUserMedia) {
+    msg(window.isSecureContext
+      ? 'This browser exposes no microphone API.'
+      : 'Microphone needs HTTPS (or localhost). Phase 3 adds TLS via Tailscale.', true);
+    return;
+  }
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true,
+               noiseSuppression: true, autoGainControl: true },
+    });
+  } catch (err) {
+    msg('Microphone blocked: ' + err.name, true);
+    return;
+  }
+
+  // Ask for 16 kHz, but never assume we got it -- the worklet resamples.
+  ctx = new AudioContext({ sampleRate: 16000 });
+  await ctx.resume();
+  $('s-rate').textContent = ctx.sampleRate + ' Hz' +
+    (ctx.sampleRate === 16000 ? '' : ' → 16000');
+
+  await ctx.audioWorklet.addModule('/static/pcm-worklet.js');
+
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+  await new Promise((res, rej) => {
+    ws.onopen = res;
+    ws.onerror = () => rej(new Error('websocket failed'));
+  });
+  ws.onmessage = onServerMessage;
+  ws.onclose = () => { if (running) { setState('disconnected', true); stop(); } };
+  ws.send(JSON.stringify({ type: 'start', language: 'tl' }));
+
+  node = new AudioWorkletNode(ctx, 'pcm-worklet');
+  node.port.onmessage = ({ data }) => {
+    $('meter').firstElementChild.style.width =
+      Math.min(100, Math.round(data.peak * 140)) + '%';
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(data.pcm);
+  };
+  ctx.createMediaStreamSource(stream).connect(node);
+  // Keep the graph pulling without routing mic audio back to the speakers.
+  node.connect(ctx.createGain()).connect(ctx.destination);
+
+  running = true;
+  goBtn.textContent = 'Stop';
+  muteBtn.disabled = false;
+  msg('');
+}
+
+function onServerMessage({ data }) {
+  const m = JSON.parse(data);
+  if (m.type === 'status') {
+    setState(m.state);
+  } else if (m.type === 'final') {
+    // Append-only. Once here, this text is permanent.
+    const el = document.createElement('span');
+    el.textContent = m.segment.text + ' ';
+    $('finals').appendChild(el);
+    $('partial').textContent = '';
+    if (m.timing) {
+      chunks += 1;
+      audioMs += m.timing.audio_ms;
+      inferMs += m.timing.infer_ms;
+      $('s-chunks').textContent = chunks;
+      $('s-audio').textContent = (audioMs / 1000).toFixed(1);
+      $('s-rtf').textContent = m.timing.rtf.toFixed(3);
+      $('s-mean').textContent = (inferMs / audioMs).toFixed(3);
+    }
+    window.scrollTo(0, document.body.scrollHeight);
+  } else if (m.type === 'partial') {
+    // Provisional -- Phase 2 starts sending these.
+    $('partial').textContent = m.text;
+  } else if (m.type === 'error') {
+    msg(`${m.code}: ${m.message}`, true);
+  }
+}
+
+async function stop() {
+  running = false;
+  goBtn.textContent = 'Start';
+  muteBtn.disabled = true;
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'stop' }));
+  }
+  node?.disconnect();
+  stream?.getTracks().forEach((t) => t.stop());
+  await ctx?.close();
+  setTimeout(() => ws?.close(), 500);
+  ws = null; ctx = null; node = null; stream = null;
+  $('meter').firstElementChild.style.width = '0%';
+  setState('idle');
+}
+
+goBtn.onclick = () => (running ? stop() : start().catch((e) => msg(e.message, true)));
+muteBtn.onclick = () => {
+  muted = !muted;
+  muteBtn.textContent = muted ? 'Unmute' : 'Mute';
+  node?.port.postMessage({ type: 'mute', value: muted });
+};
+</script>
