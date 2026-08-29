@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>Live Transcriber — Phase 1</title>
+<title>Live Transcriber — Phase 2</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
@@ -40,7 +40,7 @@
 </style>
 
 <header>
-  <h1>Live Transcriber <span style="color:var(--muted);font-weight:400">Phase 1</span></h1>
+  <h1>Live Transcriber <span style="color:var(--muted);font-weight:400">Phase 2</span></h1>
   <div id="meter" title="mic level"><i></i></div>
   <span id="state">idle</span>
   <button id="mute" disabled>Mute</button>
@@ -50,10 +50,10 @@
 <main><div id="finals"></div><span id="partial"></span></main>
 
 <div id="stats">
-  <span>chunks <b id="s-chunks">0</b></span>
+  <span>segments <b id="s-chunks">0</b></span>
   <span>audio <b id="s-audio">0.0</b>s</span>
-  <span>last RTF <b id="s-rtf">—</b></span>
-  <span>mean RTF <b id="s-mean">—</b></span>
+  <span>committed to <b id="s-rtf">—</b></span>
+  <span>state <b id="s-mean">—</b></span>
   <span>capture <b id="s-rate">—</b></span>
   <span id="s-msg"></span>
 </div>
@@ -64,7 +64,7 @@ const goBtn = $('go'), muteBtn = $('mute');
 
 let ws = null, ctx = null, node = null, stream = null;
 let running = false, muted = false;
-let chunks = 0, audioMs = 0, inferMs = 0;
+let chunks = 0, audioMs = 0, sentBytes = 0;
 
 function setState(text, bad = false) {
   $('state').textContent = text;
@@ -117,7 +117,11 @@ async function start() {
   node.port.onmessage = ({ data }) => {
     $('meter').firstElementChild.style.width =
       Math.min(100, Math.round(data.peak * 140)) + '%';
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(data.pcm);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(data.pcm);
+      sentBytes += data.pcm.byteLength;
+      $('s-audio').textContent = (sentBytes / 32000).toFixed(1);
+    }
   };
   ctx.createMediaStreamSource(stream).connect(node);
   // Keep the graph pulling without routing mic audio back to the speakers.
@@ -133,21 +137,15 @@ function onServerMessage({ data }) {
   const m = JSON.parse(data);
   if (m.type === 'status') {
     setState(m.state);
+    $('s-mean').textContent = m.state;
   } else if (m.type === 'final') {
     // Append-only. Once here, this text is permanent.
     const el = document.createElement('span');
     el.textContent = m.segment.text + ' ';
     $('finals').appendChild(el);
-    $('partial').textContent = '';
-    if (m.timing) {
-      chunks += 1;
-      audioMs += m.timing.audio_ms;
-      inferMs += m.timing.infer_ms;
-      $('s-chunks').textContent = chunks;
-      $('s-audio').textContent = (audioMs / 1000).toFixed(1);
-      $('s-rtf').textContent = m.timing.rtf.toFixed(3);
-      $('s-mean').textContent = (inferMs / audioMs).toFixed(3);
-    }
+    chunks += 1;
+    $('s-chunks').textContent = chunks;
+    $('s-rtf').textContent = (m.segment.end_ms / 1000).toFixed(1) + 's';
     window.scrollTo(0, document.body.scrollHeight);
   } else if (m.type === 'partial') {
     // Provisional -- Phase 2 starts sending these.
