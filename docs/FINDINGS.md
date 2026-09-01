@@ -183,6 +183,170 @@ forced commits take whatever the newest pass said. There is a sweet spot, and
 **`hop_ms` now defaults to 1500.** Re-derive it on real audio -- the mechanism
 is real but the optimum depends on the material.
 
+## 7. Phase 3 concurrency: partials hold up, commits do not
+
+Four simulated clients streaming the same 30 s clip at real-time pace:
+
+| Streams | Commits per stream | Partial p50 | Partial p90 | Final p50 |
+|---:|---:|---:|---:|---:|
+| 1 | 8.0 | 0.26 s | 0.55 s | 13.8 s |
+| 2 | 6.5 | 0.28 s | 0.50 s | 15.5 s |
+| 3 | 6.3 | 0.35 s | 0.54 s | 15.5 s |
+| 4 | 5.2 | 0.34 s | 0.51 s | 15.5 s |
+
+**Partial latency barely moves** -- 0.26 s to 0.35 s from one stream to four,
+comfortably inside section 14's 1-1.5 s target. The muted-text experience
+survives four concurrent streams on this machine.
+
+**Commits per stream fall by a third.** That is where the throughput ceiling
+lands: the same audio yields fewer agreed commits because more hops are dropped.
+Text still appears promptly; it just takes longer to settle. Peak scheduler
+queue wait was 5.6 s at four streams.
+
+Final latency of ~15 s is not a concurrency effect -- it is flat across all four
+counts. It is the commit policy riding the 15 s window cap on audio the model
+finds unstable, and it should fall on real recordings where agreement fires more
+often. Watch `forced_commits`; if it stays high on real audio, that number is
+the thing to fix, not the hop.
+
+Note `dropped_superseded` stayed at 0: each pipeline's own in-flight guard drops
+hops before they reach the scheduler, so the scheduler's supersession is a
+second line of defence that never fired in this configuration.
+
+## 8. Phase 5: the cleanup model invents, and similarity alone does not catch it
+
+A 3B local model asked to tidy Taglish drops and replaces words while looking
+almost unchanged by any character-level measure. Four real examples, with their
+similarity scores:
+
+| Raw | Rewrite | Similarity |
+|---|---|---:|
+| tatlong **bagailangan**. Una, yung update | Tatlong **bagay ang karanasan**. Una, yung update | 0.88 |
+| i priority **zayun** this week | i priority, this week | 0.96 |
+| Nga **nares** last week | Nga, last week | 0.92 |
+| Confirm kung kumple **tona** | Confirm kung kumple | 0.94 |
+
+Every one passed a 0.85 similarity threshold. Losing one word from a
+150-character segment moves the score by a few percent while changing what the
+sentence says, so a second guard checks that no raw word of four or more
+characters vanished entirely from the rewrite. Splits and merges still pass,
+because the comparison ignores spacing.
+
+With both guards on the fixture: 17 segments attempted, 11 accepted, **6
+rejected for dropped words**, 0 for drift or length. What survives is
+conservative -- "lah at" to "lahat", casing, punctuation, "yun MGA" to "yun mga"
+-- because anything more ambitious gets rejected.
+
+So the *invented nothing* half of section 10's exit criterion is enforced, and
+the *obviously more readable* half is only partly met. The model is the limit,
+not the mechanism. A larger local model is the obvious next thing to try, and
+`CleanupEngine(model=...)` takes any MLX model id.
+
+One related bug worth knowing about: cleanup has to be idempotent. Writing only
+the accepted rewrites left segments holding stale cleaned text from an earlier,
+looser run -- precisely the ones that mattered, since the reason to tighten the
+guards is that the old output was wrong. A rejected segment now clears its
+stored value.
+
+## 9. Phase 6 (native app): the fallback ladder does not save the offline path
+
+Finding 2 established that `firstTokenLogProbThreshold` turns a rejected window
+into empty text with no error, and that a fallback ladder is what stops it
+being silent data loss. Building the whole-file path in the native app showed
+the ladder is necessary but **not sufficient**, and the offline case fails in a
+way the live case does not.
+
+Whole-file transcription cuts the audio into windows just under Whisper's 30 s
+receptive field, decodes each once, and concatenates. On the Taglish fixture,
+one window returned nothing:
+
+| Window | Decoded |
+| --- | --- |
+| 0.000–24.876 s | **empty, every attempt** |
+| 24.532–49.708 s | 54 words |
+| 49.364–57.049 s | 16 words |
+
+Twenty-five seconds of speech — 44% of the clip — simply vanished, and the
+transcript that came out looked merely short rather than broken. WER doubled
+from 27% to 56% while every stage reported success.
+
+Three things about this were not obvious:
+
+**It is deterministic.** Five consecutive runs produced the identical empty
+result. This is not sampling variance, so retrying the same window is pointless.
+
+**The ladder does not fix it.** Retrying with `temperature` raised to 0.2 and
+0.4 and `temperatureFallbackCount` doubled failed identically. WhisperKit
+returns an empty *result set* — not an empty transcription — and it gets there
+the same way every time.
+
+**It is the boundary, not the audio.** The same leading audio decoded fine at
+every other length tried:
+
+| Window length | Result |
+| --- | --- |
+| 24.876 s | empty |
+| 25.500 s | 90 words |
+| 26.000 s | 56 words |
+| 27.000 s | 60 words |
+| 28.000 s | 70 words |
+
+Whichever gate fires, it is a function of where the window happens to end.
+
+**Why the live path never showed this.** Live windows slide by 1.5 s and
+re-decode overlapping audio every hop, so a boundary that trips a gate is gone
+1.5 s later and the words are recovered by the next pass. That redundancy is
+what LocalAgreement is buying, and it hides the failure. The offline path
+decodes each second of audio exactly once, so a refused window is not a delayed
+commit — it is deleted audio.
+
+**Fix.** A refused window is retried on *different audio*: widened by 700 ms,
+then 1400 ms, and finally cut in half and each half retried independently
+(bounded at two levels of splitting). A window nothing can decode is counted and
+surfaced to the user, because the one thing that must not happen is a short
+transcript passing for a complete one.
+
+Result on the same fixture, five runs: no dropped windows, 119–121 words against
+123 in the reference, WER 20.3–25.8% — at or below the 27.3% offline number this
+document already records as the fixture's ceiling. Locked in by
+`PipelineDecodeTests`, which models the refusal by sample count because the real
+model cannot be made to fail on demand.
+
+## 10. The diarizer fuses similar voices that share a 10 s chunk
+
+Found on a real recording (an adult interviewing an 11-year-old, both female):
+every turn in the first 24 seconds came back as one speaker, including the
+interviewer's opening question, while the same interviewer was correctly split
+out as a second speaker later in the file.
+
+**Mechanism.** FluidAudio cuts whatever audio it is handed into fixed 10 s
+chunks and extracts ONE embedding per *local segmentation slot* per chunk. The
+pyannote segmentation model decides the slots, and for these two voices it put
+both speakers in the same slot whenever they shared a chunk. One slot means one
+embedding means one cluster — the clustering threshold never gets a say.
+Swept `clusteringThreshold` 0.45–0.75 on both the streaming and the offline
+(VBx) pipelines: no effect, because the fusion happens before clustering.
+Proof it is the chunking: prepending 8.2 s of silence, so the two turns land in
+different chunks, splits them cleanly at the default threshold.
+
+**Dead ends worth recording.** Aligning diarizer calls to Silero's speech
+regions does not work — Silero bridged the 1.8 s pause between the two voices
+(regions are tuned for decode windows, not turns), and per-region calls fed the
+online clusterer noisy short embeddings that invented phantom speakers.
+`extractSpeakerEmbedding` is documented as returning L2-normalized vectors and
+does not (norms up to ~2.1); cosine distances computed on its raw output are
+meaningless and cluster everything into one speaker.
+
+**Fix.** A second pass in `SpeakerEngine`: trust the first pass only for *where
+turns are*, never for who spoke. Every merged span is re-embedded from exactly
+its own audio (`extractSpeakerEmbedding`, then normalize) and re-clustered
+globally — longest span first, so the cleanest embeddings found the clusters;
+spans under 2 s may join a cluster but never found one, which is what keeps
+noisy backchannels from inventing a third speaker. On the recording above the
+distances are cleanly bimodal (same speaker ≤ 0.56, different ≥ 0.77 against
+the 0.7 threshold), the roster drops from three speakers to the true two, and
+every turn in the transcript lands on the right one.
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a

@@ -1,0 +1,254 @@
+import Foundation
+import SwiftData
+import TranscriberCore
+
+/// Reads and writes the recording graph from the UI.
+///
+/// Free functions over a context rather than an object owning one: SwiftData
+/// hands views their context through the environment, and a second one would
+/// mean two identity maps for the same rows.
+@MainActor
+public enum RecordingStore {
+
+    // MARK: - Creating
+
+    @discardableResult
+    public static func create(
+        kind: RecordingKind, title: String? = nil, in context: ModelContext,
+        at date: Date = Date()
+    ) throws -> StoredRecording {
+        let recording = StoredRecording(
+            title: title ?? defaultTitle(for: kind, at: date),
+            kind: kind,
+            createdAt: date
+        )
+        recording.status = kind == .note ? .completed : .pending
+        context.insert(recording)
+        try context.save()
+        return recording
+    }
+
+    public static func defaultTitle(for kind: RecordingKind, at date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM, HH:mm"
+        return "\(kind.label) \(formatter.string(from: date))"
+    }
+
+    // MARK: - Deleting
+
+    /// Removes the row and the audio behind it.
+    ///
+    /// The file is deleted first: a cascade that succeeds while the unlink
+    /// fails leaves an orphan nothing will ever reference again, and those
+    /// accumulate at ~115 MB an hour.
+    public static func delete(_ recording: StoredRecording, in context: ModelContext) throws {
+        if let url = recording.audioURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+        context.delete(recording)
+        try context.save()
+    }
+
+    // MARK: - History
+
+    public enum HistoryBucket: String, CaseIterable, Identifiable, Sendable {
+        case today, yesterday, thisWeek, older
+
+        public var id: String { rawValue }
+        public var label: String {
+            switch self {
+            case .today: return "Today"
+            case .yesterday: return "Yesterday"
+            case .thisWeek: return "Earlier This Week"
+            case .older: return "Older"
+            }
+        }
+    }
+
+    public struct HistorySection: Identifiable, Sendable {
+        public var id: String { bucket.rawValue }
+        public var bucket: HistoryBucket
+        public var recordingIds: [UUID]
+    }
+
+    public static func bucket(for date: Date, now: Date = Date(),
+                              calendar: Calendar = .current) -> HistoryBucket {
+        if calendar.isDate(date, inSameDayAs: now) { return .today }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
+           calendar.isDate(date, inSameDayAs: yesterday) { return .yesterday }
+        if let weekAgo = calendar.date(byAdding: .day, value: -7, to: now),
+           date > weekAgo { return .thisWeek }
+        return .older
+    }
+
+    /// Groups newest-first into Today / Yesterday / Earlier This Week / Older.
+    public static func group(_ recordings: [StoredRecording], now: Date = Date())
+    -> [(bucket: HistoryBucket, items: [StoredRecording])] {
+        let sorted = recordings.sorted { $0.createdAt > $1.createdAt }
+        var buckets: [HistoryBucket: [StoredRecording]] = [:]
+        for recording in sorted {
+            buckets[bucket(for: recording.createdAt, now: now), default: []].append(recording)
+        }
+        return HistoryBucket.allCases.compactMap { bucket in
+            guard let items = buckets[bucket], !items.isEmpty else { return nil }
+            return (bucket, items)
+        }
+    }
+
+    // MARK: - Speakers
+
+    /// Ensures a `StoredSpeaker` row exists for every label the diarizer used,
+    /// leaving names the user already chose alone.
+    public static func syncSpeakers(_ roster: [SpeakerLabel],
+                                    on recording: StoredRecording,
+                                    in context: ModelContext) {
+        var existing = Dictionary(
+            (recording.speakers ?? []).map { ($0.speakerId, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        for (offset, label) in roster.enumerated() {
+            if let row = existing.removeValue(forKey: label.id) {
+                row.speechMs = label.speechMs
+                row.colorIndex = offset
+            } else {
+                let row = StoredSpeaker(speakerId: label.id,
+                                        displayName: label.displayName,
+                                        speechMs: label.speechMs,
+                                        colorIndex: offset)
+                row.recording = recording
+                context.insert(row)
+            }
+        }
+        // Labels no longer produced by the current transcript: drop them, or a
+        // re-run with fewer speakers leaves ghosts in the roster.
+        for orphan in existing.values { context.delete(orphan) }
+    }
+
+    public static func rename(_ speaker: StoredSpeaker, to name: String,
+                              in context: ModelContext) throws {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        speaker.displayName = trimmed.isEmpty
+            ? SpeakerLabel.defaultName(for: speaker.speakerId)
+            : trimmed
+        speaker.recording?.updatedAt = Date()
+        try context.save()
+    }
+
+    // MARK: - Bookmarks and notes
+
+    @discardableResult
+    public static func addBookmark(at ms: Int, label: String = "",
+                                   to recording: StoredRecording,
+                                   in context: ModelContext) throws -> StoredBookmark {
+        let bookmark = StoredBookmark(atMs: ms, label: label)
+        bookmark.recording = recording
+        context.insert(bookmark)
+        recording.updatedAt = Date()
+        try context.save()
+        return bookmark
+    }
+
+    @discardableResult
+    public static func addItem(_ kind: MeetingItemKind, text: String,
+                               source: StoredSegment? = nil,
+                               to recording: StoredRecording,
+                               in context: ModelContext) throws -> StoredMeetingItem {
+        let order = (recording.items ?? []).filter { $0.kind == kind }.count
+        let item = StoredMeetingItem(
+            kind: kind,
+            text: text.trimmingCharacters(in: .whitespacesAndNewlines),
+            order: order,
+            sourceSegmentId: source?.id,
+            sourceMs: source?.startMs
+        )
+        item.recording = recording
+        context.insert(item)
+        recording.updatedAt = Date()
+        try context.save()
+        return item
+    }
+
+    public static func items(_ kind: MeetingItemKind,
+                             of recording: StoredRecording) -> [StoredMeetingItem] {
+        (recording.items ?? [])
+            .filter { $0.kind == kind }
+            .sorted { ($0.order, $0.createdAt) < ($1.order, $1.createdAt) }
+    }
+
+    // MARK: - Tags
+
+    public static func tag(named name: String, in context: ModelContext) throws -> StoredTag {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let descriptor = FetchDescriptor<StoredTag>(
+            predicate: #Predicate { $0.name == trimmed }
+        )
+        if let existing = try context.fetch(descriptor).first { return existing }
+        let tag = StoredTag(name: trimmed, colorIndex: abs(trimmed.hashValue) % 8)
+        context.insert(tag)
+        return tag
+    }
+
+    // MARK: - Export payload
+
+    /// Flattens the graph into the value type the exporters consume.
+    public static func document(for recording: StoredRecording) -> MeetingDocument {
+        let transcript = recording.transcript
+        let audio = recording.audioFileName
+        let segments = (transcript?.orderedSegments ?? []).map { row in
+            Segment(
+                id: row.id,
+                index: row.index,
+                startMs: row.startMs,
+                endMs: row.endMs,
+                text: row.text,
+                textClean: row.textClean,
+                speakerId: row.speakerId,
+                confidence: row.confidence,
+                audio: audio.map {
+                    AudioReference(recordingId: recording.id, fileName: $0,
+                                   offsetMs: row.startMs)
+                }
+            )
+        }
+        return MeetingDocument(
+            id: recording.id,
+            title: recording.title,
+            kind: recording.kind,
+            createdAt: recording.createdAt,
+            durationMs: recording.durationMs,
+            language: transcript?.language ?? LanguageCatalogue.defaultLanguage,
+            modelId: transcript?.modelId,
+            audioFileName: audio,
+            status: recording.status,
+            summary: recording.summary,
+            speakers: (recording.speakers ?? [])
+                .sorted { $0.colorIndex < $1.colorIndex }
+                .map { SpeakerLabel(id: $0.speakerId, displayName: $0.displayName,
+                                    speechMs: $0.speechMs) },
+            segments: segments,
+            bookmarks: (recording.bookmarks ?? [])
+                .sorted { $0.atMs < $1.atMs }
+                .map { Bookmark(id: $0.id, atMs: $0.atMs, label: $0.label,
+                                createdAt: $0.createdAt) },
+            items: MeetingItemKind.allCases.flatMap { kind in
+                items(kind, of: recording).map { row in
+                    MeetingItem(id: row.id, kind: row.kind, text: row.text,
+                                isDone: row.isDone, owner: row.owner,
+                                dueDate: row.dueDate,
+                                sourceSegmentId: row.sourceSegmentId,
+                                sourceMs: row.sourceMs, createdAt: row.createdAt)
+                }
+            },
+            tags: (recording.tags ?? []).map(\.name).sorted()
+        )
+    }
+
+    /// Rebuilds the flattened search text. Called after any transcript or note edit.
+    public static func reindex(_ recording: StoredRecording) {
+        var parts = [recording.title, recording.summary, recording.body]
+        parts.append(contentsOf: (recording.transcript?.orderedSegments ?? []).map(\.displayText))
+        parts.append(contentsOf: (recording.items ?? []).map(\.text))
+        parts.append(contentsOf: (recording.bookmarks ?? []).map(\.label))
+        recording.searchText = parts.filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+}
