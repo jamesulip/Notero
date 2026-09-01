@@ -35,6 +35,9 @@ class Result:
     tokens: list[Token] = field(default_factory=list)
     audio_ms: int = 0
     infer_ms: int = 0
+    #: What the backend actually decoded as. Differs from what was asked for
+    #: only under auto-detect, which is the case worth surfacing.
+    language: str | None = None
 
     @property
     def text(self) -> str:

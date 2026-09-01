@@ -169,3 +169,25 @@ def test_nothing_is_timestamped_past_the_audio_received():
     la.flush()
     assert la.committed, "expected the tail to commit"
     assert max(t.end_ms for t in la.committed) <= 57_000
+
+
+def test_force_commit_does_not_duplicate_already_committed_words():
+    """Reproduces duplicated phrases seen under load.
+
+    Retained hypotheses are trimmed by prefix length, not by time, so a forced
+    commit filtering only on the window edge re-emits words already agreed.
+    """
+    la = LocalAgreement(agreement=2)
+    la.insert(toks("gusto ko lang", start=0))
+    la.insert(toks("gusto ko lang", start=0))
+    assert la.committed_text == "gusto ko lang"
+
+    # A later hypothesis still covers the committed span, plus new words.
+    overlapping = toks("gusto ko lang i confirm", start=0)
+    la.insert(overlapping)
+    forced = la.force_commit_before(1_500)
+
+    assert "gusto" not in "".join(t.text for t in forced), \
+        f"re-committed already-committed words: {[t.text for t in forced]}"
+    words = la.committed_text.split()
+    assert len(words) == len(set(words)) or words.count("gusto") == 1
