@@ -1,0 +1,232 @@
+import AVFoundation
+import Foundation
+import TranscriberCore
+
+/// The 16 kHz mono working copy of a recording.
+///
+/// Why a second file at all: inference wants 16 kHz mono Float, the archive is
+/// AAC at the hardware rate, and decoding AAC on every hop or every
+/// re-transcription is wasted work. Why on disk rather than in memory: two
+/// hours at 16 kHz Float is 460 MB resident, which on a 16 GB machine already
+/// holding a 1.6 GB model is the difference between working and swapping.
+///
+/// The file is a plain 16-bit WAV, so it is also playable and inspectable when
+/// something goes wrong, and it is disposable -- deleted once a recording is
+/// transcribed and diarized, regenerated from the archive if the user ever
+/// re-runs either.
+public enum AudioCache {
+
+    public static func directory(under support: URL) -> URL {
+        let url = support.appendingPathComponent("Cache/PCM", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    public static func url(for id: UUID, under support: URL) -> URL {
+        directory(under: support).appendingPathComponent("\(id.uuidString).wav")
+    }
+
+    public static func discard(_ id: UUID, under support: URL) {
+        try? FileManager.default.removeItem(at: url(for: id, under: support))
+    }
+
+    /// Decodes any AVFoundation-readable file to the 16 kHz mono working copy.
+    ///
+    /// Streamed through `AVAssetReader` rather than loaded: a 90-minute MOV
+    /// stays a few megabytes of buffers no matter how large the source is.
+    public static func build(from source: URL, to destination: URL,
+                             progress: (@Sendable (Double) -> Void)? = nil) async throws -> Int {
+        let asset = AVURLAsset(url: source)
+        guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
+            throw EngineError.audioUnreadable("no audio track in \(source.lastPathComponent)")
+        }
+        let duration = try await asset.load(.duration)
+        let totalSeconds = max(0.001, CMTimeGetSeconds(duration))
+
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: Audio.sampleRate,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsNonInterleaved: false,
+        ])
+        guard reader.canAdd(output) else {
+            throw EngineError.audioUnreadable("cannot decode \(source.lastPathComponent)")
+        }
+        reader.add(output)
+
+        guard let writer = WavWriter(url: destination) else {
+            throw EngineError.audioUnreadable("cannot write the working copy")
+        }
+        defer { writer.close() }
+
+        guard reader.startReading() else {
+            throw EngineError.audioUnreadable(reader.error?.localizedDescription ?? "reader failed")
+        }
+
+        while reader.status == .reading {
+            guard let sample = output.copyNextSampleBuffer() else { break }
+            if let block = CMSampleBufferGetDataBuffer(sample) {
+                var length = 0
+                var pointer: UnsafeMutablePointer<Int8>?
+                if CMBlockBufferGetDataPointer(block, atOffset: 0, lengthAtOffsetOut: nil,
+                                               totalLengthOut: &length,
+                                               dataPointerOut: &pointer) == kCMBlockBufferNoErr,
+                   let pointer, length > 0 {
+                    writer.write(Data(bytes: pointer, count: length))
+                }
+            }
+            let at = CMSampleBufferGetPresentationTimeStamp(sample)
+            progress?(min(1, max(0, CMTimeGetSeconds(at) / totalSeconds)))
+            CMSampleBufferInvalidate(sample)
+        }
+
+        if reader.status == .failed {
+            throw EngineError.audioUnreadable(reader.error?.localizedDescription ?? "decode failed")
+        }
+        return writer.durationMs
+    }
+}
+
+/// Appends 16 kHz mono PCM16 to a WAV file.
+///
+/// The RIFF header is rewritten on close, so a session killed mid-recording
+/// leaves a file that can be repaired rather than one that is simply lost.
+public final class WavWriter: @unchecked Sendable {
+    private let handle: FileHandle
+    private let lock = NSLock()
+    private var byteCount = 0
+    private var closed = false
+    public let url: URL
+
+    public init?(url: URL) {
+        self.url = url
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        guard FileManager.default.createFile(atPath: url.path,
+                                             contents: Self.header(dataBytes: 0)),
+              let handle = try? FileHandle(forWritingTo: url) else { return nil }
+        self.handle = handle
+        handle.seekToEndOfFile()
+    }
+
+    public var durationMs: Int { Audio.bytesToMs(lock.withLock { byteCount }) }
+
+    public func write(_ pcm: Data) {
+        lock.withLock {
+            guard !closed else { return }
+            handle.write(pcm)
+            byteCount += pcm.count
+        }
+    }
+
+    public func close() {
+        lock.withLock {
+            guard !closed else { return }
+            closed = true
+            handle.seek(toFileOffset: 0)
+            handle.write(Self.header(dataBytes: byteCount))
+            try? handle.close()
+        }
+    }
+
+    static func header(dataBytes: Int) -> Data {
+        let channels: UInt16 = 1, bits: UInt16 = 16
+        let rate = UInt32(Audio.sampleRate)
+        let blockAlign = channels * bits / 8
+
+        var data = Data("RIFF".utf8)
+        data.append(littleEndian: UInt32(36 + dataBytes))
+        data.append(Data("WAVEfmt ".utf8))
+        data.append(littleEndian: UInt32(16))
+        data.append(littleEndian: UInt16(1))         // PCM
+        data.append(littleEndian: channels)
+        data.append(littleEndian: rate)
+        data.append(littleEndian: rate * UInt32(blockAlign))
+        data.append(littleEndian: blockAlign)
+        data.append(littleEndian: bits)
+        data.append(Data("data".utf8))
+        data.append(littleEndian: UInt32(dataBytes))
+        return data
+    }
+}
+
+/// A memory-mapped 16 kHz mono WAV, read in slices.
+///
+/// `mappedIfSafe` means the pages are the file's own -- resident set grows only
+/// with what is actually touched, and the kernel evicts the rest under
+/// pressure. That is what lets a two-hour recording be diarized on a 16 GB
+/// machine at all.
+public struct MappedPCM: @unchecked Sendable {
+    private let data: Data
+    private let offset: Int
+    public let sampleCount: Int
+
+    public init(contentsOf url: URL) throws {
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        guard data.count > 44, data.prefix(4) == Data("RIFF".utf8) else {
+            throw EngineError.audioUnreadable("\(url.lastPathComponent) is not a WAV")
+        }
+        // Walk the chunk list rather than assuming 44: writers insert LIST and
+        // fact chunks, and a fixed offset would read the metadata as audio.
+        var cursor = 12
+        var found: (offset: Int, length: Int)?
+        while cursor + 8 <= data.count {
+            let id = data.subdata(in: cursor..<(cursor + 4))
+            let size = Int(data.subdata(in: (cursor + 4)..<(cursor + 8))
+                .withUnsafeBytes { $0.loadUnaligned(as: UInt32.self).littleEndian })
+            if id == Data("data".utf8) {
+                let remaining = data.count - cursor - 8
+                // Trust the file over its own header. A session killed
+                // mid-recording never got its header rewritten and still claims
+                // zero bytes, while the audio is all sitting right there -- and
+                // recovering it is the entire reason the header is written last.
+                let declared = (size == 0 || size > remaining) ? remaining : size
+                found = (cursor + 8, declared)
+                break
+            }
+            cursor += 8 + size + (size % 2)
+        }
+        guard let found, found.length > 0 else {
+            throw EngineError.audioUnreadable("\(url.lastPathComponent) has no audio")
+        }
+        self.data = data
+        self.offset = found.offset
+        self.sampleCount = found.length / 2
+    }
+
+    public var durationMs: Int { sampleCount * 1000 / Audio.sampleRate }
+
+    /// Normalized floats for `range`, clamped to what exists.
+    public func floats(_ range: Range<Int>) -> [Float] {
+        let low = max(0, min(range.lowerBound, sampleCount))
+        let high = max(low, min(range.upperBound, sampleCount))
+        guard high > low else { return [] }
+        return data.withUnsafeBytes { raw -> [Float] in
+            let base = raw.baseAddress!.advanced(by: offset)
+            return (low..<high).map { index in
+                Float(base.loadUnaligned(fromByteOffset: index * 2, as: Int16.self)
+                    .littleEndian) / 32768.0
+            }
+        }
+    }
+
+    public func floats(msRange: Range<Int>) -> [Float] {
+        floats(Audio.msToSamples(msRange.lowerBound)..<Audio.msToSamples(msRange.upperBound))
+    }
+
+    public var allFloats: [Float] { floats(0..<sampleCount) }
+}
+
+extension Data {
+    mutating func append<T: FixedWidthInteger>(littleEndian value: T) {
+        var little = value.littleEndian
+        Swift.withUnsafeBytes(of: &little) { append(contentsOf: $0) }
+    }
+}
+
+extension MappedPCM: PCMSource {}

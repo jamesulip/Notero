@@ -15,3 +15,9 @@ eval/audio/*
 # models
 models/
 .build/
+# macOS finder cruft
+.DS_Store
+# built app bundles — assembled by app/build-app.sh, not source
+*.app/
+# Xcode per-user state regenerated on open
+.swiftpm/
