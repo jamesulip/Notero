@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import server.main as server_main  # noqa: E402
 from server.adapters.whisperkit import WhisperKitAdapter  # noqa: E402
 from server.main import Pipeline  # noqa: E402
+from server.scheduler import InferenceScheduler  # noqa: E402
 from server.session import SAMPLE_RATE, Session  # noqa: E402
 
 EVAL_DIR = Path(__file__).resolve().parent
@@ -52,21 +53,44 @@ async def replay_live(adapter, audio: bytes, language: str, fast: bool,
                       hop_ms: int = 1000, context_ms: int = 15000,
                       agreement: int = 2) -> str:
     collected: list[str] = []
+    errors: list[str] = []
 
     async def send(payload: dict) -> None:
         if payload.get("type") == "final":
             collected.append(payload["segment"]["text"])
+        elif payload.get("type") == "error":
+            # A harness that ignores these writes an empty hypothesis and
+            # scores it as ~100% WER with no hint that nothing ever ran.
+            errors.append(payload.get("message", payload.get("code", "?")))
+
+    # Pipeline hops go through the module-level scheduler, exactly as they do
+    # under the server. It has to exist here and the session has to be
+    # registered, or every hop dies with an AssertionError that the pipeline's
+    # error handling turns into an error frame.
+    scheduler = InferenceScheduler(adapter, max_sessions=1)
+    await scheduler.start()
+    server_main.scheduler = scheduler
+    scheduler.register("replay")
 
     session = Session(session_id="replay", language=language,
                       hop_ms=hop_ms, context_ms=context_ms)
     pipeline = Pipeline(session, send, agreement=agreement)
 
-    frame = int(SAMPLE_RATE * 2 * FRAME_MS / 1000)
-    for i in range(0, len(audio), frame):
-        await pipeline.feed(audio[i:i + frame])
-        if not fast:
-            await asyncio.sleep(FRAME_MS / 1000)
-    await pipeline.finish()
+    try:
+        frame = int(SAMPLE_RATE * 2 * FRAME_MS / 1000)
+        for i in range(0, len(audio), frame):
+            await pipeline.feed(audio[i:i + frame])
+            if not fast:
+                await asyncio.sleep(FRAME_MS / 1000)
+        await pipeline.finish()
+    finally:
+        await scheduler.stop()
+        server_main.scheduler = None
+
+    if errors:
+        raise SystemExit(
+            f"replay produced {len(errors)} error frame(s); first: {errors[0]}"
+        )
 
     s = session.stats
     print(f"    {s.hops} hops, {s.dropped_hops} dropped, {s.empty_results} empty, "

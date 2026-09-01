@@ -123,13 +123,20 @@ class LocalAgreement:
         if not self._history:
             return []
         newest = self._history[-1]
-        take = [t for t in newest if t.end_ms <= absolute_ms]
+        # Skip anything already committed. The retained hypotheses are trimmed
+        # by prefix length, not by time, so a forced commit that only filtered
+        # on `absolute_ms` would re-emit words that were agreed on earlier --
+        # visible as duplicated phrases, and worst exactly when forcing is
+        # frequent.
+        take = [t for t in newest
+                if self.committed_end_ms < t.end_ms <= absolute_ms]
         if not take:
             return []
         take = self._monotonic(take)
         self.committed.extend(take)
-        keep = len([t for t in newest if t.end_ms <= absolute_ms])
-        self._history = [h[keep:] if len(h) >= keep else [] for h in self._history]
+        consumed = len([t for t in newest if t.end_ms <= absolute_ms])
+        self._history = [h[consumed:] if len(h) >= consumed else []
+                         for h in self._history]
         return take
 
     def flush(self) -> list[Token]:

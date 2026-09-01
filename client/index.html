@@ -23,6 +23,10 @@
            color: var(--fg); cursor: pointer; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button:disabled { opacity: .45; cursor: default; }
+  select { font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 7px;
+           border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+           max-width: 260px; }
+  select:disabled { opacity: .45; }
   #meter { width: 110px; height: 7px; border-radius: 4px; background: var(--panel);
            overflow: hidden; border: 1px solid var(--line); }
   #meter > i { display: block; height: 100%; width: 0%; background: var(--accent);
@@ -41,6 +45,8 @@
 
 <header>
   <h1>Live Transcriber <span style="color:var(--muted);font-weight:400">Phase 2</span></h1>
+  <select id="lang" title="transcription language"><option>…</option></select>
+  <select id="model" title="ASR model"><option>loading models…</option></select>
   <div id="meter" title="mic level"><i></i></div>
   <span id="state">idle</span>
   <button id="mute" disabled>Mute</button>
@@ -65,6 +71,12 @@ const goBtn = $('go'), muteBtn = $('mute');
 let ws = null, ctx = null, node = null, stream = null;
 let running = false, muted = false;
 let chunks = 0, audioMs = 0, sentBytes = 0;
+
+// Reconnect state. Section 8: buffer ~30 s of audio while disconnected and
+// dedupe by segment id, so the server can safely replay its segment tail.
+const BUFFER_LIMIT = 30 * 16000 * 2;   // 30 s of PCM16 @ 16 kHz
+let sessionId = null, lastSegmentId = 0, seenIds = new Set();
+let backlog = [], backlogBytes = 0, reconnectDelay = 500, reconnecting = false;
 
 function setState(text, bad = false) {
   $('state').textContent = text;
@@ -103,24 +115,26 @@ async function start() {
 
   await ctx.audioWorklet.addModule('/static/pcm-worklet.js');
 
-  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
-  ws.binaryType = 'arraybuffer';
-  await new Promise((res, rej) => {
-    ws.onopen = res;
-    ws.onerror = () => rej(new Error('websocket failed'));
-  });
-  ws.onmessage = onServerMessage;
-  ws.onclose = () => { if (running) { setState('disconnected', true); stop(); } };
-  ws.send(JSON.stringify({ type: 'start', language: 'tl' }));
+  sessionId = crypto.randomUUID().slice(0, 12);
+  lastSegmentId = 0; seenIds = new Set();
+  backlog = []; backlogBytes = 0; reconnectDelay = 500;
+  await connect();
 
   node = new AudioWorkletNode(ctx, 'pcm-worklet');
   node.port.onmessage = ({ data }) => {
     $('meter').firstElementChild.style.width =
       Math.min(100, Math.round(data.peak * 140)) + '%';
+    sentBytes += data.pcm.byteLength;
+    $('s-audio').textContent = (sentBytes / 32000).toFixed(1);
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(data.pcm);
-      sentBytes += data.pcm.byteLength;
-      $('s-audio').textContent = (sentBytes / 32000).toFixed(1);
+    } else {
+      // Hold it. Dropping frames instead would shift every later timestamp,
+      // which desyncs SRT exports against the archived audio.
+      backlog.push(data.pcm);
+      backlogBytes += data.pcm.byteLength;
+      while (backlogBytes > BUFFER_LIMIT) backlogBytes -= backlog.shift().byteLength;
+      msg(`offline — buffering ${(backlogBytes / 32000).toFixed(0)}s`, true);
     }
   };
   ctx.createMediaStreamSource(stream).connect(node);
@@ -130,7 +144,45 @@ async function start() {
   running = true;
   goBtn.textContent = 'Stop';
   muteBtn.disabled = false;
+  modelSel.disabled = true;    // the model is shared; no swapping mid-session
+  langSel.disabled = true;     // language is fixed for the life of a session
   msg('');
+}
+
+async function connect() {
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+  await new Promise((res, rej) => {
+    ws.onopen = res;
+    ws.onerror = () => rej(new Error('websocket failed'));
+  });
+  ws.onmessage = onServerMessage;
+  ws.onclose = () => { if (running) scheduleReconnect(); };
+  ws.send(JSON.stringify({
+    type: 'start', language: langSel.value,
+    session_id: sessionId, last_segment_id: lastSegmentId,
+  }));
+  // Flush whatever accumulated while we were away, in order.
+  for (const buf of backlog) ws.send(buf);
+  backlog = []; backlogBytes = 0;
+  reconnectDelay = 500;
+  msg('');
+}
+
+function scheduleReconnect() {
+  if (!running || reconnecting) return;
+  reconnecting = true;
+  setState('reconnecting', true);
+  setTimeout(async () => {
+    reconnecting = false;
+    if (!running) return;
+    try {
+      await connect();
+    } catch {
+      reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+      scheduleReconnect();
+    }
+  }, reconnectDelay);
 }
 
 function onServerMessage({ data }) {
@@ -139,7 +191,11 @@ function onServerMessage({ data }) {
     setState(m.state);
     $('s-mean').textContent = m.state;
   } else if (m.type === 'final') {
-    // Append-only. Once here, this text is permanent.
+    // Append-only. Once here, this text is permanent. Ids dedupe the tail the
+    // server replays after a reconnect.
+    if (seenIds.has(m.segment.id)) return;
+    seenIds.add(m.segment.id);
+    lastSegmentId = Math.max(lastSegmentId, m.segment.id);
     const el = document.createElement('span');
     el.textContent = m.segment.text + ' ';
     $('finals').appendChild(el);
@@ -157,6 +213,9 @@ function onServerMessage({ data }) {
 
 async function stop() {
   running = false;
+  modelSel.disabled = false;
+  langSel.disabled = false;
+  backlog = []; backlogBytes = 0;
   goBtn.textContent = 'Start';
   muteBtn.disabled = true;
   if (ws && ws.readyState === WebSocket.OPEN) {
@@ -170,6 +229,101 @@ async function stop() {
   $('meter').firstElementChild.style.width = '0%';
   setState('idle');
 }
+
+// -- language and model selection -----------------------------------------
+
+const langSel = $('lang');
+const modelSel = $('model');
+
+async function loadLanguages() {
+  try {
+    const { languages } = await (await fetch('/languages')).json();
+    langSel.innerHTML = '';
+    for (const l of languages) {
+      const opt = document.createElement('option');
+      opt.value = l.code;
+      opt.textContent = l.label;
+      opt.dataset.note = l.note || '';
+      opt.dataset.autoDetect = l.auto_detect;
+      if (l.current) opt.selected = true;
+      langSel.appendChild(opt);
+    }
+    langSel.title = langSel.selectedOptions[0]?.dataset.note || 'transcription language';
+  } catch {
+    // Fall back to the forced default rather than leaving the control empty.
+    langSel.innerHTML = '<option value="tl" selected>Tagalog / Taglish</option>';
+  }
+}
+
+langSel.onchange = () => {
+  const opt = langSel.selectedOptions[0];
+  langSel.title = opt.dataset.note || 'transcription language';
+  // Section 2: auto-detect on Taglish resolves elsewhere and starts translating.
+  msg(opt.dataset.autoDetect === 'true' ? opt.dataset.note : '',
+      opt.dataset.autoDetect === 'true');
+};
+
+loadLanguages();
+
+async function loadModels() {
+  try {
+    const { current, models } = await (await fetch('/models')).json();
+    modelSel.innerHTML = '';
+    for (const m of models) {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      const size = m.approx_mb >= 1024
+        ? (m.approx_mb / 1024).toFixed(1) + 'GB' : m.approx_mb + 'MB';
+      // Downloaded models cost nothing to select; the rest pull weights first.
+      opt.textContent = `${m.label} · ${size}${m.downloaded ? ' ✓' : ' ↓'}`;
+      opt.dataset.multilingual = m.multilingual;
+      opt.dataset.downloaded = m.downloaded;
+      opt.dataset.detail = m.detail;
+      if (m.id === current) opt.selected = true;
+      modelSel.appendChild(opt);
+    }
+    modelSel.title = modelSel.selectedOptions[0]?.dataset.detail || 'ASR model';
+  } catch {
+    modelSel.innerHTML = '<option>models unavailable</option>';
+  }
+}
+
+modelSel.onchange = async () => {
+  const opt = modelSel.selectedOptions[0];
+  const params = new URLSearchParams({ model: modelSel.value });
+
+  if (opt.dataset.multilingual !== 'true') {
+    if (!confirm(`${opt.textContent} is English-only. On Tagalog it will `
+               + `translate rather than transcribe. Select it anyway?`)) {
+      await loadModels();
+      return;
+    }
+    params.set('allow_english_only', 'true');
+  }
+  if (opt.dataset.downloaded !== 'true'
+      && !confirm(`${opt.textContent} is not downloaded yet. Fetching it may `
+                + `take several minutes. Continue?`)) {
+    await loadModels();
+    return;
+  }
+
+  modelSel.disabled = true;
+  goBtn.disabled = true;
+  msg('switching model — this can take a few minutes on first download…');
+  try {
+    const res = await fetch('/models/select?' + params, { method: 'POST' });
+    const body = await res.json();
+    msg(res.ok ? '' : (body.detail || 'model switch failed'), !res.ok);
+  } catch (e) {
+    msg('model switch failed: ' + e.message, true);
+  } finally {
+    modelSel.disabled = false;
+    goBtn.disabled = false;
+    await loadModels();
+  }
+};
+
+loadModels();
 
 goBtn.onclick = () => (running ? stop() : start().catch((e) => msg(e.message, true)));
 muteBtn.onclick = () => {

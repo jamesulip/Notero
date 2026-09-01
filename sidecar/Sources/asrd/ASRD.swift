@@ -6,11 +6,18 @@
 //  real-time-factor number meaningless.
 //
 //  Wire protocol
-//    stdin   4-byte big-endian length, then that many bytes of PCM16LE mono
-//            16 kHz. A length of 0 means shut down.
+//    stdin   4-byte big-endian header length (0 means shut down), then that
+//            many bytes of JSON:
+//              {"bytes": N, "language": "tl"|"auto"|null, "prompt": string|null}
+//            followed by N bytes of PCM16LE mono 16 kHz.
 //    stdout  newline-delimited JSON, one object per request, plus a single
 //            {"type":"ready"} once the model is loaded.
 //    stderr  human-readable diagnostics only; never protocol data.
+//
+//  Language travels with each request rather than being fixed at launch. The
+//  orchestrator supports one session per language against a shared model, so a
+//  startup-only setting would silently transcribe every session in whatever
+//  the first one asked for.
 
 import Foundation
 import WhisperKit
@@ -119,12 +126,10 @@ struct ASRD {
         // Plan section 7: greedy, temperature 0, no fallback ladder, forced
         // language, and no conditioning on previous text (promptTokens left nil)
         // because it risks hallucination loops when streaming.
-        var options = DecodingOptions()
-        options.verbose = verbose
-        options.task = .transcribe
-        options.language = language
-        options.detectLanguage = false
-        options.temperature = 0.0
+        var baseOptions = DecodingOptions()
+        baseOptions.verbose = verbose
+        baseOptions.task = .transcribe
+        baseOptions.temperature = 0.0
         // Section 7 asks for temperature 0 with the fallback ladder reserved for
         // offline cleanup. Taken literally (fallbackCount 0) that is a silent
         // data-loss bug: WhisperKit's firstTokenLogProbThreshold discards any
@@ -132,44 +137,69 @@ struct ASRD {
         // the whole window returns empty rather than being retried. Removing the
         // threshold instead is worse -- it lets repetition loops through. So keep
         // the quality gates and give them somewhere to fall back to.
-        options.temperatureFallbackCount = Int(argument("fallbacks", default: "2")!) ?? 2
-        options.temperatureIncrementOnFallback = 0.2
-        options.usePrefillPrompt = !CommandLine.arguments.contains("--no-prefill")
-        options.skipSpecialTokens = true
-        options.withoutTimestamps = CommandLine.arguments.contains("--without-timestamps")
-        options.wordTimestamps = !CommandLine.arguments.contains("--no-word-timestamps")
+        baseOptions.temperatureFallbackCount = Int(argument("fallbacks", default: "2")!) ?? 2
+        baseOptions.temperatureIncrementOnFallback = 0.2
+        baseOptions.usePrefillPrompt = !CommandLine.arguments.contains("--no-prefill")
+        baseOptions.skipSpecialTokens = true
+        baseOptions.withoutTimestamps = CommandLine.arguments.contains("--without-timestamps")
+        baseOptions.wordTimestamps = !CommandLine.arguments.contains("--no-word-timestamps")
         let args = CommandLine.arguments
         if args.contains("--no-thresholds") || args.contains("--no-nospeech") {
-            options.noSpeechThreshold = nil
+            baseOptions.noSpeechThreshold = nil
         }
         if args.contains("--no-thresholds") || args.contains("--no-logprob") {
-            options.logProbThreshold = nil
+            baseOptions.logProbThreshold = nil
         }
         if args.contains("--no-thresholds") || args.contains("--no-firsttoken") {
-            options.firstTokenLogProbThreshold = nil
+            baseOptions.firstTokenLogProbThreshold = nil
         }
         if args.contains("--no-thresholds") || args.contains("--no-compression") {
-            options.compressionRatioThreshold = nil
+            baseOptions.compressionRatioThreshold = nil
         }
-        options.chunkingStrategy = nil
+        baseOptions.chunkingStrategy = nil
 
         var sequence = 0
         while true {
-            guard let header = readExactly(4) else {
+            guard let lengthBytes = readExactly(4) else {
                 note("stdin closed; exiting")
                 break
             }
-            var length: UInt32 = 0
-            for byte in header {
-                length = (length << 8) | UInt32(byte)
+            var headerLength: UInt32 = 0
+            for byte in lengthBytes {
+                headerLength = (headerLength << 8) | UInt32(byte)
             }
-            if length == 0 {
+            if headerLength == 0 {
                 note("shutdown requested")
                 break
             }
-            guard let payload = readExactly(Int(length)) else {
+            guard let headerData = readExactly(Int(headerLength)),
+                  let header = (try? JSONSerialization.jsonObject(with: headerData))
+                      as? [String: Any]
+            else {
+                note("unreadable request header; exiting")
+                break
+            }
+            let byteCount = header["bytes"] as? Int ?? 0
+            guard let payload = readExactly(byteCount) else {
                 note("truncated payload; exiting")
                 break
+            }
+
+            var options = baseOptions
+            let requested = (header["language"] as? String) ?? language
+            if requested == "auto" {
+                // Section 2 warns this resolves Taglish to English and starts
+                // translating. Offered, never defaulted.
+                options.language = nil
+                options.detectLanguage = true
+            } else {
+                options.language = requested
+                options.detectLanguage = false
+            }
+            if let prompt = header["prompt"] as? String, !prompt.isEmpty,
+               let promptTokens = whisperKit.tokenizer?.encode(text: " " + prompt) {
+                options.promptTokens = promptTokens
+                options.usePrefillPrompt = true
             }
 
             sequence += 1
@@ -206,6 +236,7 @@ struct ASRD {
                 emit([
                     "type": "result",
                     "seq": sequence,
+                    "language": results.first?.language ?? requested,
                     "text": combined,
                     "words": words,
                     "audio_ms": audioMs,

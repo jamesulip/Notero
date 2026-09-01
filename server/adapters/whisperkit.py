@@ -1,7 +1,12 @@
 """WhisperKit backend, driven as a persistent Swift sidecar.
 
 The sidecar (`sidecar/Sources/asrd`) loads the CoreML model once and stays
-resident. Requests are 4-byte big-endian length + PCM16LE; replies are NDJSON.
+resident. Each request is a 4-byte big-endian header length, a JSON header
+carrying the PCM byte count plus this request's language and prompt, and then
+the PCM16LE itself. Replies are NDJSON.
+
+Language rides with the request rather than being fixed at launch, because the
+model is shared across sessions and each session chooses its own.
 """
 
 from __future__ import annotations
@@ -121,11 +126,17 @@ class WhisperKitAdapter(ASRAdapter):
         if not pcm:
             return Result()
 
+        header = json.dumps({
+            "bytes": len(pcm),
+            "language": language or self.language,
+            "prompt": prompt,
+        }).encode("utf-8")
+
         # One model instance: hops serialise here. The Phase 3 scheduler owns
         # the drop policy; this lock only guarantees framing integrity.
         async with self._lock:
             assert self._proc.stdin is not None
-            self._proc.stdin.write(struct.pack(">I", len(pcm)) + pcm)
+            self._proc.stdin.write(struct.pack(">I", len(header)) + header + pcm)
             await self._proc.stdin.drain()
             message = await self._read_message(timeout=300)
 
@@ -140,6 +151,7 @@ class WhisperKitAdapter(ASRAdapter):
             tokens=tokens,
             audio_ms=int(message.get("audio_ms", 0)),
             infer_ms=int(message.get("infer_ms", 0)),
+            language=message.get("language"),
         )
 
     # -- plumbing ----------------------------------------------------------
