@@ -205,7 +205,8 @@ public actor TranscriptionQueue {
             if decoded.droppedWindows > 0 {
                 emit(.warning(id: job.id, message:
                     "\(decoded.droppedWindows) window\(decoded.droppedWindows == 1 ? "" : "s") "
-                    + "of speech could not be decoded and are missing from this transcript."))
+                    + "of speech could not be decoded and "
+                    + "\(decoded.droppedWindows == 1 ? "is" : "are") missing from this transcript."))
             }
 
             // Identify speakers.
