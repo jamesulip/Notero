@@ -1,8 +1,13 @@
 # Transcriber
 
 A native macOS app for recording, transcribing and taking notes on Tagalog and
-Taglish meetings. Everything runs on the Mac: no account, no API key, and no
-audio leaves the machine.
+Taglish meetings. Transcription, speaker identification and search all run on
+the Mac: no account, no API key, and no audio ever leaves the machine.
+
+The one exception is **Draft minutes with Claude**, which is opt-in, per
+meeting, and sends the *transcript* — never the audio — to the Claude Code CLI
+you are already signed in to. The button says so before it is pressed. Nothing
+else in the app talks to a network.
 
 **Status: v1 feature-complete.** Recording, import, live transcription, speaker
 identification, transcript/audio sync, searchable history, the manual meeting
@@ -13,8 +18,8 @@ Taglish fixture the whole-file path runs at **RTF 0.09–0.14** (7–11x faster 
 real time) with a peak footprint of **~300 MB**, and scores **20.3–25.8% WER** —
 at or below the 27.3% offline number this repo already recorded for that clip.
 
-Nine findings so far change the plan, most recently one where a single refused
-decode window silently deleted 44% of a transcript. Read
+Eleven findings so far change the plan, most recently that a generated meeting
+item is only worth anything if the timestamp it cites lands in real audio. Read
 [docs/FINDINGS.md](docs/FINDINGS.md) before trusting any number here.
 
 ## The app
@@ -65,7 +70,7 @@ cd app && swift build -c release --product transcribe
 ```
 
 `--tier fast|balanced|accurate`, `--model <id>`, `--language`, `--no-diarize`,
-`--out FILE`. It reports words decoded, RTF, retried and dropped windows, WER
+`--minutes`, `--out FILE`. It reports words decoded, RTF, retried and dropped windows, WER
 when given a reference, and peak memory.
 
 ## What it does
@@ -85,6 +90,13 @@ splitting any window the model refuses.
 renumbered by first appearance so the person who opened the meeting is Speaker 1.
 Renaming one is a single row: segments hold the diarizer's label, never a display
 name, so a rename survives re-transcription.
+
+**Draft the minutes.** One button sends the transcript to Claude and proposes a
+summary plus typed items across the five lists, each citing the millisecond it
+came from. Nothing is written until you have read it: the result opens in a
+review sheet, and an item whose citation does not land inside a real transcript
+segment is kept but flagged as uncited rather than quietly pointed at the wrong
+moment. Available headlessly too — `transcribe --minutes`.
 
 **Take notes.** A meeting has a summary plus five typed lists — key points,
 decisions, action items, questions, follow-ups. Every item keeps the timestamp
@@ -172,8 +184,10 @@ Deployment and TLS: [docs/DEPLOY.md](docs/DEPLOY.md). The build plan is
 
 ## Parked for v2
 
-Local LLM, automatic summaries, automatic action-item and decision extraction,
-topic detection, semantic search, speaker voice profiles, cloud anything. The
+Local LLM, topic detection, semantic search, speaker voice profiles. Automatic
+summaries and action-item extraction have since landed as **Draft minutes with
+Claude** above — as a cloud call rather than the local model this section
+imagined, which is a deliberate trade and the only one of its kind here. The
 data model already has the shape each of them would write into — typed note rows
 with source timestamps, transcript revisions, a speaker roster separate from the
 segments — so none of them needs the app rebuilt.

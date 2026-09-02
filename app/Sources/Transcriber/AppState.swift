@@ -28,6 +28,7 @@ final class AppState {
     let queue: TranscriptionQueue
     let live: LiveSession
     let player = AudioPlayer()
+    let minutes: any MinutesGenerating = ClaudeCLIMinutes()
     private let writer: TranscriptWriter
 
     /// Sidebar selection. Nil is the empty state.
@@ -46,6 +47,20 @@ final class AppState {
 
     /// The transcript row the user last clicked. What ⌃⌘D and friends act on.
     var selectedSegmentId: UUID?
+
+    /// Generated minutes waiting to be reviewed, and the recording they are
+    /// for. Nothing is written to the store until the sheet is accepted:
+    /// dropping forty unreviewed rows into hand-kept notes is not a thing to
+    /// do on the user's behalf.
+    var minutesDraft: MinutesReview?
+    /// The recording a generation is currently running for.
+    private(set) var generatingMinutesFor: UUID?
+
+    struct MinutesReview: Identifiable {
+        let id = UUID()
+        var recordingId: UUID
+        var draft: Minutes.Draft
+    }
 
     /// Per-recording pipeline progress, keyed by recording id.
     private(set) var progress: [UUID: JobProgress] = [:]
@@ -388,6 +403,72 @@ final class AppState {
         } catch {
             alert = AppAlert(title: "Could not add that note", message: error.localizedDescription)
         }
+    }
+
+    // MARK: - Minutes
+
+    var isGeneratingMinutes: Bool { generatingMinutesFor != nil }
+
+    func isGeneratingMinutes(_ recording: StoredRecording) -> Bool {
+        generatingMinutesFor == recording.id
+    }
+
+    /// Sends the transcript to Claude and holds the result for review.
+    ///
+    /// The one thing in this app that leaves the machine. Nothing here writes
+    /// to the store -- `applyMinutes` does, after the user has read what came
+    /// back.
+    func generateMinutes(_ recording: StoredRecording) async {
+        guard generatingMinutesFor == nil else { return }
+        let document = RecordingStore.document(for: recording)
+        guard !document.segments.isEmpty else {
+            alert = AppAlert(title: "Nothing to summarise",
+                             message: Minutes.Failure.noTranscript.localizedDescription)
+            return
+        }
+
+        generatingMinutesFor = recording.id
+        defer { generatingMinutesFor = nil }
+
+        do {
+            let raw = try await minutes.generate(prompt: Minutes.prompt(for: document))
+            let draft = try Minutes.parse(raw, against: document.segments)
+            guard !draft.isEmpty else {
+                alert = AppAlert(title: "Claude returned nothing",
+                                 message: "No summary and no items came back for this transcript.")
+                return
+            }
+            minutesDraft = MinutesReview(recordingId: recording.id, draft: draft)
+        } catch {
+            alert = AppAlert(title: "Could not generate minutes",
+                             message: error.localizedDescription)
+        }
+    }
+
+    /// Writes a reviewed draft in: the summary replaces what is there, the
+    /// items are appended below any that were written by hand.
+    func applyMinutes(_ review: MinutesReview) {
+        guard let recording = recording(review.recordingId) else { return }
+        let segments = recording.transcript?.orderedSegments ?? []
+        do {
+            if !review.draft.summary.isEmpty { recording.summary = review.draft.summary }
+            for item in review.draft.items {
+                let source = item.sourceSegmentId.flatMap { id in
+                    segments.first { $0.id == id }
+                }
+                let stored = try RecordingStore.addItem(item.kind, text: item.text,
+                                                        source: source, to: recording,
+                                                        in: context)
+                stored.owner = item.owner
+            }
+            recording.updatedAt = Date()
+            RecordingStore.reindex(recording)
+            try context.save()
+        } catch {
+            alert = AppAlert(title: "Could not save the minutes",
+                             message: error.localizedDescription)
+        }
+        minutesDraft = nil
     }
 
     // MARK: - Export

@@ -347,6 +347,48 @@ distances are cleanly bimodal (same speaker ≤ 0.56, different ≥ 0.77 against
 the 0.7 threshold), the roster drops from three speakers to the true two, and
 every turn in the transcript lands on the right one.
 
+## 11. Minutes: the citation is what makes the summary checkable
+
+Phase 6's note model was built so "a later extraction pass can write into the
+same shape". Wiring that pass to the Claude CLI showed the interesting part is
+not the summary — it is whether an item can be traced back to the audio.
+
+Measured on a real 1:33:03 Taglish meeting (361 speaker turns, 44.8 KB of
+prompt, ~12k tokens):
+
+| | |
+|---|---:|
+| Wall clock | 93 s |
+| Items returned | 42 (24 key points, 6 decisions, 7 questions, 3 actions, 2 follow-ups) |
+| Valid JSON first try | yes |
+| **Citations resolving to a real turn** | **42 / 42** |
+
+The thing that made citations work is instructing the model to *copy* a
+millisecond stamp shown in the transcript rather than produce one:
+
+    [26000] Speaker 2: Yun na yan? Ayun lang, sir...
+
+Asking for `12:34` and parsing it back, or asking the model to compute an
+offset, both invite a number that looks plausible and points nowhere.
+
+**The guard, and why it is strict.** `Minutes.cite` resolves a stamp only if it
+lands *inside* a segment. A stamp in the silence between two segments resolves
+to nothing, and the item is kept with no source link and counted in
+`uncitedCount`. Snapping to the nearest segment instead would produce a note
+that looks sourced and seeks to the wrong moment — which is precisely the
+failure the source link exists to prevent, and a close relative of finding 8,
+where a rewrite that scored 0.88 similarity had changed what the sentence said.
+
+**Not measured.** Whether the *content* is right. 42/42 citations means every
+item points at real audio, not that the model understood it. That needs the
+same treatment as finding 8: a human reading the transcript alongside the
+minutes. One 93-minute meeting is also one sample.
+
+**Operational note.** A `.app` launched from Finder inherits launchd's PATH
+(`/usr/bin:/bin:/usr/sbin:/sbin`), not the shell's, so resolving `claude`
+through `env` works from a terminal and fails in the shipped bundle. The
+engine searches explicit install locations instead.
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a
