@@ -12,6 +12,10 @@ data/
 *.db
 eval/audio/*
 !eval/audio/.gitkeep
+# reference transcripts of real meetings are meeting content too
+eval/refs/*
+!eval/refs/.gitkeep
+!eval/refs/README.md
 # models
 models/
 .build/
