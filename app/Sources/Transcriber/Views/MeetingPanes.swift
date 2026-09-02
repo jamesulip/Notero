@@ -20,6 +20,7 @@ struct NotesPane: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                minutesBar
                 section("Summary") {
                     TextEditor(text: Binding(
                         get: { recording.summary },
@@ -56,6 +57,60 @@ struct NotesPane: View {
             .padding(14)
         }
         .onDisappear { save() }
+        .sheet(item: Binding(
+            get: { state.minutesDraft?.recordingId == recording.id ? state.minutesDraft : nil },
+            set: { if $0 == nil { state.minutesDraft = nil } }
+        )) { review in
+            MinutesSheet(review: review, replacesSummary: !recording.summary.isEmpty)
+                .environment(state)
+        }
+    }
+
+    /// Draft the minutes from the transcript.
+    ///
+    /// The caption is not boilerplate. Every other thing this app does runs on
+    /// the machine, so a button that quietly posts an hour of someone's
+    /// meeting to a server would be a broken promise; it says so before it is
+    /// pressed, not after.
+    private var hasTranscript: Bool {
+        !(recording.transcript?.orderedSegments ?? []).isEmpty
+    }
+
+    private var status: String {
+        if state.isGeneratingMinutes(recording) {
+            return "Reading the transcript. About a minute for an hour of audio."
+        }
+        guard hasTranscript else { return "Available once this recording has been transcribed." }
+        return "Sends the transcript — not the audio — to Claude. Everything else in this "
+             + "app stays on your Mac. You review the result before it is saved."
+    }
+
+    @ViewBuilder
+    private var minutesBar: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            // Spinner beside the button, status underneath. The inspector is
+            // narrow enough that a status label sharing this row truncates
+            // both it and the button title.
+            HStack(spacing: 8) {
+                Button {
+                    Task { await state.generateMinutes(recording) }
+                } label: {
+                    Label("Draft minutes with Claude", systemImage: "sparkles")
+                }
+                .disabled(!hasTranscript || state.isGeneratingMinutes)
+                .fixedSize()
+
+                if state.isGeneratingMinutes(recording) {
+                    ProgressView().controlSize(.small)
+                }
+                Spacer(minLength: 0)
+            }
+            Text(status)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

@@ -12,7 +12,7 @@ import TranscriberEngine
 //   swift run -c release transcribe --audio clip.wav [--reference ref.txt]
 //                                   [--models DIR] [--model ID] [--tier fast]
 //                                   [--language tl] [--no-diarize] [--room-mode]
-//                                   [--format txt]
+//                                   [--minutes] [--format txt]
 
 struct Options {
     var audio: URL?
@@ -24,6 +24,7 @@ struct Options {
     var language = LanguageCatalogue.defaultLanguage
     var diarize = true
     var roomMode = false
+    var minutes = false
     var format: ExportFormat = .txt
     var output: URL?
 }
@@ -48,13 +49,14 @@ func parse() -> Options {
         case "--format": options.format = value().flatMap(ExportFormat.init(rawValue:)) ?? options.format
         case "--out": options.output = value().map { URL(fileURLWithPath: $0) }
         case "--no-diarize": options.diarize = false
+        case "--minutes": options.minutes = true
         case "--room-mode": options.roomMode = true
         case "--help", "-h":
             print("""
             transcribe --audio FILE [--reference FILE] [--models DIR]
                        [--model ID | --tier fast|balanced|accurate]
-                       [--language tl] [--no-diarize] [--format txt|srt|vtt|json]
-                       [--out FILE]
+                       [--language tl] [--no-diarize] [--minutes]
+                       [--format txt|srt|vtt|json] [--out FILE]
             """)
             exit(0)
         default:
@@ -165,6 +167,35 @@ if let output = options.output {
     log("wrote \(output.path)")
 } else {
     print(rendered)
+}
+
+// Minutes are the one stage that leaves the machine, so they are opt-in here
+// exactly as they are in the app -- never a side effect of transcribing.
+if options.minutes {
+    log("drafting minutes with Claude…")
+    let minutesStarted = Date()
+    do {
+        let raw = try await ClaudeCLIMinutes().generate(prompt: Minutes.prompt(for: document))
+        let draft = try Minutes.parse(raw, against: segments)
+        log("minutes: \(draft.items.count) item(s) in "
+            + "\(TimeFormat.short(ms: Int(Date().timeIntervalSince(minutesStarted) * 1000)))")
+        if draft.uncitedCount > 0 {
+            log("  WARNING \(draft.uncitedCount) item(s) cited a moment not in the transcript")
+        }
+        print("\nSUMMARY\n\(draft.summary)")
+        for kind in MeetingItemKind.allCases {
+            let items = draft.items.filter { $0.kind == kind }
+            guard !items.isEmpty else { continue }
+            print("\n\(kind.plural.uppercased())")
+            for item in items {
+                let at = item.sourceMs.map { " [\(TimeFormat.short(ms: $0))]" } ?? " [uncited]"
+                let owner = item.owner.map { " (\($0))" } ?? ""
+                print("- \(item.text)\(owner)\(at)")
+            }
+        }
+    } catch {
+        log("minutes unavailable: \(error.localizedDescription)")
+    }
 }
 
 if let referenceURL = options.reference {
