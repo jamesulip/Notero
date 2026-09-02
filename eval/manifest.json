@@ -4,5 +4,11 @@
     "audio": "audio/synthetic-taglish.wav",
     "ref": "synthetic-taglish.txt",
     "category": "mixed"
+  },
+  {
+    "id": "meeting01",
+    "audio": "audio/meeting01.wav",
+    "ref": "refs/meeting01.txt",
+    "category": "mixed"
   }
 ]
