@@ -12,14 +12,20 @@ CONFIG=${1:-release}
 APP="Transcriber.app"
 BIN=".build/$CONFIG/Transcriber"
 
-echo "building ($CONFIG)…"
+# Marketing version from VERSION; build number from the commit count, so two
+# bundles from different commits never share one. Override either:
+#     VERSION=1.2.0 BUILD=57 ./build-app.sh
+VERSION=${VERSION:-$(tr -d '[:space:]' < VERSION)}
+BUILD=${BUILD:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}
+
+echo "building $VERSION ($BUILD, $CONFIG)…"
 swift build -c "$CONFIG"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Transcriber"
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -27,8 +33,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleName</key>              <string>Transcriber</string>
     <key>CFBundleDisplayName</key>       <string>Transcriber</string>
     <key>CFBundleIdentifier</key>        <string>local.transcriber</string>
-    <key>CFBundleVersion</key>           <string>2</string>
-    <key>CFBundleShortVersionString</key><string>1.0.1</string>
+    <key>CFBundleVersion</key>           <string>$BUILD</string>
+    <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundlePackageType</key>       <string>APPL</string>
     <key>CFBundleExecutable</key>        <string>Transcriber</string>
     <key>LSMinimumSystemVersion</key>    <string>15.0</string>
@@ -77,5 +83,5 @@ ENT
 codesign --force --deep --sign - --entitlements "$ENTITLEMENTS" "$APP" 2>&1 \
     | grep -v "replacing existing signature" || true
 
-echo "built $APP"
+echo "built $APP ($VERSION, build $BUILD)"
 codesign -dv "$APP" 2>&1 | grep -E "Identifier|Signature" || true

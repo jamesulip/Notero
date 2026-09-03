@@ -20,6 +20,12 @@ enum Route: Hashable {
 /// It owns the engines and the queue, and it is the only place that knows both
 /// the store and the pipeline. Views get SwiftData through the environment and
 /// everything else through here.
+///
+/// The stored state and the small view-facing helpers are here. The larger
+/// concerns each have a file: `AppState+Jobs` consumes the queue's events,
+/// `AppState+Recording` runs the live session, `AppState+Library` imports,
+/// re-runs and deletes, `AppState+Models` manages weights and memory. Members
+/// those files reach are internal rather than private for that reason.
 @Observable
 final class AppState {
 
@@ -29,7 +35,7 @@ final class AppState {
     let queue: TranscriptionQueue
     let live: LiveSession
     let player = AudioPlayer()
-    private let writer: TranscriptWriter
+    let writer: TranscriptWriter
 
     /// Sidebar selection. Nil is the empty state.
     var route: Route?
@@ -100,37 +106,37 @@ final class AppState {
     }
 
     /// Download progress per model id, 0...1, while one runs.
-    private(set) var modelDownloads: [String: Double] = [:]
+    var modelDownloads: [String: Double] = [:]
     /// Bumped when a model arrives or goes, so views re-read the disk.
-    private(set) var modelsRevision = 0
+    var modelsRevision = 0
 
     /// Below this a take is asked about rather than kept silently.
     static let shortTakeMs = 10_000
 
     /// Per-recording pipeline progress, keyed by recording id.
-    private(set) var progress: [UUID: JobProgress] = [:]
+    var progress: [UUID: JobProgress] = [:]
     /// Per-recording notes about work that finished imperfectly.
-    private(set) var warnings: [UUID: String] = [:]
+    var warnings: [UUID: String] = [:]
     /// The recording the live session is working on, set the moment the user
     /// asks for one rather than when the first sample arrives. `live.recordingId`
     /// only exists once capture starts, which on a cold model is several
     /// seconds later -- and those are exactly the seconds the UI has to show
     /// something for.
-    private(set) var activeRecordingId: UUID?
+    var activeRecordingId: UUID?
 
-    private var pump: Task<Void, Never>?
-    private var warmup: Task<Void, Never>?
+    var pump: Task<Void, Never>?
+    var warmup: Task<Void, Never>?
 
     /// Jobs handed to the queue, kept until they finish: `.partial` events
     /// need the model and language the job was started with.
-    private var queuedJobs: [UUID: TranscriptionJob] = [:]
+    var queuedJobs: [UUID: TranscriptionJob] = [:]
     /// The revision each running job is appending to, from its first window.
-    private var openTranscripts: [UUID: UUID] = [:]
+    var openTranscripts: [UUID: UUID] = [:]
     /// When the current stage of each job began and the last estimate made
     /// from it. The estimate is smoothed against this.
-    private var stageClock: [UUID: StageClock] = [:]
+    var stageClock: [UUID: StageClock] = [:]
 
-    private struct StageClock {
+    struct StageClock {
         var status: TranscriptionStatus
         var since: Date
         var remaining: TimeInterval?
@@ -187,116 +193,8 @@ final class AppState {
 
     var context: ModelContext { container.mainContext }
 
-    // MARK: - Job events
-
-    private func startPump() {
-        pump = Task { [weak self] in
-            guard let self else { return }
-            for await event in self.queue.events {
-                await self.handle(event)
-            }
-        }
-    }
-
-    private func handle(_ event: JobEvent) async {
-        switch event {
-        case .queued(let id, _):
-            progress[id] = JobProgress(status: .pending, fraction: 0)
-            openTranscripts[id] = nil
-            stageClock[id] = nil
-
-        case .stage(let id, let status, let fraction):
-            let previous = progress[id]
-            progress[id] = JobProgress(
-                status: status, fraction: fraction,
-                remaining: estimateRemaining(id, status: status, fraction: fraction),
-                coveredMs: previous?.coveredMs ?? 0
-            )
-            // The store needs the stage, not every fraction of it. Persisting
-            // the fraction meant a fetch and a SQLite save per progress tick --
-            // tens of thousands of transactions for one long recording, for a
-            // number nothing ever reads back.
-            if previous?.status != status {
-                try? await writer.updateStatus(status, progress: fraction, for: id)
-            }
-
-        case .prepared(let id, let durationMs, let waveform):
-            try? await writer.finishTranscription(
-                durationMs: durationMs,
-                waveform: waveform.isEmpty ? nil : waveform,
-                for: id
-            )
-
-        case .partial(let id, let segments, let coveredMs):
-            guard let job = queuedJobs[id] else { break }
-            if openTranscripts[id] == nil {
-                openTranscripts[id] = try? await writer.openPartialTranscript(
-                    modelId: job.modelId, language: job.language, for: id
-                )
-            }
-            if let transcriptId = openTranscripts[id] {
-                try? await writer.appendPartial(segments, to: transcriptId)
-            }
-            progress[id]?.coveredMs = coveredMs
-
-        case .transcribed(let id, let payload):
-            try? await writer.completeTranscript(
-                openTranscripts[id],
-                segments: payload.segments, roster: payload.roster,
-                modelId: payload.modelId, language: payload.language,
-                processMs: payload.processMs, didDiarize: payload.didDiarize,
-                for: id
-            )
-            openTranscripts[id] = nil
-            try? await writer.finishTranscription(
-                durationMs: payload.durationMs,
-                waveform: payload.waveform.isEmpty ? nil : payload.waveform,
-                for: id
-            )
-
-        case .diarized(let id, let spans, let roster):
-            try? await writer.applySpeakers(spans: spans, roster: roster, for: id)
-
-        case .failed(let id, let message):
-            // No alert: a background job failing should not interrupt whatever
-            // is on screen. The row's chip, the Needs Attention group and the
-            // detail's empty state all carry the message.
-            try? await writer.updateStatus(.failed, error: message, for: id)
-
-        case .warning(let id, let message):
-            // The transcript is usable but incomplete. Keyed to the recording
-            // rather than thrown in an alert, and stored so it survives a
-            // relaunch.
-            warnings[id] = message
-            try? await writer.setWarning(message, for: id)
-
-        case .finished(let id):
-            progress[id] = nil
-            stageClock[id] = nil
-            queuedJobs[id] = nil
-            openTranscripts[id] = nil
-        }
-    }
-
-    /// Seconds left in the current stage, from how long the fraction done has
-    /// taken so far. Nothing until 5 % is in, since a first window's timing
-    /// says little; smoothed after that so one slow window does not swing the
-    /// number by minutes.
-    private func estimateRemaining(_ id: UUID, status: TranscriptionStatus,
-                                   fraction: Double) -> TimeInterval? {
-        guard status.isBusy else { stageClock[id] = nil; return nil }
-        let now = Date()
-        guard var clock = stageClock[id], clock.status == status else {
-            stageClock[id] = StageClock(status: status, since: now, remaining: nil)
-            return nil
-        }
-        guard fraction >= 0.05, fraction < 1 else { return clock.remaining }
-        let elapsed = now.timeIntervalSince(clock.since)
-        let raw = elapsed / fraction * (1 - fraction)
-        clock.remaining = clock.remaining.map { $0 * 0.7 + raw * 0.3 } ?? raw
-        stageClock[id] = clock
-        return clock.remaining
-    }
+    /// Pending questions, asked one at a time.
+    var duplicateImports: [DuplicateImport] = []
 
     // MARK: - Lookup
 
@@ -326,307 +224,6 @@ final class AppState {
             alert = AppAlert(title: "Could not create that", message: error.localizedDescription)
             return nil
         }
-    }
-
-    // MARK: - Live recording
-
-    var isRecording: Bool { live.state.isRecording }
-
-    /// True from the tap on New Recording until the session ends, model load
-    /// included. What the UI has to switch on: `isRecording` is false for the
-    /// whole preparing phase, so anything gated on it leaves those seconds
-    /// looking like a hang.
-    var isLiveBusy: Bool { live.state.isBusy }
-
-    /// Whether this recording is the one the live session is busy with, in any
-    /// phase.
-    func isLive(_ id: UUID) -> Bool { activeRecordingId == id && isLiveBusy }
-
-    func beginRecording(_ recording: StoredRecording) async {
-        // A launch warmup may still be loading the model. Waiting for it is the
-        // point -- the `isBusy` guard below would otherwise drop the recording
-        // silently, which is a worse first second than a slow one.
-        await warmup?.value
-        guard !live.state.isBusy else { return }
-        let id = recording.id
-        activeRecordingId = id
-        let name = Paths.newRecordingName(id: id, ext: "m4a", on: recording.createdAt)
-        recording.audioFileName = name
-        recording.status = .preparing
-        try? context.save()
-
-        live.config = settings.sessionConfig
-        live.inputGainDb = settings.inputGainDb
-        live.isRoomMode = settings.roomMode
-        live.decodeLive = settings.liveTranscription
-        await queue.setLiveActive(true)
-        await engines.beginLive()
-        await live.prepare(model: settings.liveModelId)
-
-        do {
-            try await live.start(recordingId: id, archiveFileName: name,
-                                 archiveURL: Paths.recordingURL(name))
-            recording.status = .recording
-            try? context.save()
-        } catch {
-            activeRecordingId = nil
-            recording.status = .failed
-            recording.errorMessage = error.localizedDescription
-            try? context.save()
-            await engines.endLive()
-            await queue.setLiveActive(false)
-            alert = AppAlert(title: "Could not start recording",
-                             message: error.localizedDescription)
-        }
-    }
-
-    func stopRecording() async {
-        let finished = await live.stop()
-        activeRecordingId = nil
-        guard let result = finished else { return }
-        await engines.endLive()
-        let decodedLive = live.decodeLive
-
-        // A thrown decode is counted, not shown, during the session -- here is
-        // where it has to surface. Without this, a backend that failed on
-        // every hop produces a completed recording with an empty transcript.
-        if decodedLive, result.stats.failedHops > 0 {
-            let detail = result.stats.lastError.map { " Last error: \($0)" } ?? ""
-            warnings[result.recordingId] = result.stats.hops == 0
-                ? "Live transcription failed for this entire recording "
-                  + "(\(result.stats.failedHops) decode errors).\(detail) "
-                  + "The audio was saved -- use Transcribe Again to recover it."
-                : "\(result.stats.failedHops) decode(s) failed during this "
-                  + "recording, so some words may be missing.\(detail)"
-        }
-
-        if decodedLive {
-            try? await writer.storeTranscript(
-                segments: result.segments, roster: [], modelId: result.modelId,
-                language: result.language, processMs: result.stats.totalInferMs,
-                didDiarize: false, for: result.recordingId
-            )
-        }
-        try? await writer.attachAudio(
-            fileName: result.archiveFileName ?? "",
-            sampleRate: result.archiveSampleRate,
-            durationMs: result.durationMs,
-            waveform: result.waveform.isEmpty ? nil : result.waveform,
-            for: result.recordingId
-        )
-
-        if !decodedLive {
-            // Capture-only session: the whole-file pass is the transcript.
-            // The working copy it needs is the one the session just wrote.
-            if let stored = recording(result.recordingId) {
-                enqueueTranscription(stored, work: .full)
-            }
-        } else if settings.diarize {
-            let job = TranscriptionJob(
-                id: result.recordingId,
-                title: recording(result.recordingId)?.title ?? "Recording",
-                sourceURL: result.archiveFileName.map { Paths.recordingURL($0) },
-                cacheURL: result.cacheURL,
-                modelId: result.modelId,
-                language: result.language,
-                diarize: true,
-                work: .diarizeOnly,
-                discardCacheWhenDone: !settings.keepWorkingCopy,
-                expectedSpeakers: recording(result.recordingId)?.expectedSpeakers
-            )
-            queuedJobs[job.id] = job
-            await queue.enqueue(job)
-        } else {
-            try? await writer.updateStatus(.completed, progress: 1, for: result.recordingId)
-            if !settings.keepWorkingCopy {
-                try? FileManager.default.removeItem(at: result.cacheURL)
-            }
-        }
-        await queue.setLiveActive(false)
-
-        if result.durationMs < Self.shortTakeMs {
-            shortTake = ShortTake(
-                id: result.recordingId,
-                durationMs: result.durationMs,
-                words: decodedLive
-                    ? result.segments.reduce(0) {
-                        $0 + $1.displayText.split(whereSeparator: \.isWhitespace).count
-                    }
-                    : nil
-            )
-        }
-    }
-
-    /// The answer to the short-take question. Discarding is a full delete:
-    /// audio, row, and any speaker job the stop just queued.
-    func resolveShortTake(keep: Bool) {
-        defer { shortTake = nil }
-        guard !keep, let take = shortTake, let recording = recording(take.id) else { return }
-        delete(recording)
-    }
-
-    /// ⌘B. Works while recording and while playing back.
-    @discardableResult
-    func addBookmark(label: String = "") -> Bool {
-        guard let recording = selectedRecording else { return false }
-        let ms = isRecording ? live.currentMs : player.currentMs
-        do {
-            try RecordingStore.addBookmark(at: ms, label: label, to: recording, in: context)
-            return true
-        } catch {
-            alert = AppAlert(title: "Could not add bookmark", message: error.localizedDescription)
-            return false
-        }
-    }
-
-    // MARK: - Importing
-
-    static let importableTypes: [UTType] = [
-        .audio, .mpeg4Audio, .mp3, .wav, .aiff, .movie, .mpeg4Movie, .quickTimeMovie,
-    ]
-
-    /// A file that looks like one already in the library: same size, same
-    /// extension. Asked about rather than imported, since the library had
-    /// several copies of one meeting under one title.
-    struct DuplicateImport: Identifiable {
-        let id = UUID()
-        let url: URL
-        let existingId: UUID
-        let existingTitle: String
-    }
-
-    /// Pending questions, asked one at a time.
-    var duplicateImports: [DuplicateImport] = []
-
-    func importFiles(_ urls: [URL]) {
-        for url in urls {
-            if let existing = existingRecording(matching: url) {
-                duplicateImports.append(DuplicateImport(
-                    url: url, existingId: existing.id, existingTitle: existing.title))
-            } else {
-                importFile(url)
-            }
-        }
-    }
-
-    func resolveDuplicate(_ duplicate: DuplicateImport, importAnyway: Bool) {
-        duplicateImports.removeAll { $0.id == duplicate.id }
-        if importAnyway {
-            importFile(duplicate.url)
-        } else {
-            route = .recording(duplicate.existingId)
-        }
-    }
-
-    /// Byte-for-byte size is a strong signal for the same file and costs one
-    /// stat per recording; hashing gigabytes of audio to be certain is not
-    /// worth it for a question the user answers in a click.
-    private func existingRecording(matching url: URL) -> StoredRecording? {
-        let accessed = url.startAccessingSecurityScopedResource()
-        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0
-        else { return nil }
-        let ext = url.pathExtension.lowercased()
-        let candidates = (try? context.fetch(FetchDescriptor<StoredRecording>())) ?? []
-        return candidates.first { recording in
-            guard let existing = recording.audioURL,
-                  existing.pathExtension.lowercased() == ext,
-                  let existingSize = try? existing.resourceValues(forKeys: [.fileSizeKey]).fileSize
-            else { return false }
-            return existingSize == size
-        }
-    }
-
-    private func importFile(_ url: URL) {
-        let accessed = url.startAccessingSecurityScopedResource()
-        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-
-        do {
-            let recording = try RecordingStore.create(
-                kind: .recording,
-                title: url.deletingPathExtension().lastPathComponent,
-                in: context
-            )
-            // Copied into the library rather than referenced: a file the user
-            // moves or deletes would otherwise take the recording's audio with
-            // it, and there is no way to notice until playback fails.
-            let ext = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
-            let name = Paths.newRecordingName(id: recording.id, ext: ext)
-            let destination = Paths.recordingURL(name)
-            try? FileManager.default.removeItem(at: destination)
-            try FileManager.default.copyItem(at: url, to: destination)
-
-            recording.audioFileName = name
-            recording.status = .pending
-            try context.save()
-
-            enqueueTranscription(recording, work: .full)
-            route = .recording(recording.id)
-        } catch {
-            alert = AppAlert(title: "Could not import \(url.lastPathComponent)",
-                             message: error.localizedDescription)
-        }
-    }
-
-    func enqueueTranscription(_ recording: StoredRecording, work: TranscriptionJob.Work,
-                              modelId: String? = nil, diarize: Bool? = nil) {
-        guard let name = recording.audioFileName else { return }
-        warnings[recording.id] = nil
-        recording.warningMessage = nil
-        let job = TranscriptionJob(
-            id: recording.id,
-            title: recording.title,
-            sourceURL: Paths.recordingURL(name),
-            cacheURL: AudioCache.url(for: recording.id, under: Paths.support),
-            modelId: modelId ?? settings.offlineModelId,
-            language: settings.language,
-            prompt: settings.promptOrNil,
-            diarize: diarize ?? settings.diarize,
-            work: work,
-            discardCacheWhenDone: !settings.keepWorkingCopy,
-            roomMode: settings.roomMode,
-            expectedSpeakers: recording.expectedSpeakers
-        )
-        progress[recording.id] = JobProgress(status: .pending, fraction: 0)
-        queuedJobs[recording.id] = job
-        Task { await queue.enqueue(job) }
-    }
-
-    /// Decode again, optionally on a named tier. Nil means the tier Settings
-    /// holds -- but the menu always names one, because "again" with the same
-    /// model is rarely what anyone re-transcribing a meeting wants.
-    func retranscribe(_ recording: StoredRecording, tier: ModelTier? = nil) {
-        enqueueTranscription(recording, work: .full,
-                             modelId: tier.map { settings.modelId(for: $0) })
-    }
-
-    /// Speaker identification only, over the transcript that exists. Forced on
-    /// regardless of the setting: asking for it is the setting.
-    func rediarize(_ recording: StoredRecording) {
-        enqueueTranscription(recording, work: .diarizeOnly, diarize: true)
-    }
-
-    func cancelJob(_ id: UUID) {
-        Task { await queue.cancel(id) }
-    }
-
-    // MARK: - Deleting
-
-    func delete(_ recording: StoredRecording) {
-        let id = recording.id
-        Task { await queue.cancel(id) }
-        AudioCache.discard(id, under: Paths.support)
-        if case .recording(id) = route { route = nil }
-        if player.loadedURL == recording.audioURL { player.unload() }
-        do {
-            try RecordingStore.delete(recording, in: context)
-        } catch {
-            alert = AppAlert(title: "Could not delete", message: error.localizedDescription)
-        }
-    }
-
-    func delete(_ recordings: [StoredRecording]) {
-        for recording in recordings { delete(recording) }
     }
 
     // MARK: - Meeting items
@@ -685,73 +282,4 @@ final class AppState {
         }
     }
 
-    // MARK: - Model files
-
-    func isModelDownloaded(_ id: String) -> Bool {
-        ModelCatalogue.isDownloaded(id, modelsDirectory: Paths.models)
-    }
-
-    /// Fetches weights ahead of need. Progress is throttled to whole percents
-    /// on the way to the main actor; WhisperKit reports per chunk.
-    func downloadModel(_ id: String) {
-        guard modelDownloads[id] == nil else { return }
-        modelDownloads[id] = 0
-        let last = Mutex(-1.0)
-        Task {
-            do {
-                try await engines.downloadModel(id) { fraction in
-                    let due = last.withLock { previous in
-                        guard fraction - previous >= 0.01 || fraction >= 1 else { return false }
-                        previous = fraction
-                        return true
-                    }
-                    guard due else { return }
-                    Task { @MainActor in self.modelDownloads[id] = fraction }
-                }
-            } catch {
-                alert = AppAlert(title: "Download failed", message: error.localizedDescription)
-            }
-            modelDownloads[id] = nil
-            modelsRevision += 1
-        }
-    }
-
-    /// Deletes weights. Refused while a recording is in progress: the live
-    /// session may be decoding on exactly this model.
-    func removeModel(_ id: String) {
-        guard !isLiveBusy else { return }
-        Task {
-            do {
-                try await engines.removeModel(id)
-            } catch {
-                alert = AppAlert(title: "Could not remove the model",
-                                 message: error.localizedDescription)
-            }
-            modelsRevision += 1
-        }
-    }
-
-    // MARK: - Memory
-
-    /// Called when the app is idle. Releasing the diarizer between recordings
-    /// is 200 MB back on a machine that is going to want it for the model.
-    func releaseIdleModels() {
-        guard !isRecording else { return }
-        Task { await engines.releaseDiarizer() }
-    }
-
-    /// Loads the live model before anything asks for it, so hitting record does
-    /// not sit on a cold load.
-    ///
-    /// Only for a model already on disk: warming one that is not would start a
-    /// 1.6 GB download at launch that nobody asked for.
-    func warmUpEngines() {
-        guard warmup == nil, live.state == .idle else { return }
-        guard ModelCatalogue.isDownloaded(settings.liveModelId,
-                                          modelsDirectory: Paths.models) else { return }
-        warmup = Task { [weak self] in
-            guard let self else { return }
-            await live.prepare(model: settings.liveModelId)
-        }
-    }
 }
