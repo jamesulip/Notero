@@ -22,7 +22,11 @@ struct DetailView: View {
                 } else if recording.kind == .note {
                     NoteEditorView(recording: recording)
                 } else {
+                    // Keyed by recording so per-recording view state (which
+                    // revision is open, whether the inspector is shown) does
+                    // not carry over when the selection changes.
                     RecordingDetailView(recording: recording)
+                        .id(recording.id)
                 }
             } else {
                 ContentUnavailableView("Recording not found", systemImage: "questionmark.folder")
@@ -49,6 +53,8 @@ struct RecordingDetailView: View {
 
     @State private var inspector: InspectorTab = .notes
     @State private var showInspector = true
+    /// An earlier transcript revision open for reading. Nil is the latest.
+    @State private var revision: Int?
 
     enum InspectorTab: String, CaseIterable, Identifiable {
         case notes, bookmarks, speakers
@@ -65,7 +71,7 @@ struct RecordingDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            RecordingInfoBar(recording: recording)
+            RecordingInfoBar(recording: recording, revision: $revision)
             Divider()
 
             HStack(spacing: 0) {
@@ -73,7 +79,7 @@ struct RecordingDetailView: View {
                 // its content, and with the inspector collapsed nothing else
                 // is left to hold the row open -- so the whole header sinks to
                 // the middle of the window.
-                TranscriptView(recording: recording)
+                TranscriptView(recording: recording, revision: revision)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 if showInspector {

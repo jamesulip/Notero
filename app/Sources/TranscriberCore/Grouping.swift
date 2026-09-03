@@ -54,6 +54,27 @@ public enum TranscriptGrouping {
         return out
     }
 
+    /// The block containing `ms`, or nil in a gap or past the end. Binary
+    /// search, for the same reason as `segmentIndex`: the follower asks on
+    /// every player tick.
+    public static func blockIndex(at ms: Int, in blocks: [TranscriptBlock]) -> Int? {
+        guard !blocks.isEmpty else { return nil }
+        var low = 0
+        var high = blocks.count - 1
+        var best: Int?
+        while low <= high {
+            let mid = (low + high) / 2
+            if blocks[mid].startMs <= ms {
+                best = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        guard let best, blocks[best].contains(ms: ms) else { return nil }
+        return best
+    }
+
     /// The segment playing at `ms`, or the last one before it.
     ///
     /// Binary search rather than a scan: this runs on every player tick, and a

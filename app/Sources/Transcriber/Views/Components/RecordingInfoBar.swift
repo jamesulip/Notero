@@ -10,18 +10,29 @@ import TranscriberStore
 /// out is an expensive way to answer it.
 struct RecordingInfoBar: View {
     let recording: StoredRecording
+    /// The revision on show in the transcript. Nil is the latest.
+    @Binding var revision: Int?
 
     @State private var facts = RecordingFacts()
     @State private var showAll = false
 
+    /// The transcript the facts describe: an older revision when one is open.
+    private var shown: StoredTranscript? {
+        if let revision,
+           let older = (recording.transcripts ?? []).first(where: { $0.revision == revision }) {
+            return older
+        }
+        return recording.transcript
+    }
+
     /// Recomputing on every redraw would mean counting words across every
     /// segment of a two-hour meeting each time a slider moves. These are the
-    /// only four things that can change the answer.
+    /// only things that can change the answer.
     private var reloadKey: String {
         [recording.id.uuidString,
-         recording.transcript?.id.uuidString ?? "-",
+         shown?.id.uuidString ?? "-",
          // Rows arrive in batches while a job runs; the word count follows them.
-         String(recording.transcript?.segments?.count ?? 0),
+         String(shown?.segments?.count ?? 0),
          recording.statusRaw,
          String(recording.durationMs)].joined(separator: "|")
     }
@@ -34,6 +45,11 @@ struct RecordingInfoBar: View {
                 }
                 Text(item.value)
                     .help("\(item.label): \(item.value)\(item.help.isEmpty ? "" : "\n\n\(item.help)")")
+            }
+
+            if let revisions = recording.transcripts, revisions.count > 1 {
+                Text("·").foregroundStyle(.quaternary)
+                revisionMenu(revisions.sorted { $0.revision > $1.revision })
             }
 
             if !facts.items.isEmpty {
@@ -56,7 +72,37 @@ struct RecordingInfoBar: View {
         .lineLimit(1)
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
-        .task(id: reloadKey) { facts = RecordingFacts(recording) }
+        .task(id: reloadKey) { facts = RecordingFacts(recording, transcript: shown) }
+    }
+
+    /// Earlier revisions are kept when a recording is transcribed again; this
+    /// is the only way to read one. Hand edits stay on the revision they were
+    /// made to, which is the reason anyone would look back.
+    private func revisionMenu(_ revisions: [StoredTranscript]) -> some View {
+        Menu {
+            ForEach(revisions, id: \.id) { candidate in
+                Button {
+                    revision = candidate.revision == recording.transcript?.revision
+                        ? nil : candidate.revision
+                } label: {
+                    let title = "Revision \(candidate.revision) · "
+                        + "\(ModelCatalogue.option(candidate.modelId)?.label ?? candidate.modelId) · "
+                        + candidate.createdAt.formatted(date: .abbreviated, time: .shortened)
+                    if candidate.id == shown?.id {
+                        Label(title, systemImage: "checkmark")
+                    } else {
+                        Text(title)
+                    }
+                }
+            }
+        } label: {
+            Label(revision == nil ? "Latest revision" : "Revision \(revision ?? 0)",
+                  systemImage: "clock.arrow.circlepath")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Read an earlier transcript of this recording. Edits and notes stay "
+            + "with the revision they were made on.")
     }
 }
 
@@ -116,8 +162,8 @@ struct RecordingFacts {
 
     init() {}
 
-    init(_ recording: StoredRecording) {
-        let transcript = recording.transcript
+    init(_ recording: StoredRecording, transcript: StoredTranscript? = nil) {
+        let transcript = transcript ?? recording.transcript
         let segments = transcript?.orderedSegments ?? []
 
         items.append(Item(

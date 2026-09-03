@@ -41,11 +41,24 @@ struct AppCommands: Commands {
         }
 
         CommandGroup(after: .textEditing) {
-            Button("Find in Recordings") {
+            // ⌘F means "find on this page" everywhere else on the Mac. On a
+            // recording that is the transcript; anywhere else it is the library.
+            Button("Find…") {
+                if case .recording(let id) = state.route,
+                   state.recording(id)?.transcript != nil {
+                    state.findRequested = true
+                } else {
+                    state.route = .search
+                    state.focusSearch = true
+                }
+            }
+            .keyboardShortcut("f")
+
+            Button("Search All Recordings") {
                 state.route = .search
                 state.focusSearch = true
             }
-            .keyboardShortcut("f")
+            .keyboardShortcut("f", modifiers: [.command, .shift])
         }
 
         CommandMenu("Meeting") {
