@@ -92,13 +92,38 @@ struct AppCommands: Commands {
 
             Divider()
 
+            Button("Previous Turn") { state.stepTurn(-1) }
+                .keyboardShortcut("[", modifiers: .command)
+                .disabled(state.selectedRecording?.transcript == nil)
+            Button("Next Turn") { state.stepTurn(1) }
+                .keyboardShortcut("]", modifiers: .command)
+                .disabled(state.selectedRecording?.transcript == nil)
+
+            Divider()
+
+            Button("Faster") { state.adjustSpeed(1) }
+                .keyboardShortcut(.upArrow, modifiers: .option)
+            Button("Slower") { state.adjustSpeed(-1) }
+                .keyboardShortcut(.downArrow, modifiers: .option)
             Menu("Speed") {
-                ForEach([0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
-                    Button(String(format: "%.2gx", rate)) {
-                        state.player.rate = Float(rate)
+                ForEach(AppState.playbackRates, id: \.self) { rate in
+                    Button(String(format: "%.2gx", Double(rate))) {
+                        state.player.rate = rate
                     }
                 }
             }
+        }
+
+        CommandMenu("View") {
+            Toggle("Show Times of Day", isOn: Binding(
+                get: { state.settings.clockTimestamps },
+                set: { state.settings.clockTimestamps = $0 }
+            ))
+            .keyboardShortcut("t", modifiers: [.command, .option])
+            Toggle("Follow Playback", isOn: Binding(
+                get: { state.followPlayback },
+                set: { state.followPlayback = $0 }
+            ))
         }
 
         CommandGroup(after: .toolbar) {

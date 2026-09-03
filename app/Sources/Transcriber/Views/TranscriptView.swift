@@ -76,6 +76,10 @@ struct TranscriptView: View {
             if context.undoManager == nil { context.undoManager = undoManager }
         }
         .task(id: transcriptSignature) { regroup() }
+        .onChange(of: state.turnStep) { _, step in
+            guard let step else { return }
+            moveSelection(by: step.delta)
+        }
         .onChange(of: state.findRequested) { _, wanted in
             guard wanted else { return }
             find.isShowing = true
@@ -242,6 +246,21 @@ struct TranscriptView: View {
     private func request(_ id: UUID, anchor: UnitPoint) {
         scrollRequest = ScrollRequest(id: id, anchor: anchor,
                                       serial: (scrollRequest?.serial ?? 0) + 1)
+    }
+
+    /// ⌘[ / ⌘]: from the selected turn, else the playing one, else the top.
+    /// Selects, seeks and centres, so the keyboard walks the meeting the way
+    /// clicking would.
+    private func moveSelection(by delta: Int) {
+        guard !blocks.isEmpty else { return }
+        let current = blocks.firstIndex { block in
+            block.segments.contains { $0.id == state.selectedSegmentId }
+        } ?? TranscriptGrouping.blockIndex(at: state.player.currentMs, in: blocks)
+        let next = current.map { min(blocks.count - 1, max(0, $0 + delta)) } ?? 0
+        let block = blocks[next]
+        state.selectedSegmentId = block.segments.first?.id
+        state.seek(to: block.startMs, in: recording)
+        request(block.id, anchor: .center)
     }
 
     // MARK: - Editing
@@ -517,14 +536,18 @@ struct TranscriptBlockRow: View {
                 Button {
                     state.seek(to: block.startMs, in: recording)
                 } label: {
-                    Text(TimeFormat.short(ms: block.startMs))
+                    Text(state.timestamp(ms: block.startMs, in: recording))
                         .font(.system(.caption, design: .monospaced))
                         .monospacedDigit()
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(isPlaying ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+                .help(state.settings.clockTimestamps
+                      ? TimeFormat.short(ms: block.startMs)
+                      : TimeFormat.timeOfDay(ms: block.startMs, start: recording.createdAt))
 
                 if let speakerName {
+                    SpeakerBadge(name: speakerName, color: speakerColor)
                     Text(speakerName)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(speakerColor)
@@ -653,6 +676,23 @@ struct TranscriptBlockRow: View {
     }
 }
 
+/// Initials in the speaker's colour. A second cue beside the coloured name,
+/// for readers who do not separate eight hues at a glance and for rooms with
+/// more voices than the palette has colours.
+struct SpeakerBadge: View {
+    let name: String
+    let color: Color
+
+    var body: some View {
+        Text(SpeakerLabel.initials(for: name))
+            .font(.system(size: 8, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .frame(width: 16, height: 16)
+            .background(Circle().fill(color))
+            .accessibilityHidden(true)
+    }
+}
+
 /// A turn open for editing: one line per segment, so a fix keeps the
 /// timestamps and the seek targets that hang off them.
 ///
@@ -678,11 +718,12 @@ struct TranscriptBlockEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text(TimeFormat.short(ms: block.startMs))
+                Text(state.timestamp(ms: block.startMs, in: recording))
                     .font(.system(.caption, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.tertiary)
                 if let speakerName {
+                    SpeakerBadge(name: speakerName, color: speakerColor)
                     Text(speakerName)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(speakerColor)
@@ -700,13 +741,13 @@ struct TranscriptBlockEditor: View {
                     Button {
                         state.seek(to: row.startMs, in: recording)
                     } label: {
-                        Text(TimeFormat.short(ms: row.startMs))
+                        Text(state.timestamp(ms: row.startMs, in: recording))
                             .font(.system(.caption2, design: .monospaced))
                             .monospacedDigit()
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.tertiary)
-                    .frame(width: 52, alignment: .trailing)
+                    .frame(minWidth: 52, alignment: .trailing)
 
                     TextField("", text: Binding(
                         get: { row.displayText },

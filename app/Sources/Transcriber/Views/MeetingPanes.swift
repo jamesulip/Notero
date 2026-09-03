@@ -16,10 +16,17 @@ struct NotesPane: View {
     let recording: StoredRecording
 
     @State private var drafts: [MeetingItemKind: String] = [:]
+    /// The quick-add row's kind and text. One field at the top beats five at
+    /// the bottom of five sections when the note is being typed mid-meeting.
+    @State private var quickKind: MeetingItemKind = .keyPoint
+    @State private var quickText = ""
+    @FocusState private var quickFocused: Bool
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                quickAdd
+
                 section("Summary") {
                     TextEditor(text: Binding(
                         get: { recording.summary },
@@ -42,13 +49,21 @@ struct NotesPane: View {
                     }
                 }
 
+                // Kinds with entries get a full section. Empty kinds collapse
+                // to one add row each, so five empty headings do not push the
+                // summary and the real notes off the top of a 340 pt column.
                 ForEach(MeetingItemKind.allCases) { kind in
-                    section(kind.plural, symbol: kind.symbol) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(RecordingStore.items(kind, of: recording)) { item in
-                                ItemRow(recording: recording, item: item)
+                    let items = RecordingStore.items(kind, of: recording)
+                    if items.isEmpty {
+                        addField(kind, compact: true)
+                    } else {
+                        section(kind.plural, symbol: kind.symbol) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(items) { item in
+                                    ItemRow(recording: recording, item: item)
+                                }
+                                addField(kind)
                             }
-                            addField(kind)
                         }
                     }
                 }
@@ -56,6 +71,41 @@ struct NotesPane: View {
             .padding(14)
         }
         .onDisappear { save() }
+    }
+
+    /// Kind on the left, text on the right, ↩ to add. The kind menu shows the
+    /// shortcut that would have added the selected transcript line as that kind.
+    private var quickAdd: some View {
+        HStack(spacing: 6) {
+            Menu {
+                ForEach(MeetingItemKind.allCases) { kind in
+                    Button {
+                        quickKind = kind
+                        quickFocused = true
+                    } label: {
+                        Label(kind.label, systemImage: kind.symbol)
+                    }
+                }
+            } label: {
+                Label(quickKind.label, systemImage: quickKind.symbol)
+                    .font(.callout)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("What kind of note this is")
+
+            TextField("Add a \(quickKind.label.lowercased())…", text: $quickText)
+                .textFieldStyle(.roundedBorder)
+                .font(.callout)
+                .focused($quickFocused)
+                .onSubmit {
+                    let text = quickText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else { return }
+                    drafts[quickKind] = text
+                    commit(quickKind)
+                    quickText = ""
+                }
+        }
     }
 
     @ViewBuilder
@@ -73,12 +123,13 @@ struct NotesPane: View {
         }
     }
 
-    private func addField(_ kind: MeetingItemKind) -> some View {
+    private func addField(_ kind: MeetingItemKind, compact: Bool = false) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: "plus")
+            Image(systemName: compact ? kind.symbol : "plus")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
-            TextField("Add \(kind.label.lowercased())", text: Binding(
+                .frame(width: 14)
+            TextField(compact ? "Add \(kind.label.lowercased())" : "Add \(kind.label.lowercased())", text: Binding(
                 get: { drafts[kind] ?? "" },
                 set: { drafts[kind] = $0 }
             ))

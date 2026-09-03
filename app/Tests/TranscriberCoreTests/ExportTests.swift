@@ -235,3 +235,24 @@ final class TimeParseTests: XCTestCase {
         XCTAssertNil(TimeFormat.parse("1:2:3:4"))
     }
 }
+
+final class SpeakerInitialsTests: XCTestCase {
+    func testInitialsTakeTheFirstTwoWords() {
+        XCTAssertEqual(SpeakerLabel.initials(for: "Maria Santos"), "MS")
+        XCTAssertEqual(SpeakerLabel.initials(for: "Juan"), "J")
+        XCTAssertEqual(SpeakerLabel.initials(for: "Speaker 3"), "S3")
+        XCTAssertEqual(SpeakerLabel.initials(for: "Ana Maria Cruz"), "AM")
+        XCTAssertEqual(SpeakerLabel.initials(for: "  "), "")
+    }
+
+    func testTimeOfDayIsTheStartPlusTheOffset() {
+        // Locale decides the rendering, so compare against the same formatter's
+        // reading of the expected instant rather than a literal.
+        let start = Date(timeIntervalSince1970: 1_772_000_000)
+        let expected = DateFormatter()
+        expected.timeStyle = .medium
+        expected.dateStyle = .none
+        XCTAssertEqual(TimeFormat.timeOfDay(ms: 90_000, start: start),
+                       expected.string(from: start.addingTimeInterval(90)))
+    }
+}

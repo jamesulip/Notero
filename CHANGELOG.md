@@ -39,6 +39,17 @@
   the sidebar, the header and the info popover. A background job failing no
   longer raises an alert over whatever is on screen. The live footer keeps
   the model and language and moves the engineering numbers behind Stats.
+- Meeting workspace: the panel is the system inspector, resizable by drag,
+  and remembers whether it was open separately for recordings and meetings.
+  Tabs show counts. A quick-add row at the top takes a note of any kind; empty
+  note kinds collapse to a single add row.
+- Reading: a coloured initials badge beside each speaker; ⌘[ and ⌘] step
+  through turns; ⌥↑ and ⌥↓ change speed; View › Show Times of Day (⌥⌘T)
+  shows when each turn was said instead of how far in; hovering a bookmark
+  tick on the waveform shows its label and clicking jumps to it.
+- First run: a card in the empty pane checks microphone access, offers the
+  speech model download with progress, and sets the language, before the
+  first ⌘R discovers any of it the hard way.
 - Stopping under ten seconds asks Keep or Discard. Several sidebar rows can be
   selected and deleted together. Failed recordings group under Needs Attention.
 
