@@ -98,8 +98,9 @@ final class AppSettings {
         }
     }
 
-    /// Per-tier model id, once the benchmark has found something better than
-    /// the default mapping on this machine.
+    /// Per-tier model id override. Read-only in the app: the benchmark
+    /// recommends a tier but does not persist one, so this is empty unless an
+    /// earlier build wrote it. `modelId(for:)` falls back to the tier default.
     private(set) var overrides: [String: String] {
         didSet { defaults.set(overrides, forKey: Key.overrides) }
     }
@@ -107,12 +108,6 @@ final class AppSettings {
     func modelId(for tier: ModelTier) -> String {
         overrides[tier.rawValue] ?? tier.defaultModelId
     }
-
-    func setModel(_ id: String, for tier: ModelTier) {
-        overrides[tier.rawValue] = id
-    }
-
-    func resetOverrides() { overrides = [:] }
 
     /// The model used for the live path.
     ///

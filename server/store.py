@@ -118,7 +118,8 @@ class Store:
         )
         self._conn.commit()
 
-    async def set_clean_text(self, session_id: str, segment_id: int, clean: str) -> None:
+    async def set_clean_text(self, session_id: str, segment_id: int,
+                             clean: str | None) -> None:
         async with self._lock:
             await asyncio.to_thread(self._set_clean_text, session_id, segment_id, clean)
 

@@ -120,13 +120,13 @@ public actor EngineHost {
         await diarizer.unload()
     }
 
-    public var isDiarizerAvailable: Bool { get async { await diarizer.isAvailable } }
-
     // MARK: - Memory
 
     public func footprintMB() -> Int { MemoryProbe.footprintMB() }
 
-    /// Drops everything not currently in use. Wired to the app going idle.
+    /// Drops everything not currently in use, keeping the recognizer while a
+    /// recording is live. Nothing calls this yet; it is the hook for an
+    /// idle-memory pass.
     public func releaseAll() async {
         await diarizer.unload()
         if !isLiveActive { await asr.unload() }

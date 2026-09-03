@@ -1,12 +1,10 @@
 import Foundation
 import Observation
 import SwiftData
-import Synchronization
 import SwiftUI
 import TranscriberCore
 import TranscriberEngine
 import TranscriberStore
-import UniformTypeIdentifiers
 
 /// Where the detail pane is pointing.
 enum Route: Hashable {

@@ -28,12 +28,6 @@ public actor TranscriptWriter {
         try modelContext.save()
     }
 
-    public func updateDuration(_ durationMs: Int, for id: UUID) throws {
-        guard let recording = try find(id) else { return }
-        recording.durationMs = durationMs
-        try modelContext.save()
-    }
-
     public func attachAudio(fileName: String, sampleRate: Int, durationMs: Int,
                             waveform: [Float]?, for id: UUID) throws {
         guard let recording = try find(id), !fileName.isEmpty else { return }
@@ -55,20 +49,6 @@ public actor TranscriptWriter {
         if durationMs > 0 { recording.durationMs = durationMs }
         if let waveform, !waveform.isEmpty { recording.waveform = waveform }
         recording.updatedAt = Date()
-        try modelContext.save()
-    }
-
-    public func setWaveform(_ waveform: [Float], for id: UUID) throws {
-        guard let recording = try find(id) else { return }
-        recording.waveform = waveform
-        try modelContext.save()
-    }
-
-    public func setTitle(_ title: String, for id: UUID) throws {
-        guard let recording = try find(id) else { return }
-        recording.title = title
-        recording.updatedAt = Date()
-        RecordingStore.reindexOffMain(recording)
         try modelContext.save()
     }
 

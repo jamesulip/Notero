@@ -270,11 +270,6 @@ public struct MappedPCM: @unchecked Sendable {
         }
     }
 
-    public func floats(msRange: Range<Int>) -> [Float] {
-        floats(Audio.msToSamples(msRange.lowerBound)..<Audio.msToSamples(msRange.upperBound))
-    }
-
-    public var allFloats: [Float] { floats(0..<sampleCount) }
 }
 
 extension Data {

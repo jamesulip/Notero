@@ -11,13 +11,12 @@ public struct VadState: Equatable, Sendable {
 
 /// Energy-based voice activity detection.
 ///
-/// The Python build used Silero, which is markedly better in noise. This is a
-/// deliberate downgrade for the first native cut: Silero would mean carrying an
-/// ONNX or CoreML runtime into the app, and the two jobs VAD does here --
-/// skipping inference during silence, and ending a segment after trailing
-/// silence -- are both threshold decisions that energy handles acceptably in a
-/// quiet room. Swap in Silero (FluidAudio ships an ANE build) if it misfires on
-/// real recordings; `speechThreshold` is the knob to try first.
+/// The fallback used when FluidAudio's Silero VAD cannot be loaded -- see
+/// `VADEngine`, which prefers the neural detector and drops to this one. Silero
+/// is markedly better in noise, but the two jobs VAD does here -- skipping
+/// inference during silence, and ending a segment after trailing silence -- are
+/// both threshold decisions that energy handles acceptably in a quiet room.
+/// `speechThreshold` is the knob to try first if it misfires.
 ///
 /// Frames are 32 ms to match what Silero consumes, so the two are
 /// interchangeable behind this interface.
