@@ -190,9 +190,16 @@ public actor TranscriptionQueue {
                 return
             }
 
+            // The model, which may first have to arrive. A download reports
+            // as the preparing stage with a fraction; the load itself does not.
+            try await engines.loadModel(job.modelId) { _, fraction in
+                if let fraction {
+                    self.emit(.stage(id: job.id, status: .preparing, progress: fraction))
+                }
+            }
+
             // Decode.
             emit(.stage(id: job.id, status: .transcribing, progress: 0))
-            try await engines.loadModel(job.modelId)
             try? await engines.prepareVAD(progress: nil)
 
             let vad = await engines.voiceActivity

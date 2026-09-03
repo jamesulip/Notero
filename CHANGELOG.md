@@ -50,6 +50,8 @@
 - First run: a card in the empty pane checks microphone access, offers the
   speech model download with progress, and sets the language, before the
   first ⌘R discovers any of it the hard way.
+- A model download before a recording, or before a whole-file job, shows a
+  progress bar and percentage instead of a spinner.
 - Stopping under ten seconds asks Keep or Discard.
 - Housekeeping: the build stamps the version from `app/VERSION` and the commit
   count; `swift build` and `swift test` run on every push in GitHub Actions;
