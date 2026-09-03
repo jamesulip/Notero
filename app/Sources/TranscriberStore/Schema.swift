@@ -132,8 +132,11 @@ public final class StoredTranscript {
         self.language = language
     }
 
+    /// Deleted rows drop out at once rather than at the next save: a line the
+    /// user just removed must not reappear in the reindex or the export that
+    /// follows in the same breath.
     public var orderedSegments: [StoredSegment] {
-        (segments ?? []).sorted { $0.startMs < $1.startMs }
+        (segments ?? []).filter { !$0.isDeleted }.sorted { $0.startMs < $1.startMs }
     }
 }
 

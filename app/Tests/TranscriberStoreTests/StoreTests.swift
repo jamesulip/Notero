@@ -187,6 +187,40 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual((recording.speakers ?? []).map(\.speakerId), ["S1"])
     }
 
+    // MARK: - Editing
+
+    func testAnEditedLineIsWhatSearchAndExportSee() throws {
+        // Edits go to textClean; the raw model output stays. Search text is
+        // rebuilt on reindex, and the exporter reads displayText.
+        let context = try makeContext()
+        let recording = try seed(context)
+        let row = recording.transcript!.orderedSegments[1]
+
+        row.textClean = "Let's target September 16 for launch."
+        RecordingStore.reindex(recording)
+        try context.save()
+
+        XCTAssertEqual(row.text, "Let's target September 15 for launch.", "raw text is kept")
+        XCTAssertFalse(try SearchService.search("September 16", in: context).isEmpty)
+        XCTAssertTrue(try SearchService.search("September 15", in: context).isEmpty)
+        let exported = Exporter.render(.txt, document: RecordingStore.document(for: recording))
+        XCTAssertTrue(exported.contains("September 16"))
+        XCTAssertFalse(exported.contains("September 15"))
+    }
+
+    func testDeletingALineLeavesTheRestOfTheTranscript() throws {
+        let context = try makeContext()
+        let recording = try seed(context)
+        let doomed = recording.transcript!.orderedSegments[0]
+
+        context.delete(doomed)
+        RecordingStore.reindex(recording)
+        try context.save()
+
+        XCTAssertEqual(recording.transcript?.orderedSegments.count, 1)
+        XCTAssertFalse(recording.searchText.contains("Magandang"))
+    }
+
     // MARK: - Notes
 
     func testMeetingItemKeepsItsSourceSegment() throws {

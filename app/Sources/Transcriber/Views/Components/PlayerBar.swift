@@ -8,6 +8,8 @@ struct PlayerBar: View {
     let recording: StoredRecording
 
     var body: some View {
+        @Bindable var state = state
+
         VStack(spacing: 8) {
             WaveformView(
                 samples: recording.waveform ?? [],
@@ -46,6 +48,12 @@ struct PlayerBar: View {
                     .monospacedDigit()
 
                 Spacer()
+
+                Toggle(isOn: $state.followPlayback) {
+                    Label("Follow", systemImage: "text.line.first.and.arrowtriangle.forward")
+                }
+                .toggleStyle(.button)
+                .help("Keep the playing line in view. Scrolling by hand turns this off.")
 
                 Button {
                     _ = state.addBookmark()

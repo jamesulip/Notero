@@ -42,7 +42,13 @@ final class AppState {
     var isImporting = false
     var isExporting = false
     var focusSearch = false
+    /// ⌘F on a recording: the transcript view opens its find bar and clears this.
+    var findRequested = false
     var exportFormat: ExportFormat = .txt
+
+    /// Keep the playing turn in view. Off the moment the user scrolls by hand,
+    /// back on from the player bar or the "Follow playback" pill.
+    var followPlayback = true
 
     /// The transcript row the user last clicked. What ⌃⌘D and friends act on.
     var selectedSegmentId: UUID?
