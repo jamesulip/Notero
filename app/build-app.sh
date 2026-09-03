@@ -65,9 +65,12 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# codesign needs a real file, not a process substitution.
-ENTITLEMENTS=$(mktemp -t transcriber).plist
-trap 'rm -f "$ENTITLEMENTS"' EXIT
+# codesign needs a real file, not a process substitution. A directory keeps
+# the file and its parent under one trap; appending a suffix to the variable
+# would leave the path mktemp actually created behind on every build.
+ENTITLEMENTS_DIR=$(mktemp -d -t transcriber)
+trap 'rm -rf "$ENTITLEMENTS_DIR"' EXIT
+ENTITLEMENTS="$ENTITLEMENTS_DIR/entitlements.plist"
 cat > "$ENTITLEMENTS" <<'ENT'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -81,7 +84,7 @@ ENT
 # Ad-hoc signature. Enough for the microphone prompt on this machine; a real
 # Developer ID would be needed to run it anywhere else.
 codesign --force --deep --sign - --entitlements "$ENTITLEMENTS" "$APP" 2>&1 \
-    | grep -v "replacing existing signature" || true
+    | { grep -v "replacing existing signature" || true; }
 
 echo "built $APP ($VERSION, build $BUILD)"
 codesign -dv "$APP" 2>&1 | grep -E "Identifier|Signature" || true

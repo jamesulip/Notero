@@ -4,7 +4,6 @@ import SwiftUI
 import TranscriberCore
 import TranscriberEngine
 import TranscriberStore
-import UniformTypeIdentifiers
 
 /// The live session from the tap on New Recording to the row it leaves behind,
 /// and the question asked about a take that stopped almost at once.
@@ -29,7 +28,14 @@ extension AppState {
         // point -- the `isBusy` guard below would otherwise drop the recording
         // silently, which is a worse first second than a slow one.
         await warmup?.value
-        guard !live.state.isBusy else { return }
+        guard !live.state.isBusy else {
+            alert = AppAlert(
+                title: "A recording is already under way",
+                message: "Wait for the current one to finish, or stop it first, "
+                       + "before starting another."
+            )
+            return
+        }
         let id = recording.id
         activeRecordingId = id
         let name = Paths.newRecordingName(id: id, ext: "m4a", on: recording.createdAt)
