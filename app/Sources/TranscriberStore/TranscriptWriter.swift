@@ -20,6 +20,14 @@ public actor TranscriptWriter {
         try modelContext.save()
     }
 
+    /// Records that the job finished imperfectly. Nil clears it, which a new
+    /// job does before it starts.
+    public func setWarning(_ message: String?, for id: UUID) throws {
+        guard let recording = try find(id) else { return }
+        recording.warningMessage = message
+        try modelContext.save()
+    }
+
     public func updateDuration(_ durationMs: Int, for id: UUID) throws {
         guard let recording = try find(id) else { return }
         recording.durationMs = durationMs

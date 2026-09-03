@@ -45,6 +45,28 @@ public enum TimeFormat {
         return rest == 0 ? "about \(hours) hr" : "about \(hours) hr \(rest) min"
     }
 
+    /// "~14 min" -- `remaining` for a chip that has no room for "about".
+    public static func remainingCompact(seconds: Double) -> String {
+        remaining(seconds: seconds).replacingOccurrences(of: "about ", with: "~")
+    }
+
+    /// "1:23:45", "12:34" or "45" to milliseconds. Nil for anything else, so a
+    /// half-typed field is ignored rather than read as zero.
+    public static func parse(_ text: String) -> Int? {
+        let parts = text.trimmingCharacters(in: .whitespaces).split(separator: ":", omittingEmptySubsequences: false)
+        guard !parts.isEmpty, parts.count <= 3 else { return nil }
+        var values: [Int] = []
+        for part in parts {
+            guard let value = Int(part), value >= 0 else { return nil }
+            values.append(value)
+        }
+        // Minutes and seconds past the first field must be a clock reading.
+        for value in values.dropFirst() where value >= 60 { return nil }
+        var seconds = 0
+        for value in values { seconds = seconds * 60 + value }
+        return seconds * 1000
+    }
+
     /// "4 min", "1 hr 12 min" -- for places where seconds are noise.
     public static func coarse(ms: Int) -> String {
         let minutes = max(0, ms) / 60_000

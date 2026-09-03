@@ -261,6 +261,9 @@ struct RecordingFacts {
                 help: audio))
         }
 
+        if let warning = recording.warningMessage, !warning.isEmpty {
+            items.append(Item(label: "Warning", value: warning))
+        }
         if let error = recording.errorMessage, !error.isEmpty {
             items.append(Item(label: "Error", value: error))
         }

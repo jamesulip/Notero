@@ -225,15 +225,17 @@ final class AppState {
             try? await writer.applySpeakers(spans: spans, roster: roster, for: id)
 
         case .failed(let id, let message):
+            // No alert: a background job failing should not interrupt whatever
+            // is on screen. The row's chip, the Needs Attention group and the
+            // detail's empty state all carry the message.
             try? await writer.updateStatus(.failed, error: message, for: id)
-            alert = AppAlert(title: "Transcription failed", message: message)
 
         case .warning(let id, let message):
             // The transcript is usable but incomplete. Keyed to the recording
-            // rather than thrown in an alert, so it stays visible for this
-            // app run. (In-memory only: surviving a relaunch would need a
-            // column on StoredRecording.)
+            // rather than thrown in an alert, and stored so it survives a
+            // relaunch.
             warnings[id] = message
+            try? await writer.setWarning(message, for: id)
 
         case .finished(let id):
             progress[id] = nil
@@ -450,8 +452,56 @@ final class AppState {
         .audio, .mpeg4Audio, .mp3, .wav, .aiff, .movie, .mpeg4Movie, .quickTimeMovie,
     ]
 
+    /// A file that looks like one already in the library: same size, same
+    /// extension. Asked about rather than imported, since the library had
+    /// several copies of one meeting under one title.
+    struct DuplicateImport: Identifiable {
+        let id = UUID()
+        let url: URL
+        let existingId: UUID
+        let existingTitle: String
+    }
+
+    /// Pending questions, asked one at a time.
+    var duplicateImports: [DuplicateImport] = []
+
     func importFiles(_ urls: [URL]) {
-        for url in urls { importFile(url) }
+        for url in urls {
+            if let existing = existingRecording(matching: url) {
+                duplicateImports.append(DuplicateImport(
+                    url: url, existingId: existing.id, existingTitle: existing.title))
+            } else {
+                importFile(url)
+            }
+        }
+    }
+
+    func resolveDuplicate(_ duplicate: DuplicateImport, importAnyway: Bool) {
+        duplicateImports.removeAll { $0.id == duplicate.id }
+        if importAnyway {
+            importFile(duplicate.url)
+        } else {
+            route = .recording(duplicate.existingId)
+        }
+    }
+
+    /// Byte-for-byte size is a strong signal for the same file and costs one
+    /// stat per recording; hashing gigabytes of audio to be certain is not
+    /// worth it for a question the user answers in a click.
+    private func existingRecording(matching url: URL) -> StoredRecording? {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0
+        else { return nil }
+        let ext = url.pathExtension.lowercased()
+        let candidates = (try? context.fetch(FetchDescriptor<StoredRecording>())) ?? []
+        return candidates.first { recording in
+            guard let existing = recording.audioURL,
+                  existing.pathExtension.lowercased() == ext,
+                  let existingSize = try? existing.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            else { return false }
+            return existingSize == size
+        }
     }
 
     private func importFile(_ url: URL) {
@@ -489,6 +539,7 @@ final class AppState {
                               modelId: String? = nil, diarize: Bool? = nil) {
         guard let name = recording.audioFileName else { return }
         warnings[recording.id] = nil
+        recording.warningMessage = nil
         let job = TranscriptionJob(
             id: recording.id,
             title: recording.title,
@@ -568,8 +619,17 @@ final class AppState {
 
     // MARK: - Export
 
-    func exportText(_ recording: StoredRecording, format: ExportFormat) -> String {
-        Exporter.render(format, document: RecordingStore.document(for: recording))
+    func exportText(_ recording: StoredRecording, format: ExportFormat,
+                    options: ExportOptions = .everything) -> String {
+        Exporter.render(format, document: RecordingStore.document(for: recording),
+                        options: options)
+    }
+
+    /// The transcript onto the clipboard, in the format the destination
+    /// wants: plain text for a document, Markdown for chat and wikis.
+    func copyTranscript(_ recording: StoredRecording, format: ExportFormat) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(exportText(recording, format: format), forType: .string)
     }
 
     // MARK: - Playback

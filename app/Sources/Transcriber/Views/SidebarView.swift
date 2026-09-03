@@ -15,13 +15,16 @@ struct SidebarView: View {
     /// selected, and it follows `state.route` when something else navigates.
     @State private var selection: Set<Route> = []
     @State private var pendingDelete: [StoredRecording] = []
+    /// The row whose title is open for editing in place.
+    @State private var renaming: UUID?
 
     enum Filter: String, CaseIterable, Identifiable {
-        case all, favorites, meetings
+        case all, active, favorites, meetings
         var id: String { rawValue }
         var label: String {
             switch self {
             case .all: return "All"
+            case .active: return "Active"
             case .favorites: return "Favorites"
             case .meetings: return "Meetings"
             }
@@ -37,12 +40,13 @@ struct SidebarView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .listRowSeparator(.hidden)
+                .help("Active: recording, queued or being transcribed right now")
             }
 
             ForEach(RecordingStore.group(filtered), id: \.bucket.id) { section in
                 Section(section.bucket.label) {
                     ForEach(section.items) { recording in
-                        HistoryRow(recording: recording)
+                        HistoryRow(recording: recording, renaming: $renaming)
                             .tag(Route.recording(recording.id))
                             .contextMenu { menu(for: recording) }
                     }
@@ -51,9 +55,13 @@ struct SidebarView: View {
 
             if filtered.isEmpty {
                 ContentUnavailableView {
-                    Label("No recordings yet", systemImage: "waveform")
+                    Label(filter == .all ? "No recordings yet" : "Nothing here",
+                          systemImage: filter == .active ? "hourglass" : "waveform")
                 } description: {
-                    Text("Press ⌘R to record, or drop an audio file onto the window.")
+                    Text(filter == .all
+                         ? "Press ⌘R to record, or drop an audio file onto the window."
+                         : (filter == .active ? "Nothing is recording or being transcribed."
+                            : "Nothing matches this filter."))
                 }
                 .listRowSeparator(.hidden)
             }
@@ -91,6 +99,8 @@ struct SidebarView: View {
     private var filtered: [StoredRecording] {
         switch filter {
         case .all: return recordings
+        case .active:
+            return recordings.filter { state.progress[$0.id] != nil || $0.status.isBusy }
         case .favorites: return recordings.filter(\.isFavorite)
         case .meetings: return recordings.filter { $0.kind == .meeting }
         }
@@ -140,6 +150,7 @@ struct SidebarView: View {
 
     @ViewBuilder
     private func menu(for recording: StoredRecording) -> some View {
+        Button("Rename", systemImage: "pencil") { renaming = recording.id }
         Button(recording.isFavorite ? "Remove from Favorites" : "Add to Favorites",
                systemImage: recording.isFavorite ? "star.slash" : "star") {
             recording.isFavorite.toggle()
@@ -175,7 +186,14 @@ struct SidebarView: View {
 
 struct HistoryRow: View {
     @Environment(AppState.self) private var state
+    @Environment(\.modelContext) private var context
     let recording: StoredRecording
+    @Binding var renaming: UUID?
+
+    @State private var draft = ""
+    @FocusState private var editing: Bool
+
+    private var isRenaming: Bool { renaming == recording.id }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -187,8 +205,24 @@ struct HistoryRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
-                    Text(recording.title)
-                        .lineLimit(1)
+                    if isRenaming {
+                        TextField("Title", text: $draft)
+                            .textFieldStyle(.plain)
+                            .focused($editing)
+                            .onSubmit { commitRename() }
+                            .onExitCommand { renaming = nil }
+                            .onAppear {
+                                draft = recording.title
+                                editing = true
+                            }
+                            .onChange(of: editing) { _, focused in
+                                // Clicking away commits, as Finder does.
+                                if !focused, isRenaming { commitRename() }
+                            }
+                    } else {
+                        Text(recording.title)
+                            .lineLimit(1)
+                    }
                     if recording.isFavorite {
                         Image(systemName: "star.fill")
                             .font(.system(size: 9))
@@ -204,6 +238,11 @@ struct HistoryRow: View {
                     }
                     if (recording.items?.isEmpty == false) {
                         Image(systemName: "note.text")
+                    }
+                    if let warning = recording.warningMessage {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .help(warning)
                     }
                 }
                 .font(.caption)
@@ -223,5 +262,19 @@ struct HistoryRow: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 2)
+        .onTapGesture(count: 2) {
+            if !isRenaming { renaming = recording.id }
+        }
+    }
+
+    private func commitRename() {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty, trimmed != recording.title {
+            recording.title = trimmed
+            recording.updatedAt = Date()
+            RecordingStore.reindex(recording)
+            try? context.save()
+        }
+        renaming = nil
     }
 }

@@ -13,8 +13,9 @@ implemented: 1.1 (soft speaker target threshold untested on real audio), 1.2,
 1.3 (split/merge delivered as per-line speaker moves rather than block
 operations), 1.4, 1.5, 1.6. Not yet checked by hand: the edit mode, find bar,
 follow-scroll, revision menu, and the new Settings window (2.1, done, plus the
-"Transcribe while recording" toggle wired to a record-only mode). Next: 2.2
-sidebar, 2.4 export, 2.5 status surfaces.
+"Transcribe while recording" toggle wired to a record-only mode). 2.2, 2.4 and
+2.5 are done. Remaining: 2.3 meeting workspace, 2.6 reading and playback,
+2.7 first run, and the 1.3 hygiene items.
 
 ---
 

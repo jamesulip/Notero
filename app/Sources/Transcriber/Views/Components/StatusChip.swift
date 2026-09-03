@@ -46,9 +46,11 @@ struct StatusChip: View {
     }
 
     private var label: String {
-        status.isBusy && fraction > 0.01 && status != .diarizing
+        var text = status.isBusy && fraction > 0.01 && status != .diarizing
             ? "\(status.label) \(Int(fraction * 100))%"
             : status.label
+        if status.isBusy, let remaining { text += " · \(TimeFormat.remainingCompact(seconds: remaining))" }
+        return text
     }
 
     private var tint: Color {
