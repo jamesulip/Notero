@@ -47,6 +47,20 @@ final class AppState {
     /// The transcript row the user last clicked. What ⌃⌘D and friends act on.
     var selectedSegmentId: UUID?
 
+    /// A recording that stopped almost as soon as it started. Set on stop so
+    /// the window can ask whether to keep it: the library had five of these
+    /// under half a minute, each one a click-and-delete nobody got round to.
+    var shortTake: ShortTake?
+
+    struct ShortTake: Identifiable {
+        let id: UUID
+        let durationMs: Int
+        let words: Int
+    }
+
+    /// Below this a take is asked about rather than kept silently.
+    static let shortTakeMs = 10_000
+
     /// Per-recording pipeline progress, keyed by recording id.
     private(set) var progress: [UUID: JobProgress] = [:]
     /// Per-recording notes about work that finished imperfectly.
@@ -370,6 +384,24 @@ final class AppState {
             }
         }
         await queue.setLiveActive(false)
+
+        if result.durationMs < Self.shortTakeMs {
+            shortTake = ShortTake(
+                id: result.recordingId,
+                durationMs: result.durationMs,
+                words: result.segments.reduce(0) {
+                    $0 + $1.displayText.split(whereSeparator: \.isWhitespace).count
+                }
+            )
+        }
+    }
+
+    /// The answer to the short-take question. Discarding is a full delete:
+    /// audio, row, and any speaker job the stop just queued.
+    func resolveShortTake(keep: Bool) {
+        defer { shortTake = nil }
+        guard !keep, let take = shortTake, let recording = recording(take.id) else { return }
+        delete(recording)
     }
 
     /// ⌘B. Works while recording and while playing back.
@@ -427,7 +459,8 @@ final class AppState {
         }
     }
 
-    func enqueueTranscription(_ recording: StoredRecording, work: TranscriptionJob.Work) {
+    func enqueueTranscription(_ recording: StoredRecording, work: TranscriptionJob.Work,
+                              modelId: String? = nil, diarize: Bool? = nil) {
         guard let name = recording.audioFileName else { return }
         warnings[recording.id] = nil
         let job = TranscriptionJob(
@@ -435,10 +468,10 @@ final class AppState {
             title: recording.title,
             sourceURL: Paths.recordingURL(name),
             cacheURL: AudioCache.url(for: recording.id, under: Paths.support),
-            modelId: settings.offlineModelId,
+            modelId: modelId ?? settings.offlineModelId,
             language: settings.language,
             prompt: settings.promptOrNil,
-            diarize: settings.diarize,
+            diarize: diarize ?? settings.diarize,
             work: work,
             discardCacheWhenDone: !settings.keepWorkingCopy,
             roomMode: settings.roomMode
@@ -448,8 +481,18 @@ final class AppState {
         Task { await queue.enqueue(job) }
     }
 
-    func retranscribe(_ recording: StoredRecording) {
-        enqueueTranscription(recording, work: .full)
+    /// Decode again, optionally on a named tier. Nil means the tier Settings
+    /// holds -- but the menu always names one, because "again" with the same
+    /// model is rarely what anyone re-transcribing a meeting wants.
+    func retranscribe(_ recording: StoredRecording, tier: ModelTier? = nil) {
+        enqueueTranscription(recording, work: .full,
+                             modelId: tier.map { settings.modelId(for: $0) })
+    }
+
+    /// Speaker identification only, over the transcript that exists. Forced on
+    /// regardless of the setting: asking for it is the setting.
+    func rediarize(_ recording: StoredRecording) {
+        enqueueTranscription(recording, work: .diarizeOnly, diarize: true)
     }
 
     func cancelJob(_ id: UUID) {
@@ -469,6 +512,10 @@ final class AppState {
         } catch {
             alert = AppAlert(title: "Could not delete", message: error.localizedDescription)
         }
+    }
+
+    func delete(_ recordings: [StoredRecording]) {
+        for recording in recordings { delete(recording) }
     }
 
     // MARK: - Meeting items

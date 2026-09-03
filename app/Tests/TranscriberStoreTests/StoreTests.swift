@@ -73,6 +73,22 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(sections[0].items.first?.title, "Today")
     }
 
+    func testFailedRecordingsAreGroupedForAttentionAheadOfTheDates() throws {
+        let now = Date()
+        let context = try makeContext()
+        let fine = try RecordingStore.create(kind: .recording, title: "Fine", in: context, at: now)
+        let broken = try RecordingStore.create(
+            kind: .recording, title: "Broken", in: context,
+            at: Calendar.current.date(byAdding: .day, value: -40, to: now)!
+        )
+        broken.status = .failed
+
+        let sections = RecordingStore.group([fine, broken], now: now)
+        XCTAssertEqual(sections.map(\.bucket), [.attention, .today])
+        XCTAssertEqual(sections[0].items.map(\.title), ["Broken"],
+                       "a failed row surfaces however old it is")
+    }
+
     func testHistoryIsNewestFirstWithinASection() throws {
         // Midday, fixed. With `Date()` this passed all day and failed after
         // midnight: "an hour ago" crosses into yesterday, so the two recordings

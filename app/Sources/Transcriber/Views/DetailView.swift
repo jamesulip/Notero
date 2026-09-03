@@ -148,18 +148,17 @@ struct RecordingDetailView: View {
                 StatusChip(status: recording.status)
             } else if recording.status == .failed {
                 StatusChip(status: .failed)
-                Button("Retry") { state.retranscribe(recording) }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
+                if recording.hasAudio { RerunButton(recording: recording, label: "Retry") }
             } else if let warning = state.warnings[recording.id] {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .lineLimit(2)
                     .help(warning)
-                Button("Transcribe Again") { state.retranscribe(recording) }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
+                if recording.hasAudio { RerunButton(recording: recording) }
+            } else if recording.hasAudio {
+                RerunButton(recording: recording, label: "Re-run")
+                    .help("Transcribe again on another tier, or identify speakers again")
             }
 
             Button {

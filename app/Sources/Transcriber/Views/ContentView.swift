@@ -46,7 +46,31 @@ struct ContentView: View {
                 ExportSheet(recording: recording)
             }
         }
+        .alert(
+            "Keep this recording?",
+            isPresented: Binding(
+                get: { state.shortTake != nil },
+                set: { if !$0 { state.shortTake = nil } }
+            ),
+            presenting: state.shortTake
+        ) { _ in
+            Button("Keep") { state.resolveShortTake(keep: true) }
+                .keyboardShortcut(.defaultAction)
+            Button("Discard", role: .destructive) { state.resolveShortTake(keep: false) }
+        } message: { take in
+            Text(Self.shortTakeMessage(take))
+        }
         .toolbar { toolbar }
+    }
+
+    static func shortTakeMessage(_ take: AppState.ShortTake) -> String {
+        let seconds = max(1, (take.durationMs + 500) / 1000)
+        let length = "It ran for \(seconds) second\(seconds == 1 ? "" : "s")"
+        switch take.words {
+        case 0: return "\(length) and no words were heard. Discarding deletes the audio."
+        case 1: return "\(length) and one word was heard. Discarding deletes the audio."
+        default: return "\(length) and \(take.words) words were heard. Discarding deletes the audio."
+        }
     }
 
     private var title: String {
