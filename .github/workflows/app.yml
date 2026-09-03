@@ -29,6 +29,10 @@ jobs:
         working-directory: app
     steps:
       - uses: actions/checkout@v4
+        with:
+          # build-app.sh derives the build number from the commit count, which
+          # is 1 on the default shallow clone.
+          fetch-depth: 0
 
       # Package.swift is swift-tools-version 6.2, which ships with Xcode 26.
       - name: Select Xcode
@@ -60,14 +64,25 @@ jobs:
 
       - name: Check result
         run: |
-          if grep -qE "with [1-9][0-9]* failures|error:" test.log; then
+          # The two runners report failure differently, and the suite uses both:
+          # XCTest prints "Executed N tests, with M failure(s)" plus an "error:"
+          # line, swift-testing prints "Test run with N tests ... failed ...
+          # with M issue(s)" and no "error:" at all. Matching only the XCTest
+          # shapes let a failing @Test report green.
+          if grep -qE "with [1-9][0-9]* (failure|issue)|Test run with .* failed|error:" test.log; then
             echo "tests failed"; exit 1
           fi
-          grep -qE "Executed [0-9]+ tests" test.log || { echo "no tests ran"; exit 1; }
+          # Require positive evidence from both runners, so a crash that
+          # produces no summary cannot pass as "nothing failed".
+          grep -qE "Executed [0-9]+ tests" test.log || { echo "no XCTest tests ran"; exit 1; }
+          grep -qE "Test run with [0-9]+ tests.* passed" test.log || { echo "no swift-testing tests ran"; exit 1; }
 
       - name: Assemble bundle (release)
         run: ./build-app.sh release
 
+      # Assembly smoke-test only: the signature is ad-hoc and the zip drops the
+      # executable bit, so this artifact will not launch on another Mac. A
+      # distributable build needs a Developer ID certificate.
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
