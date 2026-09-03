@@ -1,0 +1,11 @@
+# Test dependencies for the Python server. Install alongside requirements.txt:
+#
+#     ./.venv/bin/pip install -r requirements.txt -r requirements-dev.txt
+#     ./.venv/bin/python -m pytest
+#
+# pytest-asyncio is not optional: pytest.ini sets asyncio_mode = auto, and the
+# suite's async tests are collected but never run without it.
+# httpx backs fastapi.testclient.TestClient, which tests/test_protocol.py uses.
+pytest==9.1.1
+pytest-asyncio==1.4.0
+httpx==0.28.1
