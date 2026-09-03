@@ -9,7 +9,7 @@ import TranscriberCore
 /// public Swift package, so the shipping backend is FluidAudio's pyannote
 /// segmentation plus WeSpeaker embeddings -- also CoreML, also on the Neural
 /// Engine, also entirely local. `SpeakerDiarizing` is the seam: dropping
-/// SpeakerKit in later is one new conformance and one line in `EngineFactory`,
+/// SpeakerKit in later is one new conformance and one line in `EngineHost`,
 /// with no change above this file.
 public actor SpeakerEngine: SpeakerDiarizing {
 

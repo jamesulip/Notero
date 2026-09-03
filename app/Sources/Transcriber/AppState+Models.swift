@@ -5,7 +5,6 @@ import SwiftUI
 import TranscriberCore
 import TranscriberEngine
 import TranscriberStore
-import UniformTypeIdentifiers
 
 /// Model weights on disk and in memory.
 extension AppState {

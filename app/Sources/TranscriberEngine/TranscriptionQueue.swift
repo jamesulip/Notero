@@ -115,8 +115,6 @@ public actor TranscriptionQueue {
 
     // MARK: - Queue control
 
-    public var queuedCount: Int { pending.count }
-    public var activeJob: TranscriptionJob? { running?.job }
     public var isBusy: Bool { running != nil }
 
     public func enqueue(_ job: TranscriptionJob) {
@@ -133,11 +131,6 @@ public actor TranscriptionQueue {
         if running?.job.id == id {
             running?.task.cancel()
         }
-    }
-
-    public func cancelAll() {
-        pending.removeAll()
-        running?.task.cancel()
     }
 
     /// Holds the queue while a recording runs, and releases it afterwards.
@@ -186,7 +179,7 @@ public actor TranscriptionQueue {
             let heard: any PCMSource = job.roomMode ? HighPassPCM(source) : source
 
             if job.work == .diarizeOnly {
-                try await diarizeOnly(job, source: source, durationMs: durationMs)
+                try await diarizeOnly(job, source: source)
                 return
             }
 
@@ -303,8 +296,7 @@ public actor TranscriptionQueue {
         }
     }
 
-    private func diarizeOnly(_ job: TranscriptionJob, source: MappedPCM,
-                             durationMs: Int) async throws {
+    private func diarizeOnly(_ job: TranscriptionJob, source: MappedPCM) async throws {
         guard job.diarize else {
             emit(.stage(id: job.id, status: .completed, progress: 1))
             return

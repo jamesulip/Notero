@@ -119,12 +119,6 @@ public enum RecordingStore {
         }
     }
 
-    public struct HistorySection: Identifiable, Sendable {
-        public var id: String { bucket.rawValue }
-        public var bucket: HistoryBucket
-        public var recordingIds: [UUID]
-    }
-
     public static func bucket(for date: Date, now: Date = Date(),
                               calendar: Calendar = .current) -> HistoryBucket {
         if calendar.isDate(date, inSameDayAs: now) { return .today }

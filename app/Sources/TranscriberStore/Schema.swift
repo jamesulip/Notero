@@ -115,7 +115,7 @@ public final class StoredTranscript {
     public var modelId: String = ""
     public var language: String = LanguageCatalogue.defaultLanguage
     public var createdAt: Date = Date.now
-    /// Wall-clock cost of producing it. Feeds the benchmark panel.
+    /// Wall-clock cost of producing it. Shown in the recording info bar.
     public var processMs: Int = 0
     public var didDiarize: Bool = false
     /// False while a whole-file job is still appending segments, and left

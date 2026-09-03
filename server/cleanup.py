@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 log = logging.getLogger("asr.cleanup")
 
@@ -103,7 +103,6 @@ class CleanupStats:
     rejected_drift: int = 0
     rejected_length: int = 0
     rejected_dropped: int = 0
-    rejected: list[tuple[str, str, float]] = field(default_factory=list)
 
 
 class CleanupEngine:
@@ -170,14 +169,12 @@ class CleanupEngine:
 
         if len(candidate) > len(raw) * self.max_growth + 20:
             stats.rejected_length += 1
-            stats.rejected.append((raw, candidate, 0.0))
             log.warning("cleanup rejected (too long): %r -> %r", raw[:60], candidate[:60])
             return raw
 
         missing = dropped_words(raw, candidate)
         if missing:
             stats.rejected_dropped += 1
-            stats.rejected.append((raw, candidate, 0.0))
             log.warning("cleanup rejected (dropped %s): %r -> %r",
                         missing, raw[:60], candidate[:60])
             return raw
@@ -185,7 +182,6 @@ class CleanupEngine:
         score = similarity(raw, candidate)
         if score < self.min_similarity:
             stats.rejected_drift += 1
-            stats.rejected.append((raw, candidate, score))
             log.warning("cleanup rejected (similarity %.2f): %r -> %r",
                         score, raw[:60], candidate[:60])
             return raw

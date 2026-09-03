@@ -4,7 +4,6 @@ import SwiftUI
 import TranscriberCore
 import TranscriberEngine
 import TranscriberStore
-import UniformTypeIdentifiers
 
 /// Consuming the transcription queue: progress, partial and final transcripts,
 /// warnings, and the time-remaining estimate.

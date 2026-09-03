@@ -3,7 +3,7 @@ import TranscriberCore
 
 // The seam. Everything above this file talks to these three protocols and
 // never to WhisperKit or FluidAudio directly, so replacing a backend is a new
-// conformance plus one line in `EngineFactory` -- not a rewrite of the UI.
+// conformance plus one line in `EngineHost` -- not a rewrite of the UI.
 
 // MARK: - Speech recognition
 
@@ -134,7 +134,6 @@ public enum EngineError: LocalizedError, Sendable {
     case modelNotLoaded
     case backendUnavailable(String)
     case audioUnreadable(String)
-    case cancelled
 
     public var errorDescription: String? {
         switch self {
@@ -144,8 +143,6 @@ public enum EngineError: LocalizedError, Sendable {
             return why
         case .audioUnreadable(let why):
             return "Could not read that audio: \(why)"
-        case .cancelled:
-            return "Cancelled."
         }
     }
 }

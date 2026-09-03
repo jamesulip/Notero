@@ -89,15 +89,6 @@ public final class AudioCapture: @unchecked Sendable {
         inferenceFormat = format
     }
 
-    public var hardwareSampleRate: Double {
-        engine.inputNode.inputFormat(forBus: 0).sampleRate
-    }
-
-    /// Frames written to the archive so far. The authority on duration.
-    public var archivedFrames: AVAudioFramePosition {
-        stateLock.withLock { archive?.frameCount ?? 0 }
-    }
-
     public var archiveSampleRate: Int {
         Int(archiveFormat?.sampleRate ?? 0)
     }
