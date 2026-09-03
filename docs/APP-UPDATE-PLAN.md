@@ -14,9 +14,11 @@ implemented: 1.1 (soft speaker target threshold untested on real audio), 1.2,
 operations), 1.4, 1.5, 1.6. Not yet checked by hand: the edit mode, find bar,
 follow-scroll, revision menu, and the new Settings window (2.1, done, plus the
 "Transcribe while recording" toggle wired to a record-only mode). All of Release
-1.2 is done (2.1 through 2.7). Remaining: the Release 1.3 hygiene items (CI,
-screenshot harness, versioning, AppState split), and a by-hand pass over
-everything since the speaker-merge commit, which has not been seen on screen.
+1.2 is done (2.1 through 2.7). Release 1.3 hygiene is done too (CI workflow,
+snap.sh harness, VERSION-stamped build, AppState split into +Jobs, +Recording,
++Library, +Models). What remains is a by-hand pass over everything since the
+speaker-merge commit, which has not been seen on screen, and tuning the
+speaker consolidation distance on the real room recording.
 
 ---
 

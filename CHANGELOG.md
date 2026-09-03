@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (1.1)
+## 1.1.0 (unreleased)
 
 - Transcripts appear while a whole-file job runs: each decoded window's
   segments land in the store as it finishes, under a banner with the stage,
@@ -50,7 +50,11 @@
 - First run: a card in the empty pane checks microphone access, offers the
   speech model download with progress, and sets the language, before the
   first ⌘R discovers any of it the hard way.
-- Stopping under ten seconds asks Keep or Discard. Several sidebar rows can be
+- Stopping under ten seconds asks Keep or Discard.
+- Housekeeping: the build stamps the version from `app/VERSION` and the commit
+  count; `swift build` and `swift test` run on every push in GitHub Actions;
+  `app/scripts/snap.sh` screenshots the running app for visual checks;
+  AppState is split into files by concern. Several sidebar rows can be
   selected and deleted together. Failed recordings group under Needs Attention.
 
 ## 1.0.1 — 2026-09-03

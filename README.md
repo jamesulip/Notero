@@ -55,6 +55,15 @@ default model, plus ~250 MB for voice activity and speaker identification.
 cd app && swift test
 ```
 
+`build-app.sh` stamps the bundle with the version in `app/VERSION` and the
+commit count as the build number. The same build and test run on every push
+in [`.github/workflows/app.yml`](.github/workflows/app.yml); no weights or
+microphone are needed, which is what the four-layer split buys.
+
+`app/scripts/snap.sh` screenshots the running app, clicking first if asked,
+for checking a view change against the real thing. It refuses to click unless
+Transcriber is the frontmost app.
+
 ### Headless
 
 The same pipeline without a window, for eval and CI:
