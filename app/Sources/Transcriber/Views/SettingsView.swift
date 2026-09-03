@@ -2,20 +2,60 @@ import SwiftUI
 import TranscriberCore
 import TranscriberStore
 
+/// Settings as a sidebar of panes rather than a tab strip.
+///
+/// The tab version was a fixed 560×430 and clipped its own content: the
+/// Models tab hid the tier picker under the toolbar. Panes scroll on their
+/// own, the window resizes, and each pane holds one subject.
 struct SettingsView: View {
     @Environment(AppState.self) private var state
+    @State private var pane: Pane? = .general
+
+    enum Pane: String, CaseIterable, Identifiable {
+        case general, audio, models, storage
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .general: return "General"
+            case .audio: return "Audio"
+            case .models: return "Models"
+            case .storage: return "Storage"
+            }
+        }
+        var symbol: String {
+            switch self {
+            case .general: return "text.bubble"
+            case .audio: return "mic"
+            case .models: return "cpu"
+            case .storage: return "internaldrive"
+            }
+        }
+    }
 
     var body: some View {
-        TabView {
-            TranscriptionSettings().tabItem { Label("Transcription", systemImage: "waveform") }
-            ModelSettings().tabItem { Label("Models", systemImage: "cpu") }
-            StorageSettings().tabItem { Label("Storage", systemImage: "internaldrive") }
+        NavigationSplitView {
+            List(Pane.allCases, selection: $pane) { pane in
+                Label(pane.label, systemImage: pane.symbol).tag(pane)
+            }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 150, ideal: 170, max: 200)
+            .toolbar(removing: .sidebarToggle)
+        } detail: {
+            switch pane ?? .general {
+            case .general: GeneralSettings()
+            case .audio: AudioSettings()
+            case .models: ModelSettings()
+            case .storage: StorageSettings()
+            }
         }
-        .frame(width: 560, height: 430)
+        .navigationTitle((pane ?? .general).label)
+        .frame(minWidth: 700, idealWidth: 760, minHeight: 500, idealHeight: 580)
     }
 }
 
-struct TranscriptionSettings: View {
+// MARK: - General
+
+struct GeneralSettings: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
@@ -52,8 +92,50 @@ struct TranscriptionSettings: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("While recording") {
+                Toggle("Transcribe while recording", isOn: $settings.liveTranscription)
+                Text(settings.liveTranscription
+                     ? "Text appears as people speak, on the Balanced model. The "
+                       + "recording still gets the full whole-file pass afterwards "
+                       + "for speaker identification."
+                     : "Recording only. The transcript is made when you stop, by the "
+                       + "whole-file pass on the tier chosen under Models — the better "
+                       + "transcript, and nothing runs on the Mac during the meeting.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("After recording") {
+                Toggle("Identify speakers", isOn: $settings.diarize)
+                Toggle("Neural voice activity detection", isOn: $settings.neuralVAD)
+                Text(settings.neuralVAD
+                     ? "Silero on the Neural Engine. Better in a noisy room; falls back "
+                       + "to energy detection if the model cannot load."
+                     : "Energy thresholding. No model to download, worse with background noise.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+// MARK: - Audio
+
+struct AudioSettings: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        @Bindable var settings = state.settings
+
+        Form {
             Section("Microphone") {
                 MicrophonePermissionRow()
+            }
+
+            Section("Input") {
                 InputGainSlider(gainDb: $settings.inputGainDb)
                 Text("Built-in laptop microphones run 15-20 dB quieter than a "
                      + "headset at conversational distance. The boost applies to "
@@ -62,7 +144,9 @@ struct TranscriptionSettings: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
 
+            Section("Room") {
                 Toggle("Room mode", isOn: Binding(
                     get: { settings.roomMode },
                     set: { state.setRoomMode($0) }
@@ -80,23 +164,12 @@ struct TranscriptionSettings: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            Section("Pipeline") {
-                Toggle("Transcribe while recording", isOn: $settings.liveTranscription)
-                Toggle("Identify speakers", isOn: $settings.diarize)
-                Toggle("Neural voice activity detection", isOn: $settings.neuralVAD)
-                Text(settings.neuralVAD
-                     ? "Silero on the Neural Engine. Better in a noisy room; falls back "
-                     + "to energy detection if the model cannot load."
-                     : "Energy thresholding. No model to download, worse with background noise.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
         .formStyle(.grouped)
     }
 }
+
+// MARK: - Models
 
 struct ModelSettings: View {
     @Environment(AppState.self) private var state
@@ -130,56 +203,41 @@ struct ModelSettings: View {
 
                 LabeledContent("Uses") {
                     let id = settings.modelId(for: settings.tier)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .trailing, spacing: 2) {
                         Text(ModelCatalogue.option(id)?.label ?? id)
-                        Text(ModelCatalogue.option(id)?.sizeLabel ?? "")
+                        Text(state.isModelDownloaded(id)
+                             ? "Downloaded"
+                             : "Not downloaded — fetched on first use, or below")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(state.isModelDownloaded(id) ? Color.secondary : Color.orange)
                     }
-                }
-            }
-
-            Section("Downloaded") {
-                ForEach(ModelCatalogue.all) { option in
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: ModelCatalogue.isDownloaded(option.id, modelsDirectory: Paths.models)
-                              ? "checkmark.circle.fill" : "arrow.down.circle")
-                            .foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                Text(option.label)
-                                if !option.multilingual {
-                                    Text("English only")
-                                        .font(.caption2)
-                                        .foregroundStyle(.orange)
-                                }
-                            }
-                            Text(option.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer()
-                        Text(option.sizeLabel)
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.vertical, 2)
                 }
             }
 
             Section {
-                Button("Run the Benchmark") { state.route = .benchmark }
-                Button("Release Models from Memory") { state.releaseIdleModels() }
-                LabeledContent("Memory in use", value: "\(footprint) MB")
+                ForEach(ModelCatalogue.all) { option in
+                    ModelRow(option: option)
+                }
+            } header: {
+                Text("On this Mac")
             } footer: {
                 Text("Everything runs on this Mac. No account, no API key, and no audio "
-                     + "leaves the machine.")
+                     + "leaves the machine. Weights live in Application Support and can "
+                     + "be removed and fetched again at any time.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Memory") {
+                LabeledContent("In use now", value: "\(footprint) MB")
+                Button("Release Models from Memory") { state.releaseIdleModels() }
+                    .disabled(state.isLiveBusy)
+                Button("Run the Benchmark…") { state.route = .benchmark }
+            }
         }
         .formStyle(.grouped)
+        // Scoped to this pane: the task ends when the pane is left, so the
+        // probe does not tick for a window showing something else.
         .task {
             while !Task.isCancelled {
                 footprint = MemoryProbe.footprintMB()
@@ -188,6 +246,94 @@ struct ModelSettings: View {
         }
     }
 }
+
+/// One catalogue entry: what it is, which tier it serves, and a button that
+/// does the one thing its state allows.
+private struct ModelRow: View {
+    @Environment(AppState.self) private var state
+    let option: ModelOption
+
+    private var isDownloaded: Bool {
+        // Read against the revision so a finished download re-checks the disk.
+        _ = state.modelsRevision
+        return state.isModelDownloaded(option.id)
+    }
+
+    private var servesTiers: [ModelTier] {
+        ModelTier.allCases.filter { state.settings.modelId(for: $0) == option.id }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: isDownloaded ? "checkmark.circle.fill" : "circle.dashed")
+                .foregroundStyle(isDownloaded ? Color.green : Color.secondary)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(option.label)
+                    ForEach(servesTiers) { tier in
+                        Text(tier.label)
+                            .font(.caption2.weight(.medium))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(.quaternary))
+                            .help("The \(tier.label) tier uses this model")
+                    }
+                    if !option.multilingual {
+                        Text("English only")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
+                }
+                Text(option.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 12)
+
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(option.sizeLabel)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+                action
+            }
+        }
+        .padding(.vertical, 3)
+    }
+
+    @ViewBuilder
+    private var action: some View {
+        if let fraction = state.modelDownloads[option.id] {
+            HStack(spacing: 6) {
+                ProgressView(value: fraction)
+                    .frame(width: 70)
+                Text("\(Int(fraction * 100))%")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34, alignment: .trailing)
+            }
+            .help("Downloading \(option.label)")
+        } else if isDownloaded {
+            Button("Remove") { state.removeModel(option.id) }
+                .controlSize(.small)
+                .disabled(state.isLiveBusy)
+                .help(state.isLiveBusy
+                      ? "Not while a recording is in progress"
+                      : "Delete the weights from this Mac. They can be downloaded again.")
+        } else {
+            Button("Download") { state.downloadModel(option.id) }
+                .controlSize(.small)
+                .help("Fetch \(option.sizeLabel) now, so the first recording does not wait for it")
+        }
+    }
+}
+
+// MARK: - Storage
 
 struct StorageSettings: View {
     @Environment(AppState.self) private var state
@@ -214,6 +360,7 @@ struct StorageSettings: View {
                         HStack(spacing: 8) {
                             Text(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
                                 .foregroundStyle(.secondary)
+                                .monospacedDigit()
                             Button("Show") { NSWorkspace.shared.open(url) }
                                 .buttonStyle(.link)
                         }
@@ -223,7 +370,7 @@ struct StorageSettings: View {
             }
         }
         .formStyle(.grouped)
-        .task { measure() }
+        .task(id: state.modelsRevision) { measure() }
     }
 
     private func measure() {

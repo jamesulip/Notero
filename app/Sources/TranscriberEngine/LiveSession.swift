@@ -75,6 +75,12 @@ public final class LiveSession {
     public var config = SessionConfig()
     public var isMuted = false { didSet { capture?.isMuted = isMuted } }
 
+    /// Whether to decode while recording. Off, the session only captures --
+    /// archive and working copy -- and the whole-file pass runs at stop. That
+    /// pass is the better transcript anyway, and a two-hour meeting with no
+    /// model running keeps the machine cool and the fan quiet at the table.
+    public var decodeLive = true
+
     /// Microphone boost in decibels, live-adjustable while recording.
     ///
     /// Computed over a private store rather than a stored property with a
@@ -127,6 +133,9 @@ public final class LiveSession {
     public func prepare(model: String) async {
         guard state == .idle || state == .ready else { return }
         modelId = model
+        // Nothing to load for a capture-only session; the offline job loads
+        // the model when it runs.
+        guard decodeLive else { state = .ready; return }
         state = .preparing("Loading model…")
         do {
             try await engines.prepareForLive(model: model) { [weak self] message, _ in
@@ -147,7 +156,12 @@ public final class LiveSession {
     public func start(recordingId id: UUID, archiveFileName: String?,
                       archiveURL: URL?) async throws {
         guard !state.isRecording else { return }
-        if case .ready = state {} else { await prepare(model: modelId) }
+        // `.ready` from a capture-only prepare has no model behind it, so
+        // when live decoding is wanted the check is on the model, not the state.
+        let loaded = await engines.loadedModel
+        if !(state == .ready && (!decodeLive || loaded == modelId)) {
+            await prepare(model: modelId)
+        }
         guard case .ready = state else {
             throw EngineError.backendUnavailable(state.label)
         }
@@ -269,6 +283,8 @@ public final class LiveSession {
             meterCountdown = 0
             meter = WaveformAnalyzer.appending(chunk.peak, to: meter)
         }
+
+        guard decodeLive else { return }
 
         vadPending.append(contentsOf: PCM.floats(from: chunk.pcm))
         if !vadInFlight, vadPending.count >= 4096 {

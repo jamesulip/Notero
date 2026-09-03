@@ -1,5 +1,6 @@
 import Foundation
 import TranscriberCore
+import WhisperKit
 
 /// Owns the three model-backed engines and decides who gets memory.
 ///
@@ -41,6 +42,27 @@ public actor EngineHost {
 
     public func unloadModel() async {
         await asr.unload()
+    }
+
+    // MARK: - Model files
+
+    /// Fetches a model's weights without loading them, so a download can be
+    /// started from Settings ahead of the recording that needs it rather than
+    /// discovered at the moment the recording is supposed to begin.
+    public func downloadModel(_ id: String,
+                              progress: @escaping @Sendable (Double) -> Void) async throws {
+        _ = try await WhisperKit.download(variant: id, downloadBase: modelsDirectory) { report in
+            progress(report.fractionCompleted)
+        }
+    }
+
+    /// Deletes a model's weights. A loaded copy is unloaded first: the files
+    /// under it are gone either way, and a later reload would re-download.
+    public func removeModel(_ id: String) async throws {
+        if await asr.loadedModel == id { await asr.unload() }
+        let directory = ModelCatalogue.directory(for: id, modelsDirectory: modelsDirectory)
+        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        try FileManager.default.removeItem(at: directory)
     }
 
     // MARK: - Live
