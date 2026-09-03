@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftData
+import Synchronization
 import SwiftUI
 import TranscriberCore
 import TranscriberEngine
@@ -61,8 +62,14 @@ final class AppState {
     struct ShortTake: Identifiable {
         let id: UUID
         let durationMs: Int
-        let words: Int
+        /// Nil when nothing was decoded live, so there is no word count to give.
+        let words: Int?
     }
+
+    /// Download progress per model id, 0...1, while one runs.
+    private(set) var modelDownloads: [String: Double] = [:]
+    /// Bumped when a model arrives or goes, so views re-read the disk.
+    private(set) var modelsRevision = 0
 
     /// Below this a take is asked about rather than kept silently.
     static let shortTakeMs = 10_000
@@ -316,6 +323,7 @@ final class AppState {
         live.config = settings.sessionConfig
         live.inputGainDb = settings.inputGainDb
         live.isRoomMode = settings.roomMode
+        live.decodeLive = settings.liveTranscription
         await queue.setLiveActive(true)
         await engines.beginLive()
         await live.prepare(model: settings.liveModelId)
@@ -342,11 +350,12 @@ final class AppState {
         activeRecordingId = nil
         guard let result = finished else { return }
         await engines.endLive()
+        let decodedLive = live.decodeLive
 
         // A thrown decode is counted, not shown, during the session -- here is
         // where it has to surface. Without this, a backend that failed on
         // every hop produces a completed recording with an empty transcript.
-        if result.stats.failedHops > 0 {
+        if decodedLive, result.stats.failedHops > 0 {
             let detail = result.stats.lastError.map { " Last error: \($0)" } ?? ""
             warnings[result.recordingId] = result.stats.hops == 0
                 ? "Live transcription failed for this entire recording "
@@ -356,11 +365,13 @@ final class AppState {
                   + "recording, so some words may be missing.\(detail)"
         }
 
-        try? await writer.storeTranscript(
-            segments: result.segments, roster: [], modelId: result.modelId,
-            language: result.language, processMs: result.stats.totalInferMs,
-            didDiarize: false, for: result.recordingId
-        )
+        if decodedLive {
+            try? await writer.storeTranscript(
+                segments: result.segments, roster: [], modelId: result.modelId,
+                language: result.language, processMs: result.stats.totalInferMs,
+                didDiarize: false, for: result.recordingId
+            )
+        }
         try? await writer.attachAudio(
             fileName: result.archiveFileName ?? "",
             sampleRate: result.archiveSampleRate,
@@ -369,7 +380,13 @@ final class AppState {
             for: result.recordingId
         )
 
-        if settings.diarize {
+        if !decodedLive {
+            // Capture-only session: the whole-file pass is the transcript.
+            // The working copy it needs is the one the session just wrote.
+            if let stored = recording(result.recordingId) {
+                enqueueTranscription(stored, work: .full)
+            }
+        } else if settings.diarize {
             let job = TranscriptionJob(
                 id: result.recordingId,
                 title: recording(result.recordingId)?.title ?? "Recording",
@@ -396,9 +413,11 @@ final class AppState {
             shortTake = ShortTake(
                 id: result.recordingId,
                 durationMs: result.durationMs,
-                words: result.segments.reduce(0) {
-                    $0 + $1.displayText.split(whereSeparator: \.isWhitespace).count
-                }
+                words: decodedLive
+                    ? result.segments.reduce(0) {
+                        $0 + $1.displayText.split(whereSeparator: \.isWhitespace).count
+                    }
+                    : nil
             )
         }
     }
@@ -570,6 +589,52 @@ final class AppState {
         pendingScrollTarget = hit.segmentId
         if let ms = hit.atMs, let recording = recording(hit.recordingId) {
             seek(to: ms, in: recording)
+        }
+    }
+
+    // MARK: - Model files
+
+    func isModelDownloaded(_ id: String) -> Bool {
+        ModelCatalogue.isDownloaded(id, modelsDirectory: Paths.models)
+    }
+
+    /// Fetches weights ahead of need. Progress is throttled to whole percents
+    /// on the way to the main actor; WhisperKit reports per chunk.
+    func downloadModel(_ id: String) {
+        guard modelDownloads[id] == nil else { return }
+        modelDownloads[id] = 0
+        let last = Mutex(-1.0)
+        Task {
+            do {
+                try await engines.downloadModel(id) { fraction in
+                    let due = last.withLock { previous in
+                        guard fraction - previous >= 0.01 || fraction >= 1 else { return false }
+                        previous = fraction
+                        return true
+                    }
+                    guard due else { return }
+                    Task { @MainActor in self.modelDownloads[id] = fraction }
+                }
+            } catch {
+                alert = AppAlert(title: "Download failed", message: error.localizedDescription)
+            }
+            modelDownloads[id] = nil
+            modelsRevision += 1
+        }
+    }
+
+    /// Deletes weights. Refused while a recording is in progress: the live
+    /// session may be decoding on exactly this model.
+    func removeModel(_ id: String) {
+        guard !isLiveBusy else { return }
+        Task {
+            do {
+                try await engines.removeModel(id)
+            } catch {
+                alert = AppAlert(title: "Could not remove the model",
+                                 message: error.localizedDescription)
+            }
+            modelsRevision += 1
         }
     }
 

@@ -67,9 +67,10 @@ struct ContentView: View {
         let seconds = max(1, (take.durationMs + 500) / 1000)
         let length = "It ran for \(seconds) second\(seconds == 1 ? "" : "s")"
         switch take.words {
+        case nil: return "\(length). Discarding deletes the audio."
         case 0: return "\(length) and no words were heard. Discarding deletes the audio."
         case 1: return "\(length) and one word was heard. Discarding deletes the audio."
-        default: return "\(length) and \(take.words) words were heard. Discarding deletes the audio."
+        case let words?: return "\(length) and \(words) words were heard. Discarding deletes the audio."
         }
     }
 

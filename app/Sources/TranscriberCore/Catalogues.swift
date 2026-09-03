@@ -67,11 +67,30 @@ public enum ModelCatalogue {
     }
 
     /// WhisperKit lays models out under <base>/models/<repo>/<model-id>/.
+    public static func directory(for id: String, modelsDirectory: URL) -> URL {
+        modelsDirectory.appendingPathComponent("models/argmaxinc/whisperkit-coreml/\(id)",
+                                               isDirectory: true)
+    }
+
+    /// The decoder is the last file WhisperKit writes, so its presence means
+    /// the download finished rather than merely started.
     public static func isDownloaded(_ id: String, modelsDirectory: URL) -> Bool {
-        let path = modelsDirectory
-            .appendingPathComponent("models/argmaxinc/whisperkit-coreml/\(id)")
+        let path = directory(for: id, modelsDirectory: modelsDirectory)
             .appendingPathComponent("TextDecoder.mlmodelc")
         return FileManager.default.fileExists(atPath: path.path)
+    }
+
+    /// Bytes on disk for a downloaded model, or nil when it is not there.
+    public static func sizeOnDisk(_ id: String, modelsDirectory: URL) -> Int64? {
+        let root = directory(for: id, modelsDirectory: modelsDirectory)
+        guard FileManager.default.fileExists(atPath: root.path),
+              let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.fileSizeKey])
+        else { return nil }
+        var total: Int64 = 0
+        for case let file as URL in files {
+            total += Int64((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+        return total
     }
 }
 

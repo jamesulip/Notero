@@ -170,10 +170,20 @@ struct RecordingView: View {
                     }
 
                     if state.live.segments.isEmpty && state.live.partial.isEmpty {
-                        Text(isPreparing ? "Not recording yet…" : "Listening…")
-                            .foregroundStyle(.tertiary)
-                            .padding(.top, 24)
-                            .frame(maxWidth: .infinity)
+                        VStack(spacing: 6) {
+                            Text(isPreparing ? "Not recording yet…"
+                                 : (state.live.decodeLive ? "Listening…" : "Recording"))
+                            if !isPreparing, !state.live.decodeLive {
+                                Text("Transcription runs when you stop. Turn on "
+                                     + "“Transcribe while recording” in Settings to see text live.")
+                                    .font(.caption)
+                                    .multilineTextAlignment(.center)
+                                    .frame(maxWidth: 380)
+                            }
+                        }
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 24)
+                        .frame(maxWidth: .infinity)
                     }
                 }
                 .padding(20)
@@ -190,14 +200,19 @@ struct RecordingView: View {
 
     private var footer: some View {
         HStack(spacing: 14) {
-            // Which model is decoding: the first thing anyone wants to know
-            // when the live text reads oddly.
-            Label(ModelCatalogue.option(state.settings.liveModelId)?.label
-                  ?? state.settings.liveModelId,
-                  systemImage: "cpu")
-                .help(ModelCatalogue.option(state.settings.liveModelId)?.detail ?? "")
-            Label(state.live.vadBackend == "silero" ? "Silero VAD" : "Energy VAD",
-                  systemImage: "waveform.badge.mic")
+            if !state.live.decodeLive {
+                Label("Transcribes after you stop, on \(ModelCatalogue.option(state.settings.offlineModelId)?.label ?? state.settings.offlineModelId)",
+                      systemImage: "clock")
+            } else {
+                // Which model is decoding: the first thing anyone wants to know
+                // when the live text reads oddly.
+                Label(ModelCatalogue.option(state.settings.liveModelId)?.label
+                      ?? state.settings.liveModelId,
+                      systemImage: "cpu")
+                    .help(ModelCatalogue.option(state.settings.liveModelId)?.detail ?? "")
+                Label(state.live.vadBackend == "silero" ? "Silero VAD" : "Energy VAD",
+                      systemImage: "waveform.badge.mic")
+            }
             if state.live.stats.hops > 0 {
                 Label(String(format: "RTF %.2f", state.live.stats.meanRtf),
                       systemImage: "speedometer")
