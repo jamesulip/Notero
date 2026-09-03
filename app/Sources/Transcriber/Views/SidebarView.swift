@@ -33,16 +33,6 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $selection) {
-            Section {
-                Picker("Show", selection: $filter) {
-                    ForEach(Filter.allCases) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .listRowSeparator(.hidden)
-                .help("Active: recording, queued or being transcribed right now")
-            }
-
             ForEach(RecordingStore.group(filtered), id: \.bucket.id) { section in
                 Section(section.bucket.label) {
                     ForEach(section.items) { recording in
@@ -67,6 +57,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .safeAreaInset(edge: .top, spacing: 0) { filterBar }
         .safeAreaInset(edge: .bottom) { footer }
         .onChange(of: selection) { _, picked in
             // One row is a navigation; several are a selection to act on, and
@@ -116,6 +107,29 @@ struct SidebarView: View {
         case 1: return "Delete “\(pendingDelete[0].title)”?"
         default: return "Delete \(pendingDelete.count) recordings?"
         }
+    }
+
+    /// Pinned above the list rather than being its first row.
+    ///
+    /// As a row it scrolled away, so the filter you were in stopped being
+    /// visible once you scrolled. Worse, the sidebar's titlebar strip has no
+    /// material of its own -- the window controls sit straight on the list
+    /// background -- so scrolled rows rode up under the traffic lights and the
+    /// close button landed on top of a recording's duration. An inset bar takes
+    /// that strip out of the scroll area, which fixes both.
+    private var filterBar: some View {
+        VStack(spacing: 0) {
+            Picker("Show", selection: $filter) {
+                ForEach(Filter.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .help("Active: recording, queued or being transcribed right now")
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            Divider()
+        }
+        .background(.bar)
     }
 
     private var footer: some View {
