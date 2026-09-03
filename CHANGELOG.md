@@ -23,6 +23,11 @@
 - Playback keeps the current turn in view. Scrolling by hand pauses that;
   the Follow button or the "Follow playback" pill resumes it.
 - Earlier transcript revisions can be read from a menu in the info bar.
+- Settings is a resizable window with General, Audio, Models and Storage
+  panes. Models can be downloaded ahead of time, with progress, or removed.
+- "Transcribe while recording" now does what it says. Off, the Mac only
+  records during the meeting and the whole-file pass makes the transcript
+  when you stop.
 - Stopping under ten seconds asks Keep or Discard. Several sidebar rows can be
   selected and deleted together. Failed recordings group under Needs Attention.
 
