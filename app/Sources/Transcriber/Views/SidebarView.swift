@@ -10,6 +10,11 @@ struct SidebarView: View {
     private var recordings: [StoredRecording]
 
     @State private var filter: Filter = .all
+    /// The list's own selection. A set, so several rows can be picked and
+    /// deleted together; `state.route` follows it whenever exactly one row is
+    /// selected, and it follows `state.route` when something else navigates.
+    @State private var selection: Set<Route> = []
+    @State private var pendingDelete: [StoredRecording] = []
 
     enum Filter: String, CaseIterable, Identifiable {
         case all, favorites, meetings
@@ -24,12 +29,7 @@ struct SidebarView: View {
     }
 
     var body: some View {
-        @Bindable var state = state
-
-        List(selection: Binding(
-            get: { state.route },
-            set: { state.route = $0 }
-        )) {
+        List(selection: $selection) {
             Section {
                 Picker("Show", selection: $filter) {
                     ForEach(Filter.allCases) { Text($0.label).tag($0) }
@@ -60,6 +60,32 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) { footer }
+        .onChange(of: selection) { _, picked in
+            // One row is a navigation; several are a selection to act on, and
+            // the detail keeps showing whatever it was showing.
+            if picked.count == 1, let only = picked.first, state.route != only {
+                state.route = only
+            }
+        }
+        .onChange(of: state.route, initial: true) { _, route in
+            if let route, !selection.contains(route) { selection = [route] }
+            if route == nil { selection = [] }
+        }
+        .onDeleteCommand { pendingDelete = selectedRecordings }
+        .confirmationDialog(
+            deleteTitle, isPresented: Binding(
+                get: { !pendingDelete.isEmpty },
+                set: { if !$0 { pendingDelete = [] } }
+            ), titleVisibility: .visible
+        ) {
+            Button(pendingDelete.count == 1 ? "Delete" : "Delete \(pendingDelete.count) Recordings",
+                   role: .destructive) {
+                state.delete(pendingDelete)
+                pendingDelete = []
+            }
+        } message: {
+            Text("The audio and transcript are removed from this Mac. This cannot be undone.")
+        }
     }
 
     private var filtered: [StoredRecording] {
@@ -67,6 +93,18 @@ struct SidebarView: View {
         case .all: return recordings
         case .favorites: return recordings.filter(\.isFavorite)
         case .meetings: return recordings.filter { $0.kind == .meeting }
+        }
+    }
+
+    private var selectedRecordings: [StoredRecording] {
+        recordings.filter { selection.contains(.recording($0.id)) }
+    }
+
+    private var deleteTitle: String {
+        switch pendingDelete.count {
+        case 0: return ""
+        case 1: return "Delete “\(pendingDelete[0].title)”?"
+        default: return "Delete \(pendingDelete.count) recordings?"
         }
     }
 
@@ -108,9 +146,7 @@ struct SidebarView: View {
             try? context.save()
         }
         if recording.hasAudio {
-            Button("Transcribe Again", systemImage: "arrow.clockwise") {
-                state.retranscribe(recording)
-            }
+            RerunItems(recording: recording)
             Button("Show Audio in Finder", systemImage: "folder") {
                 if let url = recording.audioURL { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             }
@@ -122,8 +158,17 @@ struct SidebarView: View {
             }
         }
         Divider()
-        Button("Delete", systemImage: "trash", role: .destructive) {
-            state.delete(recording)
+        // Right-clicking inside a multi-selection acts on all of it; outside
+        // it, on the row under the pointer alone.
+        let selected = selectedRecordings
+        if selected.count > 1, selected.contains(where: { $0.id == recording.id }) {
+            Button("Delete \(selected.count) Recordings…", systemImage: "trash", role: .destructive) {
+                pendingDelete = selected
+            }
+        } else {
+            Button("Delete…", systemImage: "trash", role: .destructive) {
+                pendingDelete = [recording]
+            }
         }
     }
 }

@@ -101,11 +101,16 @@ public enum RecordingStore {
     // MARK: - History
 
     public enum HistoryBucket: String, CaseIterable, Identifiable, Sendable {
+        /// Failed rows, whatever their date. Above the dated groups so a
+        /// recording that needs a retry or a delete is not buried under
+        /// "Older" where nobody scrolls.
+        case attention
         case today, yesterday, thisWeek, older
 
         public var id: String { rawValue }
         public var label: String {
             switch self {
+            case .attention: return "Needs Attention"
             case .today: return "Today"
             case .yesterday: return "Yesterday"
             case .thisWeek: return "Earlier This Week"
@@ -130,13 +135,18 @@ public enum RecordingStore {
         return .older
     }
 
-    /// Groups newest-first into Today / Yesterday / Earlier This Week / Older.
+    /// Groups newest-first into Needs Attention / Today / Yesterday / Earlier
+    /// This Week / Older. Failed recordings go to the first group regardless
+    /// of when they were made.
     public static func group(_ recordings: [StoredRecording], now: Date = Date())
     -> [(bucket: HistoryBucket, items: [StoredRecording])] {
         let sorted = recordings.sorted { $0.createdAt > $1.createdAt }
         var buckets: [HistoryBucket: [StoredRecording]] = [:]
         for recording in sorted {
-            buckets[bucket(for: recording.createdAt, now: now), default: []].append(recording)
+            let key: HistoryBucket = recording.status == .failed
+                ? .attention
+                : bucket(for: recording.createdAt, now: now)
+            buckets[key, default: []].append(recording)
         }
         return HistoryBucket.allCases.compactMap { bucket in
             guard let items = buckets[bucket], !items.isEmpty else { return nil }
