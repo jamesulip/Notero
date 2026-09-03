@@ -1,14 +1,21 @@
 import Foundation
 
 public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
-    case txt, srt, vtt, json
+    case txt, markdown, srt, vtt, json
 
     public var id: String { rawValue }
-    public var fileExtension: String { rawValue }
+
+    public var fileExtension: String {
+        switch self {
+        case .markdown: return "md"
+        default: return rawValue
+        }
+    }
 
     public var label: String {
         switch self {
         case .txt: return "Plain Text"
+        case .markdown: return "Markdown Minutes"
         case .srt: return "SubRip (.srt)"
         case .vtt: return "WebVTT (.vtt)"
         case .json: return "JSON"
@@ -18,6 +25,8 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     public var detail: String {
         switch self {
         case .txt: return "Speaker-labelled transcript and the meeting notes."
+        case .markdown: return "Minutes with headings, attendees, checkable action items "
+            + "and the transcript — pastes cleanly into email, chat and wikis."
         case .srt: return "Subtitle cues for video editors."
         case .vtt: return "Subtitle cues for web players."
         case .json: return "Everything: segments, speakers, bookmarks, notes."
@@ -25,12 +34,62 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// What to leave out of an export. Empty means everything.
+///
+/// A two-hour meeting is often exported for one person's part of it, or for
+/// the half hour a decision was argued. Filtering here, at export, keeps the
+/// stored transcript whole.
+public struct ExportOptions: Sendable, Equatable {
+    /// Only these speakers' lines. Nil keeps every line, attributed or not.
+    public var speakerIds: Set<String>?
+    /// Only lines starting at or after this point.
+    public var fromMs: Int?
+    /// Only lines starting before this point.
+    public var toMs: Int?
+
+    public init(speakerIds: Set<String>? = nil, fromMs: Int? = nil, toMs: Int? = nil) {
+        self.speakerIds = speakerIds
+        self.fromMs = fromMs
+        self.toMs = toMs
+    }
+
+    public static let everything = ExportOptions()
+
+    public var isFiltering: Bool { speakerIds != nil || fromMs != nil || toMs != nil }
+
+    /// The document with only what the options keep. Bookmarks and notes
+    /// with a timestamp follow the time range; notes with none are kept.
+    public func apply(to document: MeetingDocument) -> MeetingDocument {
+        guard isFiltering else { return document }
+        var out = document
+        out.segments = document.segments.filter { segment in
+            if let speakerIds, !(segment.speakerId.map(speakerIds.contains) ?? false) { return false }
+            return inRange(segment.startMs)
+        }
+        out.bookmarks = document.bookmarks.filter { inRange($0.atMs) }
+        out.items = document.items.filter { $0.sourceMs.map(inRange) ?? true }
+        if let speakerIds {
+            out.speakers = document.speakers.filter { speakerIds.contains($0.id) }
+        }
+        return out
+    }
+
+    private func inRange(_ ms: Int) -> Bool {
+        if let fromMs, ms < fromMs { return false }
+        if let toMs, ms >= toMs { return false }
+        return true
+    }
+}
+
 /// Renders a `MeetingDocument`. Pure: no store, no file system, no clock.
 public enum Exporter {
 
-    public static func render(_ format: ExportFormat, document: MeetingDocument) -> String {
+    public static func render(_ format: ExportFormat, document: MeetingDocument,
+                              options: ExportOptions = .everything) -> String {
+        let document = options.apply(to: document)
         switch format {
         case .txt: return txt(document)
+        case .markdown: return markdown(document)
         case .srt: return srt(document)
         case .vtt: return vtt(document)
         case .json: return json(document)
@@ -98,6 +157,73 @@ public enum Exporter {
             }
             lines.append(block.text)
             lines.append("")
+        }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .newlines) + "\n"
+    }
+
+    // MARK: - Markdown
+
+    /// Minutes first, transcript last: the reader of a pasted export wants
+    /// the decisions before the two hours that produced them.
+    static func markdown(_ document: MeetingDocument) -> String {
+        var lines: [String] = ["# \(document.title)"]
+        var facts = [Self.longDate.string(from: document.createdAt)]
+        if document.durationMs > 0 { facts.append(TimeFormat.duration(ms: document.durationMs)) }
+        if document.speakers.count > 1 { facts.append("\(document.speakers.count) speakers") }
+        lines.append("*\(facts.joined(separator: " · "))*")
+        lines.append("")
+
+        if !document.speakers.isEmpty {
+            lines.append("## Attendees")
+            for speaker in document.speakers.sorted(by: { $0.speechMs > $1.speechMs }) {
+                lines.append(speaker.speechMs > 0
+                    ? "- \(speaker.displayName) (\(TimeFormat.coarse(ms: speaker.speechMs)))"
+                    : "- \(speaker.displayName)")
+            }
+            lines.append("")
+        }
+
+        if !document.summary.isEmpty {
+            lines.append("## Summary")
+            lines.append(document.summary)
+            lines.append("")
+        }
+
+        for kind in MeetingItemKind.allCases {
+            let items = document.items(kind)
+            guard !items.isEmpty else { continue }
+            lines.append("## \(kind.plural)")
+            for item in items {
+                var row = kind.isCheckable ? (item.isDone ? "- [x] " : "- [ ] ") : "- "
+                row += item.text
+                if let owner = item.owner, !owner.isEmpty { row += " — \(owner)" }
+                if let at = item.sourceMs { row += " *(\(TimeFormat.short(ms: at)))*" }
+                lines.append(row)
+            }
+            lines.append("")
+        }
+
+        if !document.bookmarks.isEmpty {
+            lines.append("## Bookmarks")
+            for bookmark in document.bookmarks.sorted(by: { $0.atMs < $1.atMs }) {
+                lines.append("- **\(TimeFormat.short(ms: bookmark.atMs))** \(bookmark.displayLabel)")
+            }
+            lines.append("")
+        }
+
+        if !document.segments.isEmpty {
+            lines.append("## Transcript")
+            lines.append("")
+            for block in TranscriptGrouping.blocks(from: document.segments) {
+                let stamp = TimeFormat.short(ms: block.startMs)
+                if let name = document.name(for: block.speakerId) {
+                    lines.append("**\(stamp) · \(name)**  ")
+                } else {
+                    lines.append("**\(stamp)**  ")
+                }
+                lines.append(block.text)
+                lines.append("")
+            }
         }
         return lines.joined(separator: "\n").trimmingCharacters(in: .newlines) + "\n"
     }

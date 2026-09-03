@@ -28,6 +28,17 @@
 - "Transcribe while recording" now does what it says. Off, the Mac only
   records during the meeting and the whole-file pass makes the transcript
   when you stop.
+- Sidebar: double-click or Rename to retitle a recording in place; an Active
+  filter for what is recording or being transcribed; the status chip shows
+  time remaining. Importing a file that matches one already in the library
+  asks before making a second copy.
+- Export: Markdown minutes (attendees, summary, checkable action items, then
+  the transcript); Copy as Text or Markdown from the Export button's menu;
+  export only chosen speakers or a time range; the last format is remembered.
+- Warnings about an imperfect job are stored with the recording and shown in
+  the sidebar, the header and the info popover. A background job failing no
+  longer raises an alert over whatever is on screen. The live footer keeps
+  the model and language and moves the engineering numbers behind Stats.
 - Stopping under ten seconds asks Keep or Discard. Several sidebar rows can be
   selected and deleted together. Failed recordings group under Needs Attention.
 

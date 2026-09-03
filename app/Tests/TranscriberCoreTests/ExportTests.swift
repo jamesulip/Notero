@@ -160,3 +160,78 @@ final class ExportTests: XCTestCase {
         XCTAssertFalse(text.contains("TRANSCRIPT"))
     }
 }
+
+final class MarkdownAndFilterExportTests: XCTestCase {
+
+    private func document() -> MeetingDocument {
+        MeetingDocument(
+            id: UUID(), title: "Site Meeting", kind: .meeting,
+            createdAt: Date(timeIntervalSince1970: 1_772_000_000),
+            durationMs: 600_000, language: "tl", summary: "Agreed the launch date.",
+            speakers: [SpeakerLabel(id: "S1", displayName: "Juan", speechMs: 8_000),
+                       SpeakerLabel(id: "S2", displayName: "Maria", speechMs: 3_000)],
+            segments: [
+                Segment(index: 0, startMs: 1_000, endMs: 4_000, text: "Simulan na natin.", speakerId: "S1"),
+                Segment(index: 1, startMs: 5_000, endMs: 8_000, text: "Sige po.", speakerId: "S2"),
+                Segment(index: 2, startMs: 120_000, endMs: 125_000, text: "Launch on the 15th.", speakerId: "S1"),
+                Segment(index: 3, startMs: 130_000, endMs: 132_000, text: "Noted.", speakerId: nil),
+            ],
+            bookmarks: [Bookmark(atMs: 121_000, label: "Launch date")],
+            items: [
+                MeetingItem(kind: .decision, text: "Launch on the 15th", sourceMs: 120_000),
+                MeetingItem(kind: .actionItem, text: "Book the venue", owner: "Maria"),
+            ]
+        )
+    }
+
+    func testMarkdownPutsMinutesBeforeTheTranscript() {
+        let text = Exporter.render(.markdown, document: document())
+        XCTAssertTrue(text.hasPrefix("# Site Meeting\n"))
+        XCTAssertTrue(text.contains("## Attendees\n- Juan"))
+        XCTAssertTrue(text.contains("## Decisions\n- Launch on the 15th *(2:00)*"))
+        XCTAssertTrue(text.contains("- [ ] Book the venue — Maria"))
+        XCTAssertTrue(text.contains("**0:01 · Juan**"))
+        let minutes = text.range(of: "## Decisions")!.lowerBound
+        let transcript = text.range(of: "## Transcript")!.lowerBound
+        XCTAssertLessThan(minutes, transcript)
+    }
+
+    func testFilteringBySpeakerDropsOtherAndUnattributedLines() {
+        let text = Exporter.render(.txt, document: document(),
+                                   options: ExportOptions(speakerIds: ["S2"]))
+        XCTAssertTrue(text.contains("Sige po."))
+        XCTAssertFalse(text.contains("Simulan"))
+        XCTAssertFalse(text.contains("Noted."), "a line nobody is credited with is not Maria's")
+    }
+
+    func testFilteringByTimeRangeKeepsNotesWithoutATimestamp() {
+        let filtered = ExportOptions(fromMs: 100_000, toMs: 126_000).apply(to: document())
+        XCTAssertEqual(filtered.segments.map(\.text), ["Launch on the 15th."])
+        XCTAssertEqual(filtered.bookmarks.count, 1)
+        XCTAssertEqual(filtered.items.map(\.text), ["Launch on the 15th", "Book the venue"],
+                       "the untimed action item stays; nothing says it is outside the range")
+    }
+
+    func testNoOptionsMeansTheDocumentIsUntouched() {
+        let doc = document()
+        XCTAssertEqual(ExportOptions.everything.apply(to: doc).segments.count, doc.segments.count)
+        XCTAssertFalse(ExportOptions.everything.isFiltering)
+    }
+}
+
+final class TimeParseTests: XCTestCase {
+    func testClockReadingsParseToMilliseconds() {
+        XCTAssertEqual(TimeFormat.parse("45"), 45_000)
+        XCTAssertEqual(TimeFormat.parse("12:34"), 754_000)
+        XCTAssertEqual(TimeFormat.parse("1:02:03"), 3_723_000)
+        XCTAssertEqual(TimeFormat.parse(" 0:05 "), 5_000)
+    }
+
+    func testHalfTypedOrNonsenseIsNilNotZero() {
+        XCTAssertNil(TimeFormat.parse(""))
+        XCTAssertNil(TimeFormat.parse("12:"))
+        XCTAssertNil(TimeFormat.parse("1:75"))
+        XCTAssertNil(TimeFormat.parse("abc"))
+        XCTAssertNil(TimeFormat.parse("1:2:3:4"))
+    }
+}

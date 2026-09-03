@@ -112,3 +112,16 @@ final class TranscriptWriterTests: XCTestCase {
         XCTAssertEqual(recording.transcript?.orderedSegments.map(\.text), ["Again."])
     }
 }
+
+extension TranscriptWriterTests {
+    func testAWarningIsStoredAndClearedThroughTheWriter() async throws {
+        let id = try RecordingStore.create(kind: .recording, in: container.mainContext).id
+        let writer = TranscriptWriter(modelContainer: container)
+
+        try await writer.setWarning("2 windows could not be decoded.", for: id)
+        XCTAssertEqual(try fetch(id)?.warningMessage, "2 windows could not be decoded.")
+
+        try await writer.setWarning(nil, for: id)
+        XCTAssertNil(try fetch(id)?.warningMessage)
+    }
+}

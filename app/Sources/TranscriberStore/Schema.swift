@@ -34,6 +34,10 @@ public final class StoredRecording {
     /// 0...1 within the current stage. Stage comes from `status`.
     public var progress: Double = 0
     public var errorMessage: String?
+    /// The job finished, but not intact -- a window that would not decode,
+    /// speaker identification that failed. Kept on the row so it survives a
+    /// relaunch; a transcript missing a window looks merely short.
+    public var warningMessage: String?
 
     /// How many people the user says were in the room, for speaker
     /// identification to aim at. Nil until they say.

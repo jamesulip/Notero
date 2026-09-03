@@ -198,6 +198,8 @@ struct RecordingView: View {
         }
     }
 
+    @State private var showStats = false
+
     private var footer: some View {
         HStack(spacing: 14) {
             if !state.live.decodeLive {
@@ -210,23 +212,18 @@ struct RecordingView: View {
                       ?? state.settings.liveModelId,
                       systemImage: "cpu")
                     .help(ModelCatalogue.option(state.settings.liveModelId)?.detail ?? "")
-                Label(state.live.vadBackend == "silero" ? "Silero VAD" : "Energy VAD",
-                      systemImage: "waveform.badge.mic")
-            }
-            if state.live.stats.hops > 0 {
-                Label(String(format: "RTF %.2f", state.live.stats.meanRtf),
-                      systemImage: "speedometer")
-                    .help("Decode time over audio duration. Below 1.0 keeps up with live audio.")
-                Label("\(state.live.stats.hops) decodes · \(TimeFormat.duration(ms: state.live.stats.totalInferMs))",
-                      systemImage: "clock")
-                    .help("Windows decoded so far, and the total time the model has "
-                        + "spent on them. It runs alongside the recording, not after it.")
-            }
-            if state.live.stats.droppedHops > 0 {
-                Label("\(state.live.stats.droppedHops) dropped",
-                      systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-                    .help("Decode windows skipped because the previous one was still running.")
+                // The engineering numbers live behind a button. They were the
+                // whole footer, and nobody in a meeting needs the RTF -- but
+                // the dropped-window count is a warning and stays in sight.
+                Button {
+                    showStats.toggle()
+                } label: {
+                    Label("Stats", systemImage: state.live.stats.droppedHops > 0
+                          ? "exclamationmark.circle" : "info.circle")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(state.live.stats.droppedHops > 0 ? .orange : .secondary)
+                .popover(isPresented: $showStats, arrowEdge: .top) { statsPopover }
             }
             Spacer()
             Text(state.settings.language == "auto"
@@ -238,5 +235,41 @@ struct RecordingView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(.bar)
+    }
+
+    private var statsPopover: some View {
+        let stats = state.live.stats
+        return Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 6) {
+            GridRow {
+                Text("Voice detection").foregroundStyle(.secondary)
+                Text(state.live.vadBackend == "silero" ? "Silero (neural)" : "Energy")
+            }
+            GridRow {
+                Text("Decodes").foregroundStyle(.secondary)
+                Text("\(stats.hops) · \(TimeFormat.duration(ms: stats.totalInferMs)) of model time")
+            }
+            if stats.hops > 0 {
+                GridRow {
+                    Text("RTF").foregroundStyle(.secondary)
+                    Text(String(format: "%.2f", stats.meanRtf))
+                        .help("Decode time over audio duration. Below 1.0 keeps up with live audio.")
+                }
+            }
+            GridRow {
+                Text("Dropped").foregroundStyle(.secondary)
+                Text("\(stats.droppedHops)")
+                    .foregroundStyle(stats.droppedHops > 0 ? .orange : .primary)
+                    .help("Windows skipped because the previous decode was still running.")
+            }
+            if stats.failedHops > 0 {
+                GridRow {
+                    Text("Failed").foregroundStyle(.secondary)
+                    Text("\(stats.failedHops)").foregroundStyle(.orange)
+                }
+            }
+        }
+        .font(.callout)
+        .monospacedDigit()
+        .padding(14)
     }
 }

@@ -155,7 +155,7 @@ struct RecordingDetailView: View {
             } else if recording.status == .failed {
                 StatusChip(status: .failed)
                 if recording.hasAudio { RerunButton(recording: recording, label: "Retry") }
-            } else if let warning = state.warnings[recording.id] {
+            } else if let warning = recording.warningMessage ?? state.warnings[recording.id] {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
@@ -167,12 +167,27 @@ struct RecordingDetailView: View {
                     .help("Transcribe again on another tier, or identify speakers again")
             }
 
-            Button {
-                state.isExporting = true
+            // Click exports; the arrow offers the clipboard. Copy is the more
+            // common of the two for a transcript going into an email.
+            Menu {
+                Button("Copy as Text", systemImage: "doc.on.doc") {
+                    state.copyTranscript(recording, format: .txt)
+                }
+                Button("Copy as Markdown", systemImage: "text.badge.checkmark") {
+                    state.copyTranscript(recording, format: .markdown)
+                }
+                Divider()
+                Button("Export…", systemImage: "square.and.arrow.up") {
+                    state.isExporting = true
+                }
             } label: {
                 Label("Export", systemImage: "square.and.arrow.up")
+            } primaryAction: {
+                state.isExporting = true
             }
-            .help("Export as TXT, SRT, VTT or JSON (⌘E)")
+            .help("Export as text, Markdown minutes, SRT, VTT or JSON (⌘E). "
+                + "The arrow copies to the clipboard instead.")
+            .disabled(recording.transcript == nil)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

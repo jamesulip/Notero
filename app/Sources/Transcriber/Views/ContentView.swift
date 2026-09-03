@@ -60,6 +60,26 @@ struct ContentView: View {
         } message: { take in
             Text(Self.shortTakeMessage(take))
         }
+        .alert(
+            "Already imported?",
+            isPresented: Binding(
+                get: { !state.duplicateImports.isEmpty },
+                set: { if !$0, let first = state.duplicateImports.first {
+                    state.duplicateImports.removeAll { $0.id == first.id }
+                } }
+            ),
+            presenting: state.duplicateImports.first
+        ) { duplicate in
+            Button("Open Existing") { state.resolveDuplicate(duplicate, importAnyway: false) }
+                .keyboardShortcut(.defaultAction)
+            Button("Import Anyway") { state.resolveDuplicate(duplicate, importAnyway: true) }
+            Button("Cancel", role: .cancel) {
+                state.duplicateImports.removeAll { $0.id == duplicate.id }
+            }
+        } message: { duplicate in
+            Text("“\(duplicate.url.lastPathComponent)” is the same size as the audio behind "
+                 + "“\(duplicate.existingTitle)”. Open that recording, or import a second copy?")
+        }
         .toolbar { toolbar }
     }
 
