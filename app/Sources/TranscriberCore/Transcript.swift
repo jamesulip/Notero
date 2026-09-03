@@ -111,6 +111,15 @@ public struct SpeakerLabel: Identifiable, Equatable, Sendable, Codable {
         self.speechMs = speechMs
     }
 
+    /// "Maria Santos" -> "MS", "Speaker 3" -> "S3", "Juan" -> "J". For the
+    /// badge beside a turn, so colour is not the only cue telling speakers
+    /// apart -- the palette has eight colours and a room can have more people.
+    public static func initials(for name: String) -> String {
+        let words = name.split(whereSeparator: \.isWhitespace).prefix(2)
+        let letters = words.compactMap { $0.first }.map { String($0).uppercased() }
+        return letters.joined()
+    }
+
     /// "S1" -> "Speaker 1". The fallback when nobody has renamed anything.
     ///
     /// Backends label speakers inconsistently -- "1", "speaker_0", "S3" -- so

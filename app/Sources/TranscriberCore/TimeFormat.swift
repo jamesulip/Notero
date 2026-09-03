@@ -45,6 +45,19 @@ public enum TimeFormat {
         return rest == 0 ? "about \(hours) hr" : "about \(hours) hr \(rest) min"
     }
 
+    /// "9:47:12 PM": the wall-clock moment `ms` into a recording that started
+    /// at `start`. For matching a transcript against hand-written minutes.
+    public static func timeOfDay(ms: Int, start: Date) -> String {
+        Self.clock.string(from: start.addingTimeInterval(Double(max(0, ms)) / 1000))
+    }
+
+    private static let clock: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .medium
+        formatter.dateStyle = .none
+        return formatter
+    }()
+
     /// "~14 min" -- `remaining` for a chip that has no room for "about".
     public static func remainingCompact(seconds: Double) -> String {
         remaining(seconds: seconds).replacingOccurrences(of: "about ", with: "~")

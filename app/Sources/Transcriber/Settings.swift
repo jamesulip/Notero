@@ -20,6 +20,9 @@ final class AppSettings {
         static let inputGainDb = "recording.inputGainDb"
         static let roomMode = "recording.roomMode"
         static let benchmark = "benchmark.lastReport"
+        static let inspectorShown = "ui.inspectorShown"
+        static let clockTimestamps = "ui.clockTimestamps"
+        static let hasSeenWelcome = "ui.hasSeenWelcome"
     }
 
     private let defaults: UserDefaults
@@ -38,6 +41,32 @@ final class AppSettings {
         gainDb = InputGain.clampDb(
             defaults.object(forKey: Key.inputGainDb) as? Float ?? InputGain.defaultDb
         )
+        inspectorShown = defaults.dictionary(forKey: Key.inspectorShown) as? [String: Bool] ?? [:]
+        clockTimestamps = defaults.object(forKey: Key.clockTimestamps) as? Bool ?? false
+        hasSeenWelcome = defaults.object(forKey: Key.hasSeenWelcome) as? Bool ?? false
+    }
+
+    // MARK: - Interface
+
+    /// Show transcript times as time of day ("9:47:12 PM") rather than offsets.
+    var clockTimestamps: Bool { didSet { defaults.set(clockTimestamps, forKey: Key.clockTimestamps) } }
+
+    /// The first-run card has been dismissed.
+    var hasSeenWelcome: Bool { didSet { defaults.set(hasSeenWelcome, forKey: Key.hasSeenWelcome) } }
+
+    /// Whether the meeting workspace is open, remembered per recording kind:
+    /// meetings want it, plain recordings usually do not, and the choice
+    /// used to reset every time a row was selected.
+    private(set) var inspectorShown: [String: Bool] {
+        didSet { defaults.set(inspectorShown, forKey: Key.inspectorShown) }
+    }
+
+    func inspectorShown(for kind: RecordingKind) -> Bool {
+        inspectorShown[kind.rawValue] ?? (kind == .meeting)
+    }
+
+    func setInspectorShown(_ shown: Bool, for kind: RecordingKind) {
+        inspectorShown[kind.rawValue] = shown
     }
 
     var tier: ModelTier { didSet { defaults.set(tier.rawValue, forKey: Key.tier) } }

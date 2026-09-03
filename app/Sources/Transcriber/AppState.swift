@@ -51,6 +51,39 @@ final class AppState {
     /// back on from the player bar or the "Follow playback" pill.
     var followPlayback = true
 
+    /// ⌘[ and ⌘]: the transcript view moves the selection by this many turns.
+    var turnStep: TurnStep?
+
+    struct TurnStep: Equatable {
+        let delta: Int
+        let serial: Int
+    }
+
+    func stepTurn(_ delta: Int) {
+        turnStep = TurnStep(delta: delta, serial: (turnStep?.serial ?? 0) + 1)
+    }
+
+    /// The speeds the player offers, in order.
+    static let playbackRates: [Float] = [0.75, 1.0, 1.25, 1.5, 2.0]
+
+    /// ⌥↑ and ⌥↓: one step along `playbackRates`.
+    func adjustSpeed(_ direction: Int) {
+        let rates = Self.playbackRates
+        let current = rates.indices.min {
+            abs(rates[$0] - player.rate) < abs(rates[$1] - player.rate)
+        } ?? 1
+        let next = min(rates.count - 1, max(0, current + direction))
+        player.rate = rates[next]
+    }
+
+    /// A transcript timestamp the way the user asked to read it: an offset
+    /// into the recording, or the time of day it was said.
+    func timestamp(ms: Int, in recording: StoredRecording) -> String {
+        settings.clockTimestamps
+            ? TimeFormat.timeOfDay(ms: ms, start: recording.createdAt)
+            : TimeFormat.short(ms: ms)
+    }
+
     /// The transcript row the user last clicked. What ⌃⌘D and friends act on.
     var selectedSegmentId: UUID?
 
