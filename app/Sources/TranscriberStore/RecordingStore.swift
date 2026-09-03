@@ -49,6 +49,49 @@ public enum RecordingStore {
         try context.save()
     }
 
+    // MARK: - Recovery
+
+    /// Resolves work that a previous run left unfinished.
+    ///
+    /// Statuses like `preparing`, `recording` and `transcribing` describe a job
+    /// held by a live session or the queue. Neither survives a quit, so on the
+    /// next launch those rows describe work that no longer exists -- and
+    /// because they report `isTerminal == false`, the UI waits on them
+    /// indefinitely. A recording quit during the 9-11 s model load (284 s on a
+    /// cold CoreML compile) is left with no audio, no error and no way out.
+    ///
+    /// Called once at launch, before anything reads the store.
+    ///
+    /// Nothing is deleted. A row that captured no audio is still a row the user
+    /// made, and silently removing it would be worse than showing that it
+    /// failed.
+    @discardableResult
+    public static func recoverInterrupted(in context: ModelContext) throws -> Int {
+        let descriptor = FetchDescriptor<StoredRecording>()
+        let stale = try context.fetch(descriptor).filter { !$0.status.isTerminal }
+        guard !stale.isEmpty else { return 0 }
+
+        for recording in stale {
+            if recording.transcript != nil {
+                // The transcript exists and is readable; only the stage after
+                // it was lost. Re-running diarization is a menu item away.
+                recording.status = .completed
+                recording.progress = 1
+            } else if recording.hasAudio {
+                recording.status = .failed
+                recording.errorMessage = "Interrupted before this was transcribed. "
+                    + "The audio is here — transcribe it again."
+            } else {
+                recording.status = .failed
+                recording.errorMessage = "Interrupted before any audio was captured, "
+                    + "so there is nothing to recover."
+            }
+            recording.updatedAt = Date()
+        }
+        try context.save()
+        return stale.count
+    }
+
     // MARK: - History
 
     public enum HistoryBucket: String, CaseIterable, Identifiable, Sendable {

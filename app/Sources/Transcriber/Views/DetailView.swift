@@ -14,7 +14,10 @@ struct DetailView: View {
             BenchmarkView()
         case .recording(let id):
             if let recording = state.recording(id) {
-                if state.isRecording && state.live.recordingId == id {
+                // `isLive`, not `isRecording`: the model load happens before
+                // capture starts, and gating on `isRecording` showed the
+                // finished-recording pane -- empty, static -- for all of it.
+                if state.isLive(id) {
                     RecordingView(recording: recording)
                 } else if recording.kind == .note {
                     NoteEditorView(recording: recording)
@@ -62,11 +65,16 @@ struct RecordingDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            RecordingInfoBar(recording: recording)
             Divider()
 
             HStack(spacing: 0) {
+                // maxHeight as well as maxWidth. Without it the pane sizes to
+                // its content, and with the inspector collapsed nothing else
+                // is left to hold the row open -- so the whole header sinks to
+                // the middle of the window.
                 TranscriptView(recording: recording)
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 if showInspector {
                     Divider()
@@ -84,7 +92,12 @@ struct RecordingDetailView: View {
                         case .speakers: SpeakersPane(recording: recording)
                         }
                     }
+                    // maxHeight, or the column sizes to its content and the
+                    // HStack centres it -- leaving the tab bar floating in the
+                    // middle of a tall window with its background painted as a
+                    // band rather than a column.
                     .frame(width: 330)
+                    .frame(maxHeight: .infinity)
                     .background(.background.secondary)
                 }
             }
@@ -127,6 +140,11 @@ struct RecordingDetailView: View {
                 Button("Cancel") { state.cancelJob(recording.id) }
                     .buttonStyle(.borderless)
                     .font(.caption)
+            } else if recording.status.isBusy {
+                // Live work never reaches the queue, so it has no progress
+                // entry. Without this fallback the preparing and recording
+                // phases show no chip at all.
+                StatusChip(status: recording.status)
             } else if recording.status == .failed {
                 StatusChip(status: .failed)
                 Button("Retry") { state.retranscribe(recording) }
