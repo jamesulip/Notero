@@ -46,12 +46,26 @@ struct RecordingView: View {
     private var preparingHeader: some View {
         VStack(spacing: 12) {
             HStack(spacing: 10) {
-                ProgressView()
-                    .controlSize(.small)
+                if state.live.state.fraction == nil {
+                    ProgressView()
+                        .controlSize(.small)
+                }
                 // WhisperKit's own message: "Loading large-v3-turbo…", or the
                 // download and its size when the model is not on disk yet.
                 Text(state.live.state.label)
                     .font(.headline)
+            }
+            if let fraction = state.live.state.fraction {
+                // A download has a length; a spinner over 1.6 GB reads as a hang.
+                HStack(spacing: 10) {
+                    ProgressView(value: fraction)
+                        .frame(width: 260)
+                    Text("\(Int(fraction * 100))%")
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 36, alignment: .leading)
+                }
             }
             if isLoadingModel {
                 // Named here rather than left to WhisperKit's progress string,

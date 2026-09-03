@@ -152,10 +152,20 @@ struct ContentView: View {
             // is identical to the idle one for the whole wait.
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
+                    if let fraction = state.live.state.fraction {
+                        ProgressView(value: fraction)
+                            .frame(width: 90)
+                        Text("\(Int(fraction * 100))%")
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ProgressView().controlSize(.small)
+                    }
                     Text(state.live.state.label)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
         }

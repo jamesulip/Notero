@@ -30,7 +30,9 @@ public final class LiveSession {
 
     public enum State: Equatable, Sendable {
         case idle
-        case preparing(String)
+        /// What is happening and, when it can be measured, how far along:
+        /// a download has a fraction, a model load does not.
+        case preparing(String, Double?)
         case ready
         case recording
         case finishing
@@ -52,12 +54,18 @@ public final class LiveSession {
         public var label: String {
             switch self {
             case .idle: return "Idle"
-            case .preparing(let what): return what
+            case .preparing(let what, _): return what
             case .ready: return "Ready"
             case .recording: return "Recording"
             case .finishing: return "Finishing"
             case .failed(let why): return why
             }
+        }
+
+        /// 0...1 while something measurable is under way, else nil.
+        public var fraction: Double? {
+            if case .preparing(_, let fraction) = self { return fraction }
+            return nil
         }
     }
 
@@ -136,12 +144,12 @@ public final class LiveSession {
         // Nothing to load for a capture-only session; the offline job loads
         // the model when it runs.
         guard decodeLive else { state = .ready; return }
-        state = .preparing("Loading model…")
+        state = .preparing("Loading model…", nil)
         do {
-            try await engines.prepareForLive(model: model) { [weak self] message, _ in
+            try await engines.prepareForLive(model: model) { [weak self] message, fraction in
                 Task { @MainActor in
                     guard let self, case .preparing = self.state else { return }
-                    self.state = .preparing(message)
+                    self.state = .preparing(message, fraction)
                 }
             }
             vadBackend = await engines.vadBackendName
