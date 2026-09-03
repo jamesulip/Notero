@@ -8,9 +8,11 @@ matters; live transcription is "okay as it stands".
 
 Effort: **S** under a day, **M** two to four days, **L** a week or more.
 
-**Status, 2026-09-03:** step 0 shipped as 1.0.1. Implemented since: 1.1
-(store, UI and the soft speaker target; threshold untested on real audio),
-1.2, 1.4, 1.5. Next: 1.3 transcript editing, 1.6 follow playback and find.
+**Status, 2026-09-03:** step 0 shipped as 1.0.1. All of Release 1.1 is
+implemented: 1.1 (soft speaker target threshold untested on real audio), 1.2,
+1.3 (split/merge delivered as per-line speaker moves rather than block
+operations), 1.4, 1.5, 1.6. Not yet checked by hand: the edit mode, find bar,
+follow-scroll and revision menu. Next: Release 1.2, starting with 2.1 Settings.
 
 ---
 

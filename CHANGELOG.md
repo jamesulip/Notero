@@ -14,6 +14,15 @@
   until the count is met; clearly different voices stay separate.
 - Transcribe Again names each tier; Identify Speakers Again runs the speaker
   pass alone.
+- Transcript editing: double-click a turn to edit it line by line. Edits keep
+  the raw model output underneath and are what search and exports read. A
+  line can be moved to another speaker, restored, or deleted. ⌘Z undoes a turn's
+  edits in one step.
+- ⌘F finds within the open transcript, with matches highlighted in place;
+  ⇧⌘F searches the whole library.
+- Playback keeps the current turn in view. Scrolling by hand pauses that;
+  the Follow button or the "Follow playback" pill resumes it.
+- Earlier transcript revisions can be read from a menu in the info bar.
 - Stopping under ten seconds asks Keep or Discard. Several sidebar rows can be
   selected and deleted together. Failed recordings group under Needs Attention.
 
