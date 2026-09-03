@@ -58,6 +58,18 @@ struct TranscriptView: View {
     }
 
     private var list: some View {
+        VStack(spacing: 0) {
+            if let progress = state.progress[recording.id] {
+                // Rows are arriving under this. Without it a growing list with
+                // no status reads as a finished transcript that is oddly short.
+                TranscriptProgressBanner(progress: progress, durationMs: recording.durationMs)
+                Divider()
+            }
+            scroller
+        }
+    }
+
+    private var scroller: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
@@ -123,7 +135,10 @@ struct TranscriptView: View {
     }
 
     private var detail: String {
-        if let progress = state.progress[recording.id] { return progress.status.label }
+        if let progress = state.progress[recording.id] {
+            guard let remaining = progress.remaining else { return progress.status.label }
+            return "\(progress.status.label) · \(TimeFormat.remaining(seconds: remaining)) left"
+        }
         if let error = recording.errorMessage, recording.status == .failed { return error }
         return recording.hasAudio
             ? "The audio is here but has not been transcribed."
@@ -142,6 +157,45 @@ struct TranscriptView: View {
               let speaker = (recording.speakers ?? []).first(where: { $0.speakerId == speakerId })
         else { return .secondary }
         return SpeakerPalette.color(speaker.colorIndex)
+    }
+}
+
+/// "Transcribing · 42% · about 14 min left", over a transcript still arriving.
+struct TranscriptProgressBanner: View {
+    let progress: AppState.JobProgress
+    let durationMs: Int
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ProgressView().controlSize(.small)
+            Text(summary)
+                .font(.callout)
+                .contentTransition(.numericText())
+            Spacer()
+            if progress.status == .transcribing, progress.coveredMs > 0, durationMs > 0 {
+                Text("\(TimeFormat.short(ms: progress.coveredMs)) of \(TimeFormat.short(ms: durationMs))")
+                    .font(.system(.caption, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .help("How far into the audio the decode has reached")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.background.secondary)
+    }
+
+    private var summary: String {
+        var parts = [progress.status.label]
+        // Same rule as the chip: diarization reports progress too coarsely
+        // for a percentage to mean anything.
+        if progress.status.isBusy, progress.fraction > 0.01, progress.status != .diarizing {
+            parts.append("\(Int(progress.fraction * 100))%")
+        }
+        if let remaining = progress.remaining {
+            parts.append("\(TimeFormat.remaining(seconds: remaining)) left")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 

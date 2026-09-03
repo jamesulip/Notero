@@ -136,7 +136,8 @@ struct RecordingDetailView: View {
             Spacer(minLength: 12)
 
             if let progress = state.progress[recording.id] {
-                StatusChip(status: progress.status, fraction: progress.fraction)
+                StatusChip(status: progress.status, fraction: progress.fraction,
+                           remaining: progress.remaining)
                 Button("Cancel") { state.cancelJob(recording.id) }
                     .buttonStyle(.borderless)
                     .font(.caption)

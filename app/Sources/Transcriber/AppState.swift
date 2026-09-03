@@ -61,9 +61,28 @@ final class AppState {
     private var pump: Task<Void, Never>?
     private var warmup: Task<Void, Never>?
 
+    /// Jobs handed to the queue, kept until they finish: `.partial` events
+    /// need the model and language the job was started with.
+    private var queuedJobs: [UUID: TranscriptionJob] = [:]
+    /// The revision each running job is appending to, from its first window.
+    private var openTranscripts: [UUID: UUID] = [:]
+    /// When the current stage of each job began and the last estimate made
+    /// from it. The estimate is smoothed against this.
+    private var stageClock: [UUID: StageClock] = [:]
+
+    private struct StageClock {
+        var status: TranscriptionStatus
+        var since: Date
+        var remaining: TimeInterval?
+    }
+
     struct JobProgress: Equatable {
         var status: TranscriptionStatus
         var fraction: Double
+        /// Seconds left in this stage, once enough of it has run to say.
+        var remaining: TimeInterval?
+        /// How far into the audio the decode has reached.
+        var coveredMs: Int = 0
     }
 
     struct AppAlert: Identifiable {
@@ -123,25 +142,52 @@ final class AppState {
         switch event {
         case .queued(let id, _):
             progress[id] = JobProgress(status: .pending, fraction: 0)
+            openTranscripts[id] = nil
+            stageClock[id] = nil
 
         case .stage(let id, let status, let fraction):
-            let previous = progress[id]?.status
-            progress[id] = JobProgress(status: status, fraction: fraction)
+            let previous = progress[id]
+            progress[id] = JobProgress(
+                status: status, fraction: fraction,
+                remaining: estimateRemaining(id, status: status, fraction: fraction),
+                coveredMs: previous?.coveredMs ?? 0
+            )
             // The store needs the stage, not every fraction of it. Persisting
             // the fraction meant a fetch and a SQLite save per progress tick --
             // tens of thousands of transactions for one long recording, for a
             // number nothing ever reads back.
-            if previous != status {
+            if previous?.status != status {
                 try? await writer.updateStatus(status, progress: fraction, for: id)
             }
 
+        case .prepared(let id, let durationMs, let waveform):
+            try? await writer.finishTranscription(
+                durationMs: durationMs,
+                waveform: waveform.isEmpty ? nil : waveform,
+                for: id
+            )
+
+        case .partial(let id, let segments, let coveredMs):
+            guard let job = queuedJobs[id] else { break }
+            if openTranscripts[id] == nil {
+                openTranscripts[id] = try? await writer.openPartialTranscript(
+                    modelId: job.modelId, language: job.language, for: id
+                )
+            }
+            if let transcriptId = openTranscripts[id] {
+                try? await writer.appendPartial(segments, to: transcriptId)
+            }
+            progress[id]?.coveredMs = coveredMs
+
         case .transcribed(let id, let payload):
-            try? await writer.storeTranscript(
+            try? await writer.completeTranscript(
+                openTranscripts[id],
                 segments: payload.segments, roster: payload.roster,
                 modelId: payload.modelId, language: payload.language,
                 processMs: payload.processMs, didDiarize: payload.didDiarize,
                 for: id
             )
+            openTranscripts[id] = nil
             try? await writer.finishTranscription(
                 durationMs: payload.durationMs,
                 waveform: payload.waveform.isEmpty ? nil : payload.waveform,
@@ -164,7 +210,30 @@ final class AppState {
 
         case .finished(let id):
             progress[id] = nil
+            stageClock[id] = nil
+            queuedJobs[id] = nil
+            openTranscripts[id] = nil
         }
+    }
+
+    /// Seconds left in the current stage, from how long the fraction done has
+    /// taken so far. Nothing until 5 % is in, since a first window's timing
+    /// says little; smoothed after that so one slow window does not swing the
+    /// number by minutes.
+    private func estimateRemaining(_ id: UUID, status: TranscriptionStatus,
+                                   fraction: Double) -> TimeInterval? {
+        guard status.isBusy else { stageClock[id] = nil; return nil }
+        let now = Date()
+        guard var clock = stageClock[id], clock.status == status else {
+            stageClock[id] = StageClock(status: status, since: now, remaining: nil)
+            return nil
+        }
+        guard fraction >= 0.05, fraction < 1 else { return clock.remaining }
+        let elapsed = now.timeIntervalSince(clock.since)
+        let raw = elapsed / fraction * (1 - fraction)
+        clock.remaining = clock.remaining.map { $0 * 0.7 + raw * 0.3 } ?? raw
+        stageClock[id] = clock
+        return clock.remaining
     }
 
     // MARK: - Lookup
@@ -292,6 +361,7 @@ final class AppState {
                 work: .diarizeOnly,
                 discardCacheWhenDone: !settings.keepWorkingCopy
             )
+            queuedJobs[job.id] = job
             await queue.enqueue(job)
         } else {
             try? await writer.updateStatus(.completed, progress: 1, for: result.recordingId)
@@ -374,6 +444,7 @@ final class AppState {
             roomMode: settings.roomMode
         )
         progress[recording.id] = JobProgress(status: .pending, fraction: 0)
+        queuedJobs[recording.id] = job
         Task { await queue.enqueue(job) }
     }
 
