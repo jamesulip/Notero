@@ -34,6 +34,17 @@ public enum TimeFormat {
     /// Spoken duration, for history rows: "42:18", "1:12:44".
     public static func duration(ms: Int) -> String { short(ms: ms) }
 
+    /// "about 14 min", "about 1 hr 5 min" -- for time remaining, which is an
+    /// estimate and should read like one.
+    public static func remaining(seconds: Double) -> String {
+        let minutes = Int((max(0, seconds) / 60).rounded())
+        if minutes < 1 { return "under a minute" }
+        if minutes < 60 { return "about \(minutes) min" }
+        let hours = minutes / 60
+        let rest = minutes % 60
+        return rest == 0 ? "about \(hours) hr" : "about \(hours) hr \(rest) min"
+    }
+
     /// "4 min", "1 hr 12 min" -- for places where seconds are noise.
     public static func coarse(ms: Int) -> String {
         let minutes = max(0, ms) / 60_000

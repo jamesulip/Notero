@@ -1,3 +1,4 @@
+import Synchronization
 import XCTest
 import TranscriberCore
 @testable import TranscriberEngine
@@ -143,6 +144,23 @@ final class PipelineDecodeTests: XCTestCase {
         XCTAssertFalse(report.tokens.contains { $0.text.contains("hallucinated") })
         XCTAssertEqual(report.tokens.count, 10)
         XCTAssertEqual(report.droppedWindows, 0)
+    }
+
+    func testEachWindowReportsItsOwnWordsAsItFinishes() async throws {
+        // The progressive path: the UI shows each window's words as they land,
+        // so the batches must arrive in order and add up to the final report.
+        let asr = FakeRecognizer()
+        let batches = Mutex<[[Token]]>([])
+        let report = try await OfflinePipeline.transcribe(
+            source: source(seconds: 30),
+            windows: [window(0, 10_000), window(10_000, 20_000), window(20_000, 30_000)],
+            using: asr, language: "tl", prompt: nil,
+            onWindow: { tokens, _ in batches.withLock { $0.append(tokens) } }
+        )
+        let delivered = batches.withLock { $0 }
+        XCTAssertEqual(delivered.count, 3)
+        XCTAssertEqual(delivered.flatMap { $0 }, report.tokens)
+        XCTAssertEqual(delivered[1].first?.startMs, 10_000)
     }
 
     func testTimingsAreRebasedOntoTheFileTimeline() async throws {

@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import TranscriberCore
 
 public struct TranscriptionJob: Sendable, Identifiable, Equatable {
@@ -60,6 +61,13 @@ public struct TranscriptionPayload: Sendable {
 public enum JobEvent: Sendable {
     case queued(id: UUID, title: String)
     case stage(id: UUID, status: TranscriptionStatus, progress: Double)
+    /// The working copy is ready: how long the audio is and what it looks
+    /// like, ahead of any decoding. Lets the player and the "of 3:51:08" in
+    /// the progress banner work while the transcript is still arriving.
+    case prepared(id: UUID, durationMs: Int, waveform: [Float])
+    /// Segments from one decoded window, in file order, ahead of the final
+    /// pass. `coveredMs` is how far into the audio the decode has reached.
+    case partial(id: UUID, segments: [Segment], coveredMs: Int)
     case transcribed(id: UUID, payload: TranscriptionPayload)
     case diarized(id: UUID, spans: [SpeakerSpan], roster: [SpeakerLabel])
     case failed(id: UUID, message: String)
@@ -163,6 +171,7 @@ public actor TranscriptionQueue {
             let source = try await workingCopy(for: job)
             let waveform = WaveformAnalyzer.envelope(of: source)
             let durationMs = source.durationMs
+            emit(.prepared(id: job.id, durationMs: durationMs, waveform: waveform))
 
             // What the model is given, which is not always what was recorded.
             // The waveform stays on `source` because the user is scrubbing the
@@ -200,13 +209,26 @@ public actor TranscriptionQueue {
                     + "try transcribing again."))
             }
 
+            let nextIndex = Mutex(0)
             let decoded = try await OfflinePipeline.transcribe(
                 source: heard, windows: windows, using: asr,
-                language: job.language, prompt: job.prompt
-            ) { fraction in
-                self.emit(.stage(id: job.id, status: .transcribing,
-                                 progress: 0.1 + fraction * 0.9))
-            }
+                language: job.language, prompt: job.prompt,
+                progress: { fraction in
+                    self.emit(.stage(id: job.id, status: .transcribing,
+                                     progress: 0.1 + fraction * 0.9))
+                },
+                onWindow: { tokens, window in
+                    // Segmented per window rather than over everything so far:
+                    // windows end in silence, so no segment straddles two of
+                    // them, and the work stays proportional to the window.
+                    let first = nextIndex.withLock { $0 }
+                    let segments = SegmentMerger.segments(from: tokens, startingAt: first)
+                    guard !segments.isEmpty else { return }
+                    nextIndex.withLock { $0 = first + segments.count }
+                    self.emit(.partial(id: job.id, segments: segments,
+                                       coveredMs: window.endMs))
+                }
+            )
             try Task.checkCancellation()
             if decoded.droppedWindows > 0 {
                 emit(.warning(id: job.id, message:

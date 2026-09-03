@@ -20,6 +20,8 @@ struct RecordingInfoBar: View {
     private var reloadKey: String {
         [recording.id.uuidString,
          recording.transcript?.id.uuidString ?? "-",
+         // Rows arrive in batches while a job runs; the word count follows them.
+         String(recording.transcript?.segments?.count ?? 0),
          recording.statusRaw,
          String(recording.durationMs)].joined(separator: "|")
     }
@@ -131,6 +133,16 @@ struct RecordingFacts {
         }
 
         if let transcript {
+            if !transcript.isComplete {
+                items.append(Item(
+                    label: "Transcript",
+                    value: recording.status.isBusy ? "Arriving" : "Partial",
+                    help: recording.status.isBusy
+                        ? "Segments are added as each window is decoded."
+                        : "Transcription did not finish. What was decoded is shown; "
+                          + "transcribe again for the rest.",
+                    inSummary: true))
+            }
             let model = ModelCatalogue.option(transcript.modelId)
             items.append(Item(
                 label: "Model",

@@ -110,6 +110,10 @@ public final class StoredTranscript {
     /// Wall-clock cost of producing it. Feeds the benchmark panel.
     public var processMs: Int = 0
     public var didDiarize: Bool = false
+    /// False while a whole-file job is still appending segments, and left
+    /// false if that job fails or is cancelled part-way: a partial transcript
+    /// is kept and labelled rather than thrown away.
+    public var isComplete: Bool = true
 
     public var recording: StoredRecording?
 

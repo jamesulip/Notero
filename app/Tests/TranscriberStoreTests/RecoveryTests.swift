@@ -97,4 +97,27 @@ final class RecoveryTests: XCTestCase {
         XCTAssertEqual(recording.status, .completed)
         XCTAssertNil(recording.errorMessage)
     }
+
+    func testAPartialTranscriptIsKeptButNotCalledComplete() throws {
+        // Quit mid-decode: rows were appended per window and the job never
+        // closed the revision. Calling that completed would pass off half a
+        // meeting as the whole thing.
+        let recording = try self.recording(.transcribing, audio: "2026/09/x.m4a")
+        let transcript = StoredTranscript(modelId: "turbo", language: "tl")
+        transcript.isComplete = false
+        transcript.recording = recording
+        context.insert(transcript)
+        let row = StoredSegment(index: 0, startMs: 0, endMs: 3_000, text: "Simula.")
+        row.transcript = transcript
+        context.insert(row)
+        try context.save()
+
+        try RecordingStore.recoverInterrupted(in: context)
+
+        XCTAssertEqual(recording.status, .failed)
+        XCTAssertTrue(recording.errorMessage?.contains("part-way") ?? false,
+                      "got: \(recording.errorMessage ?? "nil")")
+        XCTAssertEqual(recording.transcript?.orderedSegments.count, 1, "the rows stay")
+        XCTAssertEqual(recording.transcript?.isComplete, false)
+    }
 }

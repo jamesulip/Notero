@@ -72,11 +72,17 @@ public enum RecordingStore {
         guard !stale.isEmpty else { return 0 }
 
         for recording in stale {
-            if recording.transcript != nil {
+            if let transcript = recording.transcript, transcript.isComplete {
                 // The transcript exists and is readable; only the stage after
                 // it was lost. Re-running diarization is a menu item away.
                 recording.status = .completed
                 recording.progress = 1
+            } else if recording.transcript != nil {
+                // A job quit part-way through decoding. The rows it wrote are
+                // kept and shown; the label says they are not the whole thing.
+                recording.status = .failed
+                recording.errorMessage = "Interrupted part-way through transcription. "
+                    + "What was transcribed so far is kept — transcribe again for the rest."
             } else if recording.hasAudio {
                 recording.status = .failed
                 recording.errorMessage = "Interrupted before this was transcribed. "

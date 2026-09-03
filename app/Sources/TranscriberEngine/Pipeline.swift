@@ -149,7 +149,11 @@ public enum OfflinePipeline {
         using asr: any SpeechRecognizing,
         language: String,
         prompt: String?,
-        progress: (@Sendable (Double) -> Void)? = nil
+        progress: (@Sendable (Double) -> Void)? = nil,
+        /// Called after each window with the words it produced, already on the
+        /// file timeline and in order. What lets a two-hour transcript appear
+        /// as it is decoded rather than after.
+        onWindow: (@Sendable (_ tokens: [Token], _ window: SpeechRegion) -> Void)? = nil
     ) async throws -> DecodeReport {
         var tokens: [Token] = []
         var detected: String?
@@ -178,6 +182,7 @@ public enum OfflinePipeline {
                 floorMs = max(floorMs, last.endMs - 120)
             }
             tokens.append(contentsOf: outcome.tokens)
+            onWindow?(outcome.tokens, window)
             progress?(Double(index + 1) / Double(max(1, windows.count)))
         }
         return DecodeReport(
