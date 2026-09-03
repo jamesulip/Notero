@@ -24,6 +24,9 @@ struct TranscriptView: View {
             }
         }
         .focusable()
+        // Focus is for the space bar, not for a ring: the whole pane drew a
+        // blue border whenever it had focus, which is most of the time.
+        .focusEffectDisabled()
         .focused($focused)
         // Space belongs here rather than in the menu bar: as a menu key
         // equivalent it would be consumed before the responder chain and eat
