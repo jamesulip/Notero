@@ -174,9 +174,10 @@ public final class LiveSession {
         await engines.resetVAD()
 
         let cacheURL = AudioCache.url(for: id, under: supportDirectory)
-        guard let cache = WavWriter(url: cacheURL) else {
-            throw EngineError.audioUnreadable("cannot open the working copy for writing")
-        }
+        // Thrown straight through: `WavWriter.CannotWrite` names the path and
+        // the reason, and replacing it with a generic string here is what made
+        // this undiagnosable in the first place.
+        let cache = try WavWriter(url: cacheURL)
         self.cache = cache
 
         guard let capture = AudioCapture() else {
@@ -395,10 +396,6 @@ public final class LiveSession {
     }
 
     private func requestMicrophone() async -> Bool {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized: return true
-        case .notDetermined: return await AVCaptureDevice.requestAccess(for: .audio)
-        default: return false
-        }
+        await MicrophoneAccess.request() == .granted
     }
 }

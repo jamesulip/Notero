@@ -53,6 +53,7 @@ struct TranscriptionSettings: View {
             }
 
             Section("Microphone") {
+                MicrophonePermissionRow()
                 InputGainSlider(gainDb: $settings.inputGainDb)
                 Text("Built-in laptop microphones run 15-20 dB quieter than a "
                      + "headset at conversational distance. The boost applies to "

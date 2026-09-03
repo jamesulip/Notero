@@ -102,6 +102,17 @@ struct ContentView: View {
                 .tint(.red)
                 .help("Stop recording (⌘.)")
             }
+        } else if state.isLiveBusy {
+            // The model load, which is seconds cold. Without this the toolbar
+            // is identical to the idle one for the whole wait.
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text(state.live.state.label)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
 
         ToolbarItem(placement: .automatic) {

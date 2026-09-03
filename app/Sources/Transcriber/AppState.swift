@@ -51,10 +51,15 @@ final class AppState {
     private(set) var progress: [UUID: JobProgress] = [:]
     /// Per-recording notes about work that finished imperfectly.
     private(set) var warnings: [UUID: String] = [:]
-    private(set) var isPreparingModel = false
-    private(set) var modelStatus = ""
+    /// The recording the live session is working on, set the moment the user
+    /// asks for one rather than when the first sample arrives. `live.recordingId`
+    /// only exists once capture starts, which on a cold model is several
+    /// seconds later -- and those are exactly the seconds the UI has to show
+    /// something for.
+    private(set) var activeRecordingId: UUID?
 
     private var pump: Task<Void, Never>?
+    private var warmup: Task<Void, Never>?
 
     struct JobProgress: Equatable {
         var status: TranscriptionStatus
@@ -79,6 +84,10 @@ final class AppState {
         live.config = settings.sessionConfig
         live.inputGainDb = settings.inputGainDb
         live.isRoomMode = settings.roomMode
+        // Before any view reads the store: the live session and the queue did
+        // not survive the last quit, so anything they still claim to be working
+        // on is stranded.
+        try? RecordingStore.recoverInterrupted(in: container.mainContext)
         startPump()
     }
 
@@ -116,8 +125,15 @@ final class AppState {
             progress[id] = JobProgress(status: .pending, fraction: 0)
 
         case .stage(let id, let status, let fraction):
+            let previous = progress[id]?.status
             progress[id] = JobProgress(status: status, fraction: fraction)
-            try? await writer.updateStatus(status, progress: fraction, for: id)
+            // The store needs the stage, not every fraction of it. Persisting
+            // the fraction meant a fetch and a SQLite save per progress tick --
+            // tens of thousands of transactions for one long recording, for a
+            // number nothing ever reads back.
+            if previous != status {
+                try? await writer.updateStatus(status, progress: fraction, for: id)
+            }
 
         case .transcribed(let id, let payload):
             try? await writer.storeTranscript(
@@ -185,23 +201,35 @@ final class AppState {
 
     var isRecording: Bool { live.state.isRecording }
 
+    /// True from the tap on New Recording until the session ends, model load
+    /// included. What the UI has to switch on: `isRecording` is false for the
+    /// whole preparing phase, so anything gated on it leaves those seconds
+    /// looking like a hang.
+    var isLiveBusy: Bool { live.state.isBusy }
+
+    /// Whether this recording is the one the live session is busy with, in any
+    /// phase.
+    func isLive(_ id: UUID) -> Bool { activeRecordingId == id && isLiveBusy }
+
     func beginRecording(_ recording: StoredRecording) async {
+        // A launch warmup may still be loading the model. Waiting for it is the
+        // point -- the `isBusy` guard below would otherwise drop the recording
+        // silently, which is a worse first second than a slow one.
+        await warmup?.value
         guard !live.state.isBusy else { return }
         let id = recording.id
+        activeRecordingId = id
         let name = Paths.newRecordingName(id: id, ext: "m4a", on: recording.createdAt)
         recording.audioFileName = name
         recording.status = .preparing
         try? context.save()
 
-        isPreparingModel = true
-        modelStatus = "Loading model…"
         live.config = settings.sessionConfig
         live.inputGainDb = settings.inputGainDb
         live.isRoomMode = settings.roomMode
         await queue.setLiveActive(true)
         await engines.beginLive()
         await live.prepare(model: settings.liveModelId)
-        isPreparingModel = false
 
         do {
             try await live.start(recordingId: id, archiveFileName: name,
@@ -209,6 +237,7 @@ final class AppState {
             recording.status = .recording
             try? context.save()
         } catch {
+            activeRecordingId = nil
             recording.status = .failed
             recording.errorMessage = error.localizedDescription
             try? context.save()
@@ -220,7 +249,9 @@ final class AppState {
     }
 
     func stopRecording() async {
-        guard let result = await live.stop() else { return }
+        let finished = await live.stop()
+        activeRecordingId = nil
+        guard let result = finished else { return }
         await engines.endLive()
 
         // A thrown decode is counted, not shown, during the session -- here is
@@ -423,5 +454,20 @@ final class AppState {
     func releaseIdleModels() {
         guard !isRecording else { return }
         Task { await engines.releaseDiarizer() }
+    }
+
+    /// Loads the live model before anything asks for it, so hitting record does
+    /// not sit on a cold load.
+    ///
+    /// Only for a model already on disk: warming one that is not would start a
+    /// 1.6 GB download at launch that nobody asked for.
+    func warmUpEngines() {
+        guard warmup == nil, live.state == .idle else { return }
+        guard ModelCatalogue.isDownloaded(settings.liveModelId,
+                                          modelsDirectory: Paths.models) else { return }
+        warmup = Task { [weak self] in
+            guard let self else { return }
+            await live.prepare(model: settings.liveModelId)
+        }
     }
 }

@@ -72,6 +72,11 @@ struct TranscriptView: View {
                     }
                 }
                 .padding(20)
+                // A transcript is prose, and prose set the full width of a
+                // 2560pt window is a wall. The column caps at a readable
+                // measure and centres; narrow windows are unaffected.
+                .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
             .onChange(of: state.pendingScrollTarget) { _, target in
                 guard let target else { return }
@@ -95,13 +100,22 @@ struct TranscriptView: View {
         } actions: {
             if recording.hasAudio, state.progress[recording.id] == nil {
                 Button("Transcribe") { state.retranscribe(recording) }
+            } else if !recording.hasAudio, state.progress[recording.id] == nil {
+                // Without this the row is a dead end: no audio means nothing to
+                // transcribe, and the only way out was to find it in the
+                // sidebar and work out that it should be deleted.
+                Button("Delete Recording", role: .destructive) { state.delete(recording) }
+                Button("Import Audio…") { state.isImporting = true }
             }
         }
     }
 
     private var label: String {
         if state.progress[recording.id] != nil { return "Working on it" }
-        return recording.status == .failed ? "Transcription failed" : "No transcript yet"
+        guard recording.status == .failed else { return "No transcript yet" }
+        // "Transcription failed" is wrong for a recording that never captured
+        // anything -- nothing got as far as being transcribed.
+        return recording.hasAudio ? "Transcription failed" : "Recording interrupted"
     }
 
     private var icon: String {
@@ -113,7 +127,8 @@ struct TranscriptView: View {
         if let error = recording.errorMessage, recording.status == .failed { return error }
         return recording.hasAudio
             ? "The audio is here but has not been transcribed."
-            : "This recording has no audio."
+            : "No audio was captured, so there is nothing to transcribe. "
+              + "Importing a file makes a new recording; this one can be deleted."
     }
 
     private func name(for speakerId: String?) -> String? {

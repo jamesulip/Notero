@@ -19,5 +19,6 @@ models/
 .DS_Store
 # built app bundles — assembled by app/build-app.sh, not source
 *.app/
+Transcriber*.zip
 # Xcode per-user state regenerated on open
 .swiftpm/

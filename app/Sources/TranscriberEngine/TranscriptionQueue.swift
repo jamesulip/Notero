@@ -80,18 +80,24 @@ public actor TranscriptionQueue {
     private let engines: EngineHost
     private var pending: [TranscriptionJob] = []
     private var running: (job: TranscriptionJob, task: Task<Void, Never>)?
-    private var continuation: AsyncStream<JobEvent>.Continuation?
     private var liveActive = false
 
     /// `nonisolated` so the UI can start consuming without an await hop just to
-    /// reach the stream. `AsyncStream` is Sendable; the continuation stays inside.
+    /// reach the stream. `AsyncStream` is Sendable; so is its continuation.
     public nonisolated let events: AsyncStream<JobEvent>
+
+    /// Also `nonisolated`, so a progress closure running on whatever thread the
+    /// decoder is on can report without hopping onto this actor. Each report
+    /// used to be wrapped in `Task { await emit(...) }`, which allocated a task
+    /// per call and -- those tasks being unordered -- let progress arrive out of
+    /// sequence, so the bar could jump backwards.
+    private nonisolated let sink: AsyncStream<JobEvent>.Continuation
 
     public init(engines: EngineHost) {
         self.engines = engines
-        var sink: AsyncStream<JobEvent>.Continuation!
-        events = AsyncStream(bufferingPolicy: .unbounded) { sink = $0 }
-        continuation = sink
+        var continuation: AsyncStream<JobEvent>.Continuation!
+        events = AsyncStream(bufferingPolicy: .unbounded) { continuation = $0 }
+        sink = continuation
     }
 
     // MARK: - Queue control
@@ -104,8 +110,8 @@ public actor TranscriptionQueue {
         guard !pending.contains(where: { $0.id == job.id }),
               running?.job.id != job.id else { return }
         pending.append(job)
-        continuation?.yield(.queued(id: job.id, title: job.title))
-        continuation?.yield(.stage(id: job.id, status: .pending, progress: 0))
+        sink.yield(.queued(id: job.id, title: job.title))
+        sink.yield(.stage(id: job.id, status: .pending, progress: 0))
         pump()
     }
 
@@ -139,12 +145,12 @@ public actor TranscriptionQueue {
 
     private func finish(_ job: TranscriptionJob) {
         running = nil
-        continuation?.yield(.finished(id: job.id))
+        sink.yield(.finished(id: job.id))
         pump()
     }
 
-    private func emit(_ event: JobEvent) {
-        continuation?.yield(event)
+    private nonisolated func emit(_ event: JobEvent) {
+        sink.yield(event)
     }
 
     // MARK: - The pipeline
@@ -178,8 +184,8 @@ public actor TranscriptionQueue {
             let vad = await engines.voiceActivity
             let asr = await engines.recognizer
             let regions = try await OfflinePipeline.speechRegions(in: heard, using: vad) { fraction in
-                Task { await self.emit(.stage(id: job.id, status: .transcribing,
-                                              progress: fraction * 0.1)) }
+                self.emit(.stage(id: job.id, status: .transcribing,
+                                 progress: fraction * 0.1))
             }
             let windows = OfflinePipeline.windows(for: regions, durationMs: durationMs)
             if windows.isEmpty, durationMs > 0 {
@@ -198,8 +204,8 @@ public actor TranscriptionQueue {
                 source: heard, windows: windows, using: asr,
                 language: job.language, prompt: job.prompt
             ) { fraction in
-                Task { await self.emit(.stage(id: job.id, status: .transcribing,
-                                              progress: 0.1 + fraction * 0.9)) }
+                self.emit(.stage(id: job.id, status: .transcribing,
+                                 progress: 0.1 + fraction * 0.9))
             }
             try Task.checkCancellation()
             if decoded.droppedWindows > 0 {
@@ -217,8 +223,8 @@ public actor TranscriptionQueue {
                 do {
                     try await engines.prepareDiarizer(progress: nil)
                     let raw = try await engines.diarize(source) { fraction in
-                        Task { await self.emit(.stage(id: job.id, status: .diarizing,
-                                                      progress: fraction)) }
+                        self.emit(.stage(id: job.id, status: .diarizing,
+                                         progress: fraction))
                     }
                     let normalized = SegmentMerger.normalize(raw)
                     spans = normalized.spans
@@ -273,7 +279,7 @@ public actor TranscriptionQueue {
         do {
             try await engines.prepareDiarizer(progress: nil)
             let raw = try await engines.diarize(source) { fraction in
-                Task { await self.emit(.stage(id: job.id, status: .diarizing, progress: fraction)) }
+                self.emit(.stage(id: job.id, status: .diarizing, progress: fraction))
             }
             let normalized = SegmentMerger.normalize(raw)
             emit(.diarized(id: job.id, spans: normalized.spans, roster: normalized.roster))
@@ -305,7 +311,7 @@ public actor TranscriptionQueue {
             throw EngineError.audioUnreadable("no audio to work from")
         }
         _ = try await AudioCache.build(from: sourceURL, to: job.cacheURL) { fraction in
-            Task { await self.emit(.stage(id: job.id, status: .preparing, progress: fraction)) }
+            self.emit(.stage(id: job.id, status: .preparing, progress: fraction))
         }
         return try MappedPCM(contentsOf: job.cacheURL)
     }

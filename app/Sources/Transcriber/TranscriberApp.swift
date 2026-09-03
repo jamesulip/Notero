@@ -42,6 +42,10 @@ struct TranscriberApp: App {
                     Alert(title: Text(alert.title), message: Text(alert.message))
                 }
                 .task {
+                    // Ahead of the first tap, not on it: the model load is the
+                    // several seconds between hitting record and the recording
+                    // starting.
+                    state.warmUpEngines()
                     if let startupFailure {
                         state.alert = AppState.AppAlert(
                             title: "Storage unavailable",
