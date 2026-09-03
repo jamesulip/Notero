@@ -373,7 +373,8 @@ final class AppState {
                 language: result.language,
                 diarize: true,
                 work: .diarizeOnly,
-                discardCacheWhenDone: !settings.keepWorkingCopy
+                discardCacheWhenDone: !settings.keepWorkingCopy,
+                expectedSpeakers: recording(result.recordingId)?.expectedSpeakers
             )
             queuedJobs[job.id] = job
             await queue.enqueue(job)
@@ -474,7 +475,8 @@ final class AppState {
             diarize: diarize ?? settings.diarize,
             work: work,
             discardCacheWhenDone: !settings.keepWorkingCopy,
-            roomMode: settings.roomMode
+            roomMode: settings.roomMode,
+            expectedSpeakers: recording.expectedSpeakers
         )
         progress[recording.id] = JobProgress(status: .pending, fraction: 0)
         queuedJobs[recording.id] = job

@@ -35,6 +35,10 @@ public final class StoredRecording {
     public var progress: Double = 0
     public var errorMessage: String?
 
+    /// How many people the user says were in the room, for speaker
+    /// identification to aim at. Nil until they say.
+    public var expectedSpeakers: Int?
+
     /// Meeting summary, hand-written in v1.
     public var summary: String = ""
     /// Body text for a plain note, and scratch notes on a recording.

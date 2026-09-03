@@ -132,6 +132,52 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(speaker.displayName, "Speaker 2")
     }
 
+    func testMergingASpeakerRecreditsTheirLinesAndRemovesTheRow() throws {
+        let context = try makeContext()
+        let recording = try seed(context)
+        let juan = (recording.speakers ?? []).first { $0.speakerId == "S1" }!
+        let maria = (recording.speakers ?? []).first { $0.speakerId == "S2" }!
+
+        try RecordingStore.merge(maria, into: juan, in: context)
+
+        XCTAssertEqual((recording.speakers ?? []).map(\.speakerId), ["S1"])
+        XCTAssertEqual(recording.transcript?.orderedSegments.map(\.speakerId), ["S1", "S1"])
+        XCTAssertEqual(juan.speechMs, 6_000, "talk time moves with the lines")
+        XCTAssertEqual(RecordingStore.document(for: recording).name(for: "S1"), "Juan")
+    }
+
+    func testMergingASpeakerIntoItselfIsANoOp() throws {
+        let context = try makeContext()
+        let recording = try seed(context)
+        let juan = (recording.speakers ?? []).first { $0.speakerId == "S1" }!
+        try RecordingStore.merge(juan, into: juan, in: context)
+        XCTAssertEqual(recording.speakers?.count, 2)
+    }
+
+    func testAssigningLinesMovesTalkTimeBetweenSpeakers() throws {
+        let context = try makeContext()
+        let recording = try seed(context)
+        let juan = (recording.speakers ?? []).first { $0.speakerId == "S1" }!
+        let maria = (recording.speakers ?? []).first { $0.speakerId == "S2" }!
+        let mariasLine = recording.transcript!.orderedSegments[1]
+
+        try RecordingStore.assign([mariasLine], to: juan, on: recording, in: context)
+
+        XCTAssertEqual(mariasLine.speakerId, "S1")
+        XCTAssertEqual(juan.speechMs, 6_000)
+        XCTAssertEqual(maria.speechMs, 0)
+        XCTAssertEqual(recording.speakers?.count, 2, "an emptied speaker stays until merged")
+    }
+
+    func testANewSpeakerIsNumberedAfterTheRoster() throws {
+        let context = try makeContext()
+        let recording = try seed(context)
+        let added = try RecordingStore.addSpeaker(to: recording, in: context)
+        XCTAssertEqual(added.speakerId, "S3")
+        XCTAssertEqual(added.displayName, "Speaker 3")
+        XCTAssertEqual(added.colorIndex, 2, "gets the next colour, not a reused one")
+    }
+
     func testSyncSpeakersDropsLabelsTheNewTranscriptNoLongerUses() throws {
         let context = try makeContext()
         let recording = try seed(context)

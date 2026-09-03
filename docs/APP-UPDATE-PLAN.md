@@ -8,6 +8,10 @@ matters; live transcription is "okay as it stands".
 
 Effort: **S** under a day, **M** two to four days, **L** a week or more.
 
+**Status, 2026-09-03:** step 0 shipped as 1.0.1. Implemented since: 1.1
+(store, UI and the soft speaker target; threshold untested on real audio),
+1.2, 1.4, 1.5. Next: 1.3 transcript editing, 1.6 follow playback and find.
+
 ---
 
 ## 0. Ship what is already done (today)

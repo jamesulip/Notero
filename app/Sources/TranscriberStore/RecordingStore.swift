@@ -193,6 +193,65 @@ public enum RecordingStore {
         try context.save()
     }
 
+    /// Folds one speaker into another: every line credited to `speaker` is
+    /// re-credited to `target`, the talk time moves with it, and the row goes.
+    ///
+    /// The repair for a diarizer that heard fourteen voices in a six-person
+    /// room. Segments hold the diarizer's label, so this rewrites them; a
+    /// later "Identify Speakers Again" starts from a fresh roster and the
+    /// merge would have to be made again, which is the honest outcome.
+    public static func merge(_ speaker: StoredSpeaker, into target: StoredSpeaker,
+                             in context: ModelContext) throws {
+        guard speaker !== target, speaker.speakerId != target.speakerId,
+              let recording = target.recording else { return }
+        for row in recording.transcript?.orderedSegments ?? []
+        where row.speakerId == speaker.speakerId {
+            row.speakerId = target.speakerId
+        }
+        target.speechMs += speaker.speechMs
+        context.delete(speaker)
+        recording.updatedAt = Date()
+        try context.save()
+    }
+
+    /// Re-credits lines to a speaker (or to nobody), moving their duration
+    /// between the talk-time totals so the Speakers pane stays honest.
+    public static func assign(_ segments: [StoredSegment], to speaker: StoredSpeaker?,
+                              on recording: StoredRecording, in context: ModelContext) throws {
+        let roster = recording.speakers ?? []
+        for row in segments {
+            guard row.speakerId != speaker?.speakerId else { continue }
+            let duration = max(0, row.endMs - row.startMs)
+            if let previous = roster.first(where: { $0.speakerId == row.speakerId }) {
+                previous.speechMs = max(0, previous.speechMs - duration)
+            }
+            row.speakerId = speaker?.speakerId
+            speaker?.speechMs += duration
+        }
+        recording.updatedAt = Date()
+        try context.save()
+    }
+
+    /// A speaker the diarizer did not find, numbered after the last it did.
+    @discardableResult
+    public static func addSpeaker(named name: String? = nil, to recording: StoredRecording,
+                                  in context: ModelContext) throws -> StoredSpeaker {
+        let existing = recording.speakers ?? []
+        let next = (existing.compactMap { Int($0.speakerId.filter(\.isNumber)) }.max() ?? 0) + 1
+        let id = "S\(next)"
+        let speaker = StoredSpeaker(
+            speakerId: id,
+            displayName: name ?? SpeakerLabel.defaultName(for: id),
+            speechMs: 0,
+            colorIndex: (existing.map(\.colorIndex).max() ?? -1) + 1
+        )
+        speaker.recording = recording
+        context.insert(speaker)
+        recording.updatedAt = Date()
+        try context.save()
+        return speaker
+    }
+
     // MARK: - Bookmarks and notes
 
     @discardableResult
