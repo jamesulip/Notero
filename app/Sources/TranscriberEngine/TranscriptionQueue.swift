@@ -28,11 +28,15 @@ public struct TranscriptionJob: Sendable, Identifiable, Equatable {
     /// enqueue time rather than stored on the recording, so a meeting captured
     /// in the wrong mode is fixed by toggling and transcribing again.
     public var roomMode: Bool
+    /// How many people the user says were in the room. A target for speaker
+    /// clustering, never a cap. Nil when nobody said.
+    public var expectedSpeakers: Int?
 
     public init(id: UUID, title: String, sourceURL: URL?, cacheURL: URL,
                 modelId: String, language: String, prompt: String? = nil,
                 diarize: Bool = true, work: Work = .full,
-                discardCacheWhenDone: Bool = true, roomMode: Bool = false) {
+                discardCacheWhenDone: Bool = true, roomMode: Bool = false,
+                expectedSpeakers: Int? = nil) {
         self.id = id
         self.title = title
         self.sourceURL = sourceURL
@@ -44,6 +48,7 @@ public struct TranscriptionJob: Sendable, Identifiable, Equatable {
         self.work = work
         self.discardCacheWhenDone = discardCacheWhenDone
         self.roomMode = roomMode
+        self.expectedSpeakers = expectedSpeakers
     }
 }
 
@@ -244,7 +249,7 @@ public actor TranscriptionQueue {
                 emit(.stage(id: job.id, status: .diarizing, progress: 0))
                 do {
                     try await engines.prepareDiarizer(progress: nil)
-                    let raw = try await engines.diarize(source) { fraction in
+                    let raw = try await engines.diarize(source, expectedSpeakers: job.expectedSpeakers) { fraction in
                         self.emit(.stage(id: job.id, status: .diarizing,
                                          progress: fraction))
                     }
@@ -300,7 +305,7 @@ public actor TranscriptionQueue {
         emit(.stage(id: job.id, status: .diarizing, progress: 0))
         do {
             try await engines.prepareDiarizer(progress: nil)
-            let raw = try await engines.diarize(source) { fraction in
+            let raw = try await engines.diarize(source, expectedSpeakers: job.expectedSpeakers) { fraction in
                 self.emit(.stage(id: job.id, status: .diarizing, progress: fraction))
             }
             let normalized = SegmentMerger.normalize(raw)

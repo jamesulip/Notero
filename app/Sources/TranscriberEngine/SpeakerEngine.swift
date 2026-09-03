@@ -62,6 +62,7 @@ public actor SpeakerEngine: SpeakerDiarizing {
     }
 
     public func diarize(_ source: any PCMSource,
+                        expectedSpeakers: Int? = nil,
                         progress: (@Sendable (Double) -> Void)?) async throws -> [SpeakerSpan] {
         guard let manager else { throw EngineError.modelNotLoaded }
         guard source.sampleCount > Audio.sampleRate else { return [] }
@@ -87,7 +88,8 @@ public actor SpeakerEngine: SpeakerDiarizing {
             })
             progress?(0.7 * Double(offset + 1) / Double(max(1, windows.count)))
         }
-        return try recluster(merge(spans), in: source, using: manager) { fraction in
+        return try recluster(merge(spans), in: source, using: manager,
+                             expectedSpeakers: expectedSpeakers) { fraction in
             progress?(0.7 + 0.3 * fraction)
         }
     }
@@ -98,6 +100,12 @@ public actor SpeakerEngine: SpeakerDiarizing {
     /// `DiarizerConfig.clusteringThreshold`'s default and scale (cosine
     /// distance of L2-normalized vectors).
     private static let sameSpeakerDistance: Float = 0.7
+    /// How far apart two clusters may be and still be folded together when
+    /// the user's head-count says there are too many. Wider than
+    /// `sameSpeakerDistance`, because the count is evidence the threshold did
+    /// not have; narrower than "anything", because a real seventh voice must
+    /// survive a count of six. Unmeasured: tune on the six-person room file.
+    private static let consolidationDistance: Float = 0.85
     /// A turn shorter than this may join an existing speaker but never found a
     /// new one: a 1-2 s embedding is noisy enough that letting it open a
     /// cluster is how phantom third speakers get invented.
@@ -124,13 +132,17 @@ public actor SpeakerEngine: SpeakerDiarizing {
     /// them.
     private func recluster(
         _ spans: [SpeakerSpan], in source: any PCMSource, using manager: DiarizerManager,
-        progress: (Double) -> Void
+        expectedSpeakers: Int?, progress: (Double) -> Void
     ) throws -> [SpeakerSpan] {
         guard spans.count > 1 else { return spans }
 
-        var clusters: [Cluster] = []
+        var clusterer = TurnClusterer(sameSpeakerDistance: Self.sameSpeakerDistance,
+                                      foundingTurnMs: Self.foundingTurnMs)
         var out: [SpeakerSpan] = []
         out.reserveCapacity(spans.count)
+        /// Which spans were placed by the clusterer, as opposed to keeping
+        /// their first-pass label. Only these are subject to consolidation.
+        var placed = Set<UUID>()
 
         let ordered = spans.sorted { $0.durationMs > $1.durationMs }
         for (index, span) in ordered.enumerated() {
@@ -143,66 +155,32 @@ public actor SpeakerEngine: SpeakerDiarizing {
             // are not. Normalize here or cosine distances are meaningless.
             guard let raw = try? manager.extractSpeakerEmbedding(from: samples),
                   manager.validateEmbedding(raw),
-                  let embedding = Self.normalized(raw) else {
+                  let embedding = TurnClusterer.normalized(raw) else {
                 // Unembeddable audio keeps its first-pass guess: possibly
                 // fused, but strictly better than dropping the turn.
                 out.append(span)
                 continue
             }
 
-            let nearest = clusters.indices.min {
-                Self.cosineDistance(embedding, clusters[$0].centroid)
-                    < Self.cosineDistance(embedding, clusters[$1].centroid)
-            }
             var copy = span
-            if let found = nearest,
-               Self.cosineDistance(embedding, clusters[found].centroid) < Self.sameSpeakerDistance
-                   || span.durationMs < Self.foundingTurnMs {
-                copy.speakerId = clusters[found].id
-                clusters[found] = Self.absorb(clusters[found], embedding, weightMs: span.durationMs)
-            } else {
-                let cluster = Cluster(id: "T\(clusters.count + 1)",
-                                      centroid: embedding, weightMs: span.durationMs)
-                clusters.append(cluster)
-                copy.speakerId = cluster.id
-            }
+            copy.speakerId = clusterer.assign(embedding, durationMs: span.durationMs)
+            placed.insert(copy.id)
             out.append(copy)
         }
-        return out.sorted { $0.startMs < $1.startMs }
-    }
 
-    private struct Cluster {
-        let id: String
-        var centroid: [Float]
-        var weightMs: Int
-    }
-
-    private static func absorb(_ cluster: Cluster, _ embedding: [Float],
-                               weightMs: Int) -> Cluster {
-        var updated = cluster
-        let total = Float(cluster.weightMs + weightMs)
-        let keep = Float(cluster.weightMs) / total
-        let add = Float(weightMs) / total
-        for index in updated.centroid.indices where index < embedding.count {
-            updated.centroid[index] = updated.centroid[index] * keep + embedding[index] * add
+        if let target = expectedSpeakers, target > 0 {
+            let aliases = clusterer.consolidate(toward: target,
+                                                withinDistance: Self.consolidationDistance)
+            if !aliases.isEmpty {
+                out = out.map { span in
+                    guard placed.contains(span.id), let to = aliases[span.speakerId] else { return span }
+                    var copy = span
+                    copy.speakerId = to
+                    return copy
+                }
+            }
         }
-        let norm = sqrt(updated.centroid.reduce(0) { $0 + $1 * $1 })
-        if norm > 0 { updated.centroid = updated.centroid.map { $0 / norm } }
-        updated.weightMs += weightMs
-        return updated
-    }
-
-    private static func normalized(_ vector: [Float]) -> [Float]? {
-        let norm = sqrt(vector.reduce(0) { $0 + $1 * $1 })
-        guard norm > 0 else { return nil }
-        return vector.map { $0 / norm }
-    }
-
-    /// 1 - cosine similarity of unit vectors, in 0...2.
-    private static func cosineDistance(_ a: [Float], _ b: [Float]) -> Float {
-        var dot: Float = 0
-        for index in 0..<min(a.count, b.count) { dot += a[index] * b[index] }
-        return 1 - dot
+        return out.sorted { $0.startMs < $1.startMs }
     }
 
     /// Joins spans the chunking split at a window edge, and drops the

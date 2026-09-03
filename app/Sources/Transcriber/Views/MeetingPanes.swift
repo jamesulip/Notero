@@ -223,14 +223,36 @@ struct BookmarksPane: View {
     }
 }
 
+/// The roster, by talk time, with the two repairs a far-field recording needs:
+/// merge a fragment into the person it belongs to, and tell the next run how
+/// many people were actually in the room.
 struct SpeakersPane: View {
     @Environment(AppState.self) private var state
     @Environment(\.modelContext) private var context
     let recording: StoredRecording
 
+    /// Under this much speech, or under 1 % of the total, a speaker is more
+    /// likely a fragment of someone else than a person. Flagged, not merged:
+    /// a guest who said one thing is also under 30 s.
+    private static let fragmentMs = 30_000
+
+    private var speakers: [StoredSpeaker] {
+        (recording.speakers ?? []).sorted { $0.speechMs > $1.speechMs }
+    }
+
+    private var totalMs: Int { speakers.reduce(0) { $0 + $1.speechMs } }
+
+    private func isFragment(_ speaker: StoredSpeaker) -> Bool {
+        speakers.count > 1
+            && (speaker.speechMs < Self.fragmentMs
+                || Double(speaker.speechMs) < 0.01 * Double(totalMs))
+    }
+
     var body: some View {
-        Group {
-            if (recording.speakers ?? []).isEmpty {
+        VStack(spacing: 0) {
+            headCount
+            Divider()
+            if speakers.isEmpty {
                 ContentUnavailableView {
                     Label("No speakers yet", systemImage: "person.2")
                 } description: {
@@ -240,37 +262,129 @@ struct SpeakersPane: View {
                 }
             } else {
                 List {
-                    ForEach((recording.speakers ?? []).sorted { $0.colorIndex < $1.colorIndex }) { speaker in
-                        HStack(spacing: 9) {
-                            Circle()
-                                .fill(SpeakerPalette.color(speaker.colorIndex))
-                                .frame(width: 9, height: 9)
-                            TextField("Name", text: Binding(
-                                get: { speaker.displayName },
-                                set: { speaker.displayName = $0 }
-                            ))
-                            .textFieldStyle(.plain)
-                            .onSubmit {
-                                try? RecordingStore.rename(speaker,
-                                                           to: speaker.displayName,
-                                                           in: context)
-                            }
-                            Spacer()
-                            Text(TimeFormat.coarse(ms: speaker.speechMs))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                    ForEach(speakers) { speaker in
+                        SpeakerRow(recording: recording, speaker: speaker,
+                                   share: totalMs > 0 ? Double(speaker.speechMs) / Double(totalMs) : 0,
+                                   isFragment: isFragment(speaker),
+                                   others: speakers.filter { $0.id != speaker.id })
                     }
                 }
                 .listStyle(.inset)
                 .safeAreaInset(edge: .bottom) {
-                    Text("Renaming a speaker here updates every line they said. "
-                         + "Names are kept even if the recording is transcribed again.")
+                    Text("Rename here and every line follows. Right-click a speaker to "
+                         + "merge it into another; right-click a transcript line to move "
+                         + "just that line.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(12)
                 }
             }
+        }
+    }
+
+    /// "People in the room". Stored on the recording and handed to the next
+    /// speaker pass as a target. Shown even before speakers exist, because the
+    /// best time to say six is before the run that finds fourteen.
+    private var headCount: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Stepper(value: Binding(
+                    get: { recording.expectedSpeakers ?? 0 },
+                    set: { value in
+                        recording.expectedSpeakers = value > 0 ? value : nil
+                        recording.updatedAt = Date()
+                        try? context.save()
+                    }
+                ), in: 0...30) {
+                    HStack(spacing: 6) {
+                        Text("People in the room")
+                        Text(recording.expectedSpeakers.map(String.init) ?? "Any")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(minWidth: 24, alignment: .trailing)
+                    }
+                }
+                .font(.callout)
+                Spacer()
+                if recording.hasAudio, state.progress[recording.id] == nil {
+                    Button("Identify Again") { state.rediarize(recording) }
+                        .controlSize(.small)
+                        .help("Run speaker identification again, aiming at this count")
+                }
+            }
+            if speakers.count > 1, let expected = recording.expectedSpeakers,
+               speakers.count > expected {
+                Text("\(speakers.count) found for \(expected) people. Merge the fragments "
+                     + "below, or Identify Again to let the count guide the pass.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("A target for speaker identification, not a limit. Voices the "
+                     + "model hears as clearly different stay separate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+    }
+}
+
+struct SpeakerRow: View {
+    @Environment(\.modelContext) private var context
+    let recording: StoredRecording
+    let speaker: StoredSpeaker
+    let share: Double
+    let isFragment: Bool
+    let others: [StoredSpeaker]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 9) {
+                Circle()
+                    .fill(SpeakerPalette.color(speaker.colorIndex))
+                    .frame(width: 9, height: 9)
+                TextField("Name", text: Binding(
+                    get: { speaker.displayName },
+                    set: { speaker.displayName = $0 }
+                ))
+                .textFieldStyle(.plain)
+                .onSubmit {
+                    try? RecordingStore.rename(speaker, to: speaker.displayName, in: context)
+                }
+                Spacer()
+                Text(TimeFormat.coarse(ms: speaker.speechMs))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            // Talk time as a bar, so fourteen rows read as "two people and a
+            // dozen slivers" at a glance rather than as a column of numbers.
+            GeometryReader { geometry in
+                Capsule()
+                    .fill(SpeakerPalette.color(speaker.colorIndex).opacity(0.75))
+                    .frame(width: max(2, geometry.size.width * share))
+            }
+            .frame(height: 4)
+            .padding(.leading, 18)
+            if isFragment {
+                Label("Likely a fragment of another speaker", systemImage: "exclamationmark.circle")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .padding(.leading, 18)
+            }
+        }
+        .padding(.vertical, 3)
+        .contextMenu {
+            Menu("Merge Into") {
+                ForEach(others) { other in
+                    Button(other.displayName) {
+                        try? RecordingStore.merge(speaker, into: other, in: context)
+                    }
+                }
+            }
+            .disabled(others.isEmpty)
         }
     }
 }

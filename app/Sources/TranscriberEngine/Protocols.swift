@@ -119,7 +119,11 @@ public protocol SpeakerDiarizing: Sendable {
     /// memory-mapped file: two hours of 16 kHz audio is 460 MB as an array, and
     /// on a 16 GB machine already holding a 1.6 GB model that is the difference
     /// between running and swapping.
+    ///
+    /// `expectedSpeakers` is how many people the user says were in the room.
+    /// A target for the clustering, never a cap; nil means no opinion.
     func diarize(_ source: any PCMSource,
+                 expectedSpeakers: Int?,
                  progress: (@Sendable (Double) -> Void)?) async throws -> [SpeakerSpan]
     func unload() async
 }

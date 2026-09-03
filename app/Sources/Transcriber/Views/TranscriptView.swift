@@ -282,11 +282,46 @@ struct TranscriptBlockRow: View {
                 }
             }
             Divider()
+            speakerMenu
+            Divider()
             Button("Copy", systemImage: "doc.on.doc") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(block.text, forType: .string)
             }
         }
+    }
+
+    /// Move this turn to another speaker, when the diarizer credited it wrong.
+    /// One turn at a time; merging whole speakers lives in the Speakers pane.
+    private var speakerMenu: some View {
+        Menu("Speaker", systemImage: "person") {
+            ForEach((recording.speakers ?? []).sorted { $0.speechMs > $1.speechMs }) { speaker in
+                Button {
+                    assign(to: speaker)
+                } label: {
+                    if speaker.speakerId == block.speakerId {
+                        Label(speaker.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(speaker.displayName)
+                    }
+                }
+            }
+            Divider()
+            Button("New Speaker") {
+                if let speaker = try? RecordingStore.addSpeaker(to: recording, in: context) {
+                    assign(to: speaker)
+                }
+            }
+            if block.speakerId != nil {
+                Button("No Speaker") { assign(to: nil) }
+            }
+        }
+    }
+
+    private func assign(to speaker: StoredSpeaker?) {
+        let ids = Set(block.segments.map(\.id))
+        let rows = (recording.transcript?.orderedSegments ?? []).filter { ids.contains($0.id) }
+        try? RecordingStore.assign(rows, to: speaker, on: recording, in: context)
     }
 
     private func add(_ kind: MeetingItemKind) {
