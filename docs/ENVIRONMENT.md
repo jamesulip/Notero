@@ -1,6 +1,13 @@
 # Environment findings — 2026-08-29
 
-Verified on the machine, not assumed. These change two of the plan's premises.
+> **Design history.** A dated snapshot of the machine this project was
+> developed and measured on, kept because the RTF and WER numbers in
+> [FINDINGS.md](FINDINGS.md) are relative to it. It is *not* a requirements
+> list — see the Requirements section of the [README](../README.md) for what
+> you actually need.
+
+Measured on the machine rather than assumed. Two of the plan's premises change
+as a result.
 
 ## Host
 
@@ -9,13 +16,11 @@ Verified on the machine, not assumed. These change two of the plan's premises.
 | Machine | Mac mini M2 Pro | **MacBook Pro, Apple M5 Pro** |
 | Cores | — | 15 (5 efficiency + 10 performance) |
 | RAM | — | 24 GB |
-| macOS | — | 26.6.2 (build 25G83) |
-| Free disk | — | 594 GB |
+| macOS | — | 26.6.2 |
 
-Every latency/RTF number in the plan (sections 3, 7, 10 Phase 1) was reasoned about
-for an M2 Pro. The M5 Pro is materially faster. **Open item:** is this the deployment
-target, or a dev machine fronting a separate Mac mini? Phase 1's exit criterion
-("you know your RTF at turbo on this machine") is only meaningful once that's settled.
+Every latency/RTF number in the plan (sections 3, 7, 10 Phase 1) was reasoned
+about for an M2 Pro. The M5 Pro is materially faster, so every measurement
+recorded here and in FINDINGS.md is an upper bound on what an M2 Pro would do.
 
 ## Toolchain (all present unless noted)
 
@@ -26,8 +31,9 @@ target, or a dev machine fronting a separate Mac mini? Phase 1's exit criterion
 - Node 26.5.0, npm 11.17.0, pnpm 10.30.3
 - git 2.55.0, Homebrew 6.0.20
 
-**Missing:** `ffmpeg` (needed for the eval set and WAV handling), `cmake`, `uv`.
-`whisperkit-cli` not installed.
+**Not installed at the time:** `ffmpeg`, `cmake`, `uv`, `whisperkit-cli`. None
+of them turned out to be required — `eval/make-synthetic.sh` builds the fixture
+with the `say` and `afconvert` that ship with macOS.
 
 ## The model-ID trap
 

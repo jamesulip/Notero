@@ -1,13 +1,16 @@
 # Deploying on the tailnet
 
-Section 2 picks Tailscale because it solves HTTPS certificates and cross-device
-access in one move. Section 13 flags why it cannot wait: `getUserMedia` returns
-undefined on plain HTTP from anything but `localhost`, so **the microphone will
-never work from a phone until TLS is in place**, and it fails silently.
+Section 2 of [PLAN.md](PLAN.md) picks Tailscale because it solves HTTPS
+certificates and cross-device access in one move. Section 13 flags why it
+cannot wait: `getUserMedia` returns undefined on plain HTTP from anything but
+`localhost`, so **the microphone will never work from a phone until TLS is in
+place**, and it fails silently.
 
-Tailscale is installed on this machine (1.102.3) but stopped and not
-authenticated. These steps need your login, so they are written out rather than
-run.
+The server itself has **no authentication**. Tailscale is what restricts who
+can reach it; do not substitute a plain LAN bind for this.
+
+These steps need Tailscale installed and an interactive login, so they are
+written out rather than scripted.
 
 ## 1. Bring the machine onto the tailnet
 
