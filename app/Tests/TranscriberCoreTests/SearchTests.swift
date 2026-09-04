@@ -75,6 +75,17 @@ final class BenchmarkMathTests: XCTestCase {
         XCTAssertEqual(report.recommendedTier, .balanced)
     }
 
+    func testAccurateTierIsNeverRecommendedEvenWhenItKeepsUp() {
+        // `accurate` re-decodes a 15 s window per hop; ModelTier declares it
+        // unsuitable for live, so a fast measurement must not promote it.
+        let report = BenchmarkReport(
+            runs: [run(.fast, rtf: 0.08), run(.balanced, rtf: 0.12),
+                   run(.accurate, rtf: 0.5)],
+            machine: "test", memoryGB: 16
+        )
+        XCTAssertEqual(report.recommendedTier, .balanced)
+    }
+
     func testFallsBackToTheFastestWhenNothingKeepsUp() {
         let report = BenchmarkReport(
             runs: [run(.balanced, rtf: 0.9), run(.accurate, rtf: 2.2)],

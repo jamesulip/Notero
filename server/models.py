@@ -53,7 +53,8 @@ CATALOGUE: tuple[ModelInfo, ...] = (
         label="large-v3 (full, not turbo)",
         detail="Full 1.5B large-v3. The `_turbo` suffix is a WhisperKit compute "
                "variant, NOT the turbo model -- its decoder is 5.3x heavier. "
-               "Most accurate, and far slower per hop.",
+               "Expected to be more accurate, but unmeasured on Taglish here; "
+               "far slower per hop.",
         approx_mb=3195, multilingual=True,
     ),
     ModelInfo(

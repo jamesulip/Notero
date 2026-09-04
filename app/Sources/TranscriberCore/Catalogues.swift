@@ -38,7 +38,8 @@ public enum ModelCatalogue {
             label: "large-v3 (full, not turbo)",
             detail: "Full 1.5B large-v3. The `_turbo` suffix here is a WhisperKit "
                   + "compute variant, NOT the turbo model — its decoder is 5.3x "
-                  + "heavier. Most accurate, far slower per hop.",
+                  + "heavier. Expected to be more accurate; unmeasured on Taglish "
+                  + "in this project. Far slower per hop.",
             approxMB: 3195, multilingual: true, recommended: false),
         ModelOption(
             id: "openai_whisper-medium",
@@ -141,8 +142,10 @@ public enum LanguageCatalogue {
 /// The three choices offered in Settings.
 ///
 /// A tier is a *promise about speed*, not a model name -- which is the point.
-/// Benchmarking on this machine decides which id sits behind each tier, and the
+/// The benchmark measures the tiers on this machine and recommends one, so the
 /// UI never has to mention `openai_whisper-large-v3-v20240930_turbo` to anyone.
+/// The recommendation selects a tier; it does not re-point a tier at a
+/// different model id.
 public enum ModelTier: String, CaseIterable, Identifiable, Sendable, Codable {
     case fast, balanced, accurate
 
@@ -160,18 +163,27 @@ public enum ModelTier: String, CaseIterable, Identifiable, Sendable, Codable {
         switch self {
         case .fast:
             return "Quantized turbo. Lowest latency and the smallest memory "
-                 + "footprint; some accuracy given up on Taglish."
+                 + "footprint; the accuracy cost on Taglish is unmeasured."
         case .balanced:
             return "large-v3-turbo. The default: full large-v3 encoder with a "
                  + "4-layer decoder, which is what keeps live transcription real-time."
         case .accurate:
-            return "Full large-v3. Best transcript, roughly 5x the decode cost "
-                 + "per window — meant for re-transcribing a finished recording, "
-                 + "not for the live path."
+            return "Full large-v3. Expected to give the best transcript, at "
+                 + "roughly 5x the decode cost per window — meant for "
+                 + "re-transcribing a finished recording, not for the live path. "
+                 + "This project has not measured its accuracy."
         }
     }
 
-    /// Default mapping. Overridden per-machine once the benchmark has run.
+    /// The tier-to-model mapping.
+    ///
+    /// **Nothing overrides this today.** `Settings.overrides` can hold a
+    /// per-tier id, but no code writes it: the benchmark recommends a tier and
+    /// the user picks one, and neither re-points a tier at a different model.
+    ///
+    /// The `accurate` weights are ~3.2 GB and are not part of the first-start
+    /// download, thus selecting that tier fetches them and pays the one-time
+    /// CoreML compile that docs/BENCHMARKS.md records.
     public var defaultModelId: String {
         switch self {
         case .fast: return "openai_whisper-large-v3-v20240930_626MB"
