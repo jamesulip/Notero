@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 log = logging.getLogger("asr.registry")
 
@@ -24,7 +24,6 @@ log = logging.getLogger("asr.registry")
 class Entry:
     pipeline: object
     detached_at: float | None = None
-    segments: list[dict] = field(default_factory=list)
 
 
 class SessionRegistry:

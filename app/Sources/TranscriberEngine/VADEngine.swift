@@ -35,7 +35,6 @@ public actor VADEngine: VoiceActivityDetecting {
     private var lastProbability: Float = 0
 
     public private(set) var backend: Backend = .energy
-    public private(set) var unavailableReason: String?
 
     public init(modelsDirectory: URL, preferNeural: Bool = true) {
         self.modelsDirectory = modelsDirectory
@@ -59,12 +58,10 @@ public actor VADEngine: VoiceActivityDetecting {
             self.manager = manager
             streamState = await manager.makeStreamState()
             backend = .silero
-            unavailableReason = nil
         } catch {
             // Recording still works; it just decodes a few more silent windows.
             manager = nil
             backend = .energy
-            unavailableReason = error.localizedDescription
             progress?("Voice activity model unavailable, using energy detection", nil)
         }
     }

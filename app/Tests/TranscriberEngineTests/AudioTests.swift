@@ -85,7 +85,7 @@ final class AudioFileTests: XCTestCase {
 
     func testWavWriterAndMappedPcmRoundTrip() throws {
         let url = scratch.appendingPathComponent("copy.wav")
-        let writer = WavWriter(url: url)!
+        let writer = try WavWriter(url: url)
         // One second of a ramp, so a wrong offset shows up as wrong values.
         let samples = (0..<Audio.sampleRate).map { Float($0) / Float(Audio.sampleRate) }
         writer.write(PCM.data(from: samples))
@@ -115,7 +115,7 @@ final class AudioFileTests: XCTestCase {
         // The file still holds the audio, and the reader must not believe the
         // header over the file it can see.
         let url = scratch.appendingPathComponent("interrupted.wav")
-        let writer = WavWriter(url: url)!
+        let writer = try WavWriter(url: url)
         writer.write(PCM.data(from: [Float](repeating: 0.2, count: 16_000)))
         // No close(): the header is never rewritten.
 
@@ -142,6 +142,38 @@ final class AudioFileTests: XCTestCase {
         // decode produced an empty file that still looked the right length.
         let peak = mapped.floats(0..<8_000).map(abs).max() ?? 0
         XCTAssertGreaterThan(peak, 0.1)
+    }
+
+    /// The decode is fast; reporting it was not. A 3h51m recording yields
+    /// 27,091 sample buffers, and reporting each one put a SwiftData fetch and
+    /// save on the wire per buffer -- minutes of bookkeeping for three seconds
+    /// of decoding.
+    func testProgressIsReportedInPercentStepsRatherThanPerBuffer() async throws {
+        let source = scratch.appendingPathComponent("progress.m4a")
+        let buffer = try tone(seconds: 1)
+        let writer = try ArchiveWriter(url: source, format: buffer.format)
+        // Long enough that an unthrottled build would report well past the cap:
+        // AAC yields roughly two sample buffers per second of audio.
+        for _ in 0..<150 { writer.write(buffer) }
+        writer.finish()
+
+        let reports = Reports()
+        _ = try await AudioCache.build(from: source,
+                                       to: scratch.appendingPathComponent("progress.wav")) {
+            reports.append($0)
+        }
+
+        let seen = reports.values
+        XCTAssertFalse(seen.isEmpty, "progress was never reported")
+        XCTAssertLessThanOrEqual(seen.count, 101)
+        // Monotonic: a report that goes backwards is a bar that jumps back.
+        XCTAssertEqual(seen, seen.sorted())
+        // And spaced, which is the actual rule -- a cap alone would pass on a
+        // short file no matter how often the callback fired.
+        for (previous, next) in zip(seen, seen.dropFirst()) {
+            XCTAssertGreaterThanOrEqual(next - previous, 0.0099)
+        }
+        XCTAssertTrue(seen.allSatisfy { $0 >= 0 && $0 <= 1 })
     }
 
     func testBuildingFromAFileWithNoAudioTrackFails() async throws {
@@ -182,4 +214,13 @@ final class AudioFileTests: XCTestCase {
         }
         XCTAssertEqual(meter.count, 240)
     }
+}
+
+
+/// The progress callback is `@Sendable` and called from the decoder's thread.
+private final class Reports: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [Double] = []
+    func append(_ value: Double) { lock.withLock { storage.append(value) } }
+    var values: [Double] { lock.withLock { storage } }
 }

@@ -75,10 +75,6 @@ class FakeVadState:
     last_prob: float = 0.9
     frames: int = 1
 
-    @property
-    def has_speech(self) -> bool:
-        return self.speech_ms > 0
-
 
 class FakeVAD:
     """Reports speech until `go_silent()` is called."""

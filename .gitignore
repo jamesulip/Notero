@@ -2,22 +2,67 @@
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+# a .env holds local configuration; .env.example is the committed template
+.env
+.env.*
+!.env.example
+
 # node
 node_modules/
 dist/
-# data — never commit audio or transcripts
+
+# data — never commit audio, recordings or transcripts
 data/
 *.wav
+*.m4a
+*.mp3
+*.mp4
+*.mov
+*.aiff
+*.caf
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
 *.db
+# eval fixtures are the developer's own meeting audio and its reference
+# transcript. Only the .gitkeep placeholders belong in the repo.
 eval/audio/*
 !eval/audio/.gitkeep
+eval/refs/*
+!eval/refs/.gitkeep
+!eval/refs/README.md
+
 # models
 models/
 .build/
+
 # macOS finder cruft
 .DS_Store
+
 # built app bundles — assembled by app/build-app.sh, not source
 *.app/
-# Xcode per-user state regenerated on open
+Transcriber*.zip
+
+# editor state regenerated on open
 .swiftpm/
+.vscode/
+*.xcuserstate
+xcuserdata/
+DerivedData/
+
+# compiled from app/scripts/click.swift on demand
+app/scripts/click
+
+# screenshots from app/scripts/snap.sh show the real library, with real
+# meeting titles and transcript text. Scoped to app/ so a deliberate
+# docs/ screenshot stays committable.
+/app/*.png
+/app/scripts/*.png
+
+# logs, including the test.log the CI workflow tees
+*.log

@@ -30,10 +30,6 @@ class VadState:
     trailing_silence_ms: int
     frames: int
 
-    @property
-    def has_speech(self) -> bool:
-        return self.speech_ms > 0
-
 
 class SileroVAD:
     """One instance per session -- the underlying model carries RNN state."""
@@ -44,14 +40,6 @@ class SileroVAD:
         self.threshold = threshold
         self._model = load_silero_vad(onnx=onnx)
         self._buffer = bytearray()
-        self._speech_ms = 0
-        self._trailing_silence_ms = 0
-        self._frames = 0
-        self._last_prob = 0.0
-
-    def reset(self) -> None:
-        self._model.reset_states()
-        self._buffer.clear()
         self._speech_ms = 0
         self._trailing_silence_ms = 0
         self._frames = 0

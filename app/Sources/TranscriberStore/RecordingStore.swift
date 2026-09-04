@@ -49,26 +49,74 @@ public enum RecordingStore {
         try context.save()
     }
 
+    // MARK: - Recovery
+
+    /// Resolves work that a previous run left unfinished.
+    ///
+    /// Statuses like `preparing`, `recording` and `transcribing` describe a job
+    /// held by a live session or the queue. Neither survives a quit, so on the
+    /// next launch those rows describe work that no longer exists -- and
+    /// because they report `isTerminal == false`, the UI waits on them
+    /// indefinitely. A recording quit during the 9-11 s model load (284 s on a
+    /// cold CoreML compile) is left with no audio, no error and no way out.
+    ///
+    /// Called once at launch, before anything reads the store.
+    ///
+    /// Nothing is deleted. A row that captured no audio is still a row the user
+    /// made, and silently removing it would be worse than showing that it
+    /// failed.
+    @discardableResult
+    public static func recoverInterrupted(in context: ModelContext) throws -> Int {
+        let descriptor = FetchDescriptor<StoredRecording>()
+        let stale = try context.fetch(descriptor).filter { !$0.status.isTerminal }
+        guard !stale.isEmpty else { return 0 }
+
+        for recording in stale {
+            if let transcript = recording.transcript, transcript.isComplete {
+                // The transcript exists and is readable; only the stage after
+                // it was lost. Re-running diarization is a menu item away.
+                recording.status = .completed
+                recording.progress = 1
+            } else if recording.transcript != nil {
+                // A job quit part-way through decoding. The rows it wrote are
+                // kept and shown; the label says they are not the whole thing.
+                recording.status = .failed
+                recording.errorMessage = "Interrupted part-way through transcription. "
+                    + "What was transcribed so far is kept — transcribe again for the rest."
+            } else if recording.hasAudio {
+                recording.status = .failed
+                recording.errorMessage = "Interrupted before this was transcribed. "
+                    + "The audio is here — transcribe it again."
+            } else {
+                recording.status = .failed
+                recording.errorMessage = "Interrupted before any audio was captured, "
+                    + "so there is nothing to recover."
+            }
+            recording.updatedAt = Date()
+        }
+        try context.save()
+        return stale.count
+    }
+
     // MARK: - History
 
     public enum HistoryBucket: String, CaseIterable, Identifiable, Sendable {
+        /// Failed rows, whatever their date. Above the dated groups so a
+        /// recording that needs a retry or a delete is not buried under
+        /// "Older" where nobody scrolls.
+        case attention
         case today, yesterday, thisWeek, older
 
         public var id: String { rawValue }
         public var label: String {
             switch self {
+            case .attention: return "Needs Attention"
             case .today: return "Today"
             case .yesterday: return "Yesterday"
             case .thisWeek: return "Earlier This Week"
             case .older: return "Older"
             }
         }
-    }
-
-    public struct HistorySection: Identifiable, Sendable {
-        public var id: String { bucket.rawValue }
-        public var bucket: HistoryBucket
-        public var recordingIds: [UUID]
     }
 
     public static func bucket(for date: Date, now: Date = Date(),
@@ -81,13 +129,18 @@ public enum RecordingStore {
         return .older
     }
 
-    /// Groups newest-first into Today / Yesterday / Earlier This Week / Older.
+    /// Groups newest-first into Needs Attention / Today / Yesterday / Earlier
+    /// This Week / Older. Failed recordings go to the first group regardless
+    /// of when they were made.
     public static func group(_ recordings: [StoredRecording], now: Date = Date())
     -> [(bucket: HistoryBucket, items: [StoredRecording])] {
         let sorted = recordings.sorted { $0.createdAt > $1.createdAt }
         var buckets: [HistoryBucket: [StoredRecording]] = [:]
         for recording in sorted {
-            buckets[bucket(for: recording.createdAt, now: now), default: []].append(recording)
+            let key: HistoryBucket = recording.status == .failed
+                ? .attention
+                : bucket(for: recording.createdAt, now: now)
+            buckets[key, default: []].append(recording)
         }
         return HistoryBucket.allCases.compactMap { bucket in
             guard let items = buckets[bucket], !items.isEmpty else { return nil }
@@ -132,6 +185,65 @@ public enum RecordingStore {
             : trimmed
         speaker.recording?.updatedAt = Date()
         try context.save()
+    }
+
+    /// Folds one speaker into another: every line credited to `speaker` is
+    /// re-credited to `target`, the talk time moves with it, and the row goes.
+    ///
+    /// The repair for a diarizer that heard fourteen voices in a six-person
+    /// room. Segments hold the diarizer's label, so this rewrites them; a
+    /// later "Identify Speakers Again" starts from a fresh roster and the
+    /// merge would have to be made again, which is the honest outcome.
+    public static func merge(_ speaker: StoredSpeaker, into target: StoredSpeaker,
+                             in context: ModelContext) throws {
+        guard speaker !== target, speaker.speakerId != target.speakerId,
+              let recording = target.recording else { return }
+        for row in recording.transcript?.orderedSegments ?? []
+        where row.speakerId == speaker.speakerId {
+            row.speakerId = target.speakerId
+        }
+        target.speechMs += speaker.speechMs
+        context.delete(speaker)
+        recording.updatedAt = Date()
+        try context.save()
+    }
+
+    /// Re-credits lines to a speaker (or to nobody), moving their duration
+    /// between the talk-time totals so the Speakers pane stays honest.
+    public static func assign(_ segments: [StoredSegment], to speaker: StoredSpeaker?,
+                              on recording: StoredRecording, in context: ModelContext) throws {
+        let roster = recording.speakers ?? []
+        for row in segments {
+            guard row.speakerId != speaker?.speakerId else { continue }
+            let duration = max(0, row.endMs - row.startMs)
+            if let previous = roster.first(where: { $0.speakerId == row.speakerId }) {
+                previous.speechMs = max(0, previous.speechMs - duration)
+            }
+            row.speakerId = speaker?.speakerId
+            speaker?.speechMs += duration
+        }
+        recording.updatedAt = Date()
+        try context.save()
+    }
+
+    /// A speaker the diarizer did not find, numbered after the last it did.
+    @discardableResult
+    public static func addSpeaker(named name: String? = nil, to recording: StoredRecording,
+                                  in context: ModelContext) throws -> StoredSpeaker {
+        let existing = recording.speakers ?? []
+        let next = (existing.compactMap { Int($0.speakerId.filter(\.isNumber)) }.max() ?? 0) + 1
+        let id = "S\(next)"
+        let speaker = StoredSpeaker(
+            speakerId: id,
+            displayName: name ?? SpeakerLabel.defaultName(for: id),
+            speechMs: 0,
+            colorIndex: (existing.map(\.colorIndex).max() ?? -1) + 1
+        )
+        speaker.recording = recording
+        context.insert(speaker)
+        recording.updatedAt = Date()
+        try context.save()
+        return speaker
     }
 
     // MARK: - Bookmarks and notes

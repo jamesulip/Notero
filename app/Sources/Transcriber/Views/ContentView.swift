@@ -46,7 +46,52 @@ struct ContentView: View {
                 ExportSheet(recording: recording)
             }
         }
+        .alert(
+            "Keep this recording?",
+            isPresented: Binding(
+                get: { state.shortTake != nil },
+                set: { if !$0 { state.shortTake = nil } }
+            ),
+            presenting: state.shortTake
+        ) { _ in
+            Button("Keep") { state.resolveShortTake(keep: true) }
+                .keyboardShortcut(.defaultAction)
+            Button("Discard", role: .destructive) { state.resolveShortTake(keep: false) }
+        } message: { take in
+            Text(Self.shortTakeMessage(take))
+        }
+        .alert(
+            "Already imported?",
+            isPresented: Binding(
+                get: { !state.duplicateImports.isEmpty },
+                set: { if !$0, let first = state.duplicateImports.first {
+                    state.duplicateImports.removeAll { $0.id == first.id }
+                } }
+            ),
+            presenting: state.duplicateImports.first
+        ) { duplicate in
+            Button("Open Existing") { state.resolveDuplicate(duplicate, importAnyway: false) }
+                .keyboardShortcut(.defaultAction)
+            Button("Import Anyway") { state.resolveDuplicate(duplicate, importAnyway: true) }
+            Button("Cancel", role: .cancel) {
+                state.duplicateImports.removeAll { $0.id == duplicate.id }
+            }
+        } message: { duplicate in
+            Text("“\(duplicate.url.lastPathComponent)” is the same size as the audio behind "
+                 + "“\(duplicate.existingTitle)”. Open that recording, or import a second copy?")
+        }
         .toolbar { toolbar }
+    }
+
+    static func shortTakeMessage(_ take: AppState.ShortTake) -> String {
+        let seconds = max(1, (take.durationMs + 500) / 1000)
+        let length = "It ran for \(seconds) second\(seconds == 1 ? "" : "s")"
+        switch take.words {
+        case nil: return "\(length). Discarding deletes the audio."
+        case 0: return "\(length) and no words were heard. Discarding deletes the audio."
+        case 1: return "\(length) and one word was heard. Discarding deletes the audio."
+        case let words?: return "\(length) and \(words) words were heard. Discarding deletes the audio."
+        }
     }
 
     private var title: String {
@@ -101,6 +146,27 @@ struct ContentView: View {
                 }
                 .tint(.red)
                 .help("Stop recording (⌘.)")
+            }
+        } else if state.isLiveBusy {
+            // The model load, which is seconds cold. Without this the toolbar
+            // is identical to the idle one for the whole wait.
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 6) {
+                    if let fraction = state.live.state.fraction {
+                        ProgressView(value: fraction)
+                            .frame(width: 90)
+                        Text("\(Int(fraction * 100))%")
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(state.live.state.label)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
         }
 

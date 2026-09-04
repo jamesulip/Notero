@@ -9,6 +9,10 @@ import TranscriberCore
 struct StatusChip: View {
     let status: TranscriptionStatus
     var fraction: Double = 0
+    /// Seconds left in the stage, shown on hover. Too changeable for the
+    /// chip itself, which sits in a list row that should not be re-laid-out
+    /// every tick.
+    var remaining: TimeInterval?
 
     var body: some View {
         HStack(spacing: 5) {
@@ -22,6 +26,7 @@ struct StatusChip: View {
             }
         }
         .foregroundStyle(tint)
+        .help(remaining.map { "\(TimeFormat.remaining(seconds: $0)) left" } ?? "")
     }
 
     @ViewBuilder
@@ -41,9 +46,11 @@ struct StatusChip: View {
     }
 
     private var label: String {
-        status.isBusy && fraction > 0.01 && status != .diarizing
+        var text = status.isBusy && fraction > 0.01 && status != .diarizing
             ? "\(status.label) \(Int(fraction * 100))%"
             : status.label
+        if status.isBusy, let remaining { text += " · \(TimeFormat.remainingCompact(seconds: remaining))" }
+        return text
     }
 
     private var tint: Color {

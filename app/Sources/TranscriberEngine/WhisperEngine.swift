@@ -29,10 +29,8 @@ public actor WhisperEngine: SpeechRecognizing {
         if pipeline != nil, currentModel == model { return }
 
         let option = ModelCatalogue.option(model)
+        let label = option?.label ?? model
         let known = ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory)
-        progress?(known ? "Loading \(option?.label ?? model)…"
-                        : "Downloading \(option?.label ?? model) (\(option?.sizeLabel ?? "~1.6 GB"))…",
-                  nil)
 
         let previous = pipeline
         let previousName = currentModel
@@ -40,6 +38,17 @@ public actor WhisperEngine: SpeechRecognizing {
 
         let started = Date()
         do {
+            if !known {
+                // Fetched separately first: the combined download-and-load
+                // path reports nothing until the weights are on disk, and a
+                // 1.6 GB wait behind a spinner reads as a hang.
+                let title = "Downloading \(label) (\(option?.sizeLabel ?? "~1.6 GB"))…"
+                progress?(title, 0)
+                _ = try await WhisperKit.download(variant: model, downloadBase: modelsDirectory) { report in
+                    progress?(title, report.fractionCompleted)
+                }
+            }
+            progress?("Loading \(label)…", nil)
             let config = WhisperKitConfig(
                 model: model,
                 downloadBase: modelsDirectory,

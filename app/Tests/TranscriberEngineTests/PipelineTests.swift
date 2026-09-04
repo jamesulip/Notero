@@ -1,3 +1,4 @@
+import Synchronization
 import XCTest
 import TranscriberCore
 @testable import TranscriberEngine
@@ -12,10 +13,13 @@ actor FakeRecognizer: SpeechRecognizing {
     typealias Refusal = @Sendable (_ sampleCount: Int, _ attempt: Int) -> Bool
 
     private let refuse: Refusal
+    private let callHook: @Sendable () async -> Void
     private(set) var calls: [(samples: Int, attempt: Int)] = []
 
-    init(refuse: @escaping Refusal = { _, _ in false }) {
+    init(refuse: @escaping Refusal = { _, _ in false },
+         callHook: @escaping @Sendable () async -> Void = {}) {
         self.refuse = refuse
+        self.callHook = callHook
     }
 
     var loadedModel: String? { "fake" }
@@ -24,6 +28,7 @@ actor FakeRecognizer: SpeechRecognizing {
     func unload() {}
 
     func transcribe(_ request: ASRRequest) async throws -> ASROutput {
+        await callHook()
         calls.append((request.samples.count, request.decodeAttempt))
         let durationMs = request.samples.count * 1000 / Audio.sampleRate
         guard !refuse(request.samples.count, request.decodeAttempt) else {
@@ -41,6 +46,33 @@ actor FakeRecognizer: SpeechRecognizing {
         tokens.append(Token(text: "hallucinated ", startMs: 29_000, endMs: 29_900))
         return ASROutput(tokens: tokens, audioMs: durationMs, inferMs: 1,
                          detectedLanguage: "tl")
+    }
+}
+
+private actor PipelineEventLog {
+    private(set) var values: [String] = []
+    func append(_ value: String) { values.append(value) }
+}
+
+private actor BatchedVAD: VoiceActivityDetecting {
+    let log: PipelineEventLog
+
+    init(log: PipelineEventLog) { self.log = log }
+
+    func prepare(progress: ProgressReport?) async throws {}
+    func push(_ samples: [Float]) async throws -> VoiceActivityReading {
+        VoiceActivityReading(isSpeech: false, probability: 0,
+                             trailingSilenceMs: 0, speechMs: 0)
+    }
+    func clearSpeechCounter() {}
+    func reset() {}
+
+    func regions(in samples: [Float]) async throws -> [SpeechRegion] {
+        await log.append("vad")
+        let durationMs = Audio.samplesToMs(samples.count)
+        return stride(from: 0, to: durationMs, by: 25_000).map {
+            SpeechRegion(startMs: $0, endMs: min(durationMs, $0 + 25_000))
+        }
     }
 }
 
@@ -124,6 +156,30 @@ final class PipelineWindowTests: XCTestCase {
     }
 }
 
+final class IncrementalFilePipelineTests: XCTestCase {
+    func testFirstBatchIsDecodedBeforeTheSecondBatchIsScanned() async throws {
+        let log = PipelineEventLog()
+        let vad = BatchedVAD(log: log)
+        let asr = FakeRecognizer(callHook: { await log.append("asr") })
+        let source = ArrayPCM([Float](repeating: 0.1,
+                                     count: Audio.sampleRate * 310))
+
+        let report = try await OfflinePipeline.transcribeFile(
+            source: source, using: vad, asr: asr,
+            language: "tl", prompt: nil
+        )
+
+        let events = await log.values
+        let firstASR = try XCTUnwrap(events.firstIndex(of: "asr"))
+        let secondVAD = try XCTUnwrap(events.indices.filter { events[$0] == "vad" }.dropFirst().first)
+        XCTAssertLessThan(firstASR, secondVAD)
+        XCTAssertEqual(report.regions.count, 12, "the region crossing 5:00 is rejoined")
+        XCTAssertEqual(report.regions.last?.endMs, 310_000)
+        XCTAssertGreaterThan(report.windowCount, 1)
+        XCTAssertFalse(report.decode.tokens.isEmpty)
+    }
+}
+
 final class PipelineDecodeTests: XCTestCase {
 
     private func source(seconds: Int) -> ArrayPCM {
@@ -143,6 +199,23 @@ final class PipelineDecodeTests: XCTestCase {
         XCTAssertFalse(report.tokens.contains { $0.text.contains("hallucinated") })
         XCTAssertEqual(report.tokens.count, 10)
         XCTAssertEqual(report.droppedWindows, 0)
+    }
+
+    func testEachWindowReportsItsOwnWordsAsItFinishes() async throws {
+        // The progressive path: the UI shows each window's words as they land,
+        // so the batches must arrive in order and add up to the final report.
+        let asr = FakeRecognizer()
+        let batches = Mutex<[[Token]]>([])
+        let report = try await OfflinePipeline.transcribe(
+            source: source(seconds: 30),
+            windows: [window(0, 10_000), window(10_000, 20_000), window(20_000, 30_000)],
+            using: asr, language: "tl", prompt: nil,
+            onWindow: { tokens, _ in batches.withLock { $0.append(tokens) } }
+        )
+        let delivered = batches.withLock { $0 }
+        XCTAssertEqual(delivered.count, 3)
+        XCTAssertEqual(delivered.flatMap { $0 }, report.tokens)
+        XCTAssertEqual(delivered[1].first?.startMs, 10_000)
     }
 
     func testTimingsAreRebasedOntoTheFileTimeline() async throws {

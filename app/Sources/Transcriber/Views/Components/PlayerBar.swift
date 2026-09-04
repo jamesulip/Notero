@@ -8,6 +8,8 @@ struct PlayerBar: View {
     let recording: StoredRecording
 
     var body: some View {
+        @Bindable var state = state
+
         VStack(spacing: 8) {
             WaveformView(
                 samples: recording.waveform ?? [],
@@ -18,6 +20,23 @@ struct PlayerBar: View {
                 }
             )
             .frame(height: 52)
+            .overlay {
+                // A hover target over each bookmark tick, so the label shows
+                // and a click lands exactly on the moment rather than a few
+                // hundred milliseconds off it.
+                GeometryReader { geometry in
+                    ForEach(sortedBookmarks) { bookmark in
+                        let x = geometry.size.width
+                            * CGFloat(Double(bookmark.atMs) / Double(max(1, duration)))
+                        Color.clear
+                            .frame(width: 10, height: geometry.size.height)
+                            .contentShape(Rectangle())
+                            .help("\(bookmark.displayLabel) · \(TimeFormat.short(ms: bookmark.atMs))")
+                            .onTapGesture { state.seek(to: bookmark.atMs, in: recording) }
+                            .position(x: x, y: geometry.size.height / 2)
+                    }
+                }
+            }
 
             HStack(spacing: 14) {
                 Button {
@@ -47,6 +66,12 @@ struct PlayerBar: View {
 
                 Spacer()
 
+                Toggle(isOn: $state.followPlayback) {
+                    Label("Follow", systemImage: "text.line.first.and.arrowtriangle.forward")
+                }
+                .toggleStyle(.button)
+                .help("Keep the playing line in view. Scrolling by hand turns this off.")
+
                 Button {
                     _ = state.addBookmark()
                 } label: {
@@ -55,8 +80,8 @@ struct PlayerBar: View {
                 .help("Bookmark this moment (⌘B)")
 
                 Menu {
-                    ForEach([0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
-                        Button(String(format: "%.2gx", rate)) { state.player.rate = Float(rate) }
+                    ForEach(AppState.playbackRates, id: \.self) { rate in
+                        Button(String(format: "%.2gx", Double(rate))) { state.player.rate = rate }
                     }
                 } label: {
                     Text(String(format: "%.2gx", Double(state.player.rate)))
@@ -65,6 +90,7 @@ struct PlayerBar: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
+                .help("Playback speed (⌥↑ faster, ⌥↓ slower)")
             }
             .buttonStyle(.borderless)
         }
@@ -82,9 +108,13 @@ struct PlayerBar: View {
         duration > 0 ? Double(state.player.currentMs) / Double(duration) : 0
     }
 
+    private var sortedBookmarks: [StoredBookmark] {
+        (recording.bookmarks ?? []).sorted { $0.atMs < $1.atMs }
+    }
+
     private var bookmarkFractions: [Double] {
         guard duration > 0 else { return [] }
-        return (recording.bookmarks ?? []).map { Double($0.atMs) / Double(duration) }
+        return sortedBookmarks.map { Double($0.atMs) / Double(duration) }
     }
 
     private func ensureLoaded() {

@@ -30,7 +30,9 @@ public final class LiveSession {
 
     public enum State: Equatable, Sendable {
         case idle
-        case preparing(String)
+        /// What is happening and, when it can be measured, how far along:
+        /// a download has a fraction, a model load does not.
+        case preparing(String, Double?)
         case ready
         case recording
         case finishing
@@ -52,12 +54,18 @@ public final class LiveSession {
         public var label: String {
             switch self {
             case .idle: return "Idle"
-            case .preparing(let what): return what
+            case .preparing(let what, _): return what
             case .ready: return "Ready"
             case .recording: return "Recording"
             case .finishing: return "Finishing"
             case .failed(let why): return why
             }
+        }
+
+        /// 0...1 while something measurable is under way, else nil.
+        public var fraction: Double? {
+            if case .preparing(_, let fraction) = self { return fraction }
+            return nil
         }
     }
 
@@ -74,6 +82,12 @@ public final class LiveSession {
 
     public var config = SessionConfig()
     public var isMuted = false { didSet { capture?.isMuted = isMuted } }
+
+    /// Whether to decode while recording. Off, the session only captures --
+    /// archive and working copy -- and the whole-file pass runs at stop. That
+    /// pass is the better transcript anyway, and a two-hour meeting with no
+    /// model running keeps the machine cool and the fan quiet at the table.
+    public var decodeLive = true
 
     /// Microphone boost in decibels, live-adjustable while recording.
     ///
@@ -127,12 +141,15 @@ public final class LiveSession {
     public func prepare(model: String) async {
         guard state == .idle || state == .ready else { return }
         modelId = model
-        state = .preparing("Loading model…")
+        // Nothing to load for a capture-only session; the offline job loads
+        // the model when it runs.
+        guard decodeLive else { state = .ready; return }
+        state = .preparing("Loading model…", nil)
         do {
-            try await engines.prepareForLive(model: model) { [weak self] message, _ in
+            try await engines.prepareForLive(model: model) { [weak self] message, fraction in
                 Task { @MainActor in
                     guard let self, case .preparing = self.state else { return }
-                    self.state = .preparing(message)
+                    self.state = .preparing(message, fraction)
                 }
             }
             vadBackend = await engines.vadBackendName
@@ -147,7 +164,12 @@ public final class LiveSession {
     public func start(recordingId id: UUID, archiveFileName: String?,
                       archiveURL: URL?) async throws {
         guard !state.isRecording else { return }
-        if case .ready = state {} else { await prepare(model: modelId) }
+        // `.ready` from a capture-only prepare has no model behind it, so
+        // when live decoding is wanted the check is on the model, not the state.
+        let loaded = await engines.loadedModel
+        if !(state == .ready && (!decodeLive || loaded == modelId)) {
+            await prepare(model: modelId)
+        }
         guard case .ready = state else {
             throw EngineError.backendUnavailable(state.label)
         }
@@ -174,9 +196,10 @@ public final class LiveSession {
         await engines.resetVAD()
 
         let cacheURL = AudioCache.url(for: id, under: supportDirectory)
-        guard let cache = WavWriter(url: cacheURL) else {
-            throw EngineError.audioUnreadable("cannot open the working copy for writing")
-        }
+        // Thrown straight through: `WavWriter.CannotWrite` names the path and
+        // the reason, and replacing it with a generic string here is what made
+        // this undiagnosable in the first place.
+        let cache = try WavWriter(url: cacheURL)
         self.cache = cache
 
         guard let capture = AudioCapture() else {
@@ -268,6 +291,8 @@ public final class LiveSession {
             meterCountdown = 0
             meter = WaveformAnalyzer.appending(chunk.peak, to: meter)
         }
+
+        guard decodeLive else { return }
 
         vadPending.append(contentsOf: PCM.floats(from: chunk.pcm))
         if !vadInFlight, vadPending.count >= 4096 {
@@ -395,10 +420,6 @@ public final class LiveSession {
     }
 
     private func requestMicrophone() async -> Bool {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized: return true
-        case .notDetermined: return await AVCaptureDevice.requestAccess(for: .audio)
-        default: return false
-        }
+        await MicrophoneAccess.request() == .granted
     }
 }

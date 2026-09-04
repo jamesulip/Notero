@@ -1,8 +1,15 @@
-# Phase 1 findings
+# Findings
 
-What the vertical slice actually measured, and the two places the plan needs
-amending. Numbers are from a MacBook Pro M5 Pro (see ENVIRONMENT.md) — not the
-Mac mini M2 Pro the plan assumes.
+Measurements and failure modes recorded while building the Python server
+(phases 1–5) and the native app (phase 6). Several of these exist because a
+plausible-looking change quietly lost transcript data; this is the file to read
+before changing a model id, a decode parameter or the commit policy.
+
+Numbers are from a MacBook Pro M5 Pro (see [ENVIRONMENT.md](ENVIRONMENT.md)) —
+not the Mac mini M2 Pro [PLAN.md](PLAN.md) assumes, so they are an upper bound
+on that machine. "Section N" throughout refers to PLAN.md. Findings are
+numbered in the order they were found and are referenced by number elsewhere,
+so they are never renumbered.
 
 ## 1. The model ID in section 2 is ambiguous, and the obvious reading is wrong
 
@@ -314,10 +321,10 @@ model cannot be made to fail on demand.
 
 ## 10. The diarizer fuses similar voices that share a 10 s chunk
 
-Found on a real recording (an adult interviewing an 11-year-old, both female):
-every turn in the first 24 seconds came back as one speaker, including the
-interviewer's opening question, while the same interviewer was correctly split
-out as a second speaker later in the file.
+Found on a real recording of two female speakers with similar timbre: every
+turn in the first 24 seconds came back as one speaker, including the opening
+question, while the same speaker was correctly split out as a second speaker
+later in the file.
 
 **Mechanism.** FluidAudio cuts whatever audio it is handed into fixed 10 s
 chunks and extracts ONE embedding per *local segmentation slot* per chunk. The

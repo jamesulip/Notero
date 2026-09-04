@@ -91,6 +91,15 @@ final class BenchmarkMathTests: XCTestCase {
         XCTAssertEqual(report.recommendedTier, .balanced)
     }
 
+    func testFastestTierUsesMeasuredTimeRatherThanTierName() {
+        let report = BenchmarkReport(
+            runs: [run(.fast, rtf: 0.12), run(.balanced, rtf: 0.08),
+                   run(.accurate, rtf: 0.5)],
+            machine: "test", memoryGB: 16
+        )
+        XCTAssertEqual(report.fastestTier, .balanced)
+    }
+
     func testWordErrorRateCountsSubstitutionsInsertionsAndDeletions() {
         XCTAssertEqual(WordErrorRate.score(reference: "isa dalawa tatlo",
                                            hypothesis: "isa dalawa tatlo"),

@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>Live Transcriber — Phase 2</title>
+<title>Live Transcriber</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
@@ -33,8 +33,7 @@
                transition: width .06s linear; }
   #state { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
   main { padding: 20px 18px 80px; max-width: 760px; margin: 0 auto; font-size: 17px; }
-  /* Section 8 design contract: muted text may change, foreground text never will. */
-  #finals span { }
+  /* Design contract: muted text may change, foreground text never will. */
   #partial { color: var(--muted); }
   #stats { position: fixed; bottom: 0; left: 0; right: 0; padding: 9px 18px;
            border-top: 1px solid var(--line); background: var(--panel);
@@ -44,7 +43,7 @@
 </style>
 
 <header>
-  <h1>Live Transcriber <span style="color:var(--muted);font-weight:400">Phase 2</span></h1>
+  <h1>Live Transcriber</h1>
   <select id="lang" title="transcription language"><option>…</option></select>
   <select id="model" title="ASR model"><option>loading models…</option></select>
   <div id="meter" title="mic level"><i></i></div>
@@ -70,7 +69,7 @@ const goBtn = $('go'), muteBtn = $('mute');
 
 let ws = null, ctx = null, node = null, stream = null;
 let running = false, muted = false;
-let chunks = 0, audioMs = 0, sentBytes = 0;
+let chunks = 0, sentBytes = 0;
 
 // Reconnect state. Section 8: buffer ~30 s of audio while disconnected and
 // dedupe by segment id, so the server can safely replay its segment tail.
@@ -93,7 +92,7 @@ async function start() {
   if (!navigator.mediaDevices?.getUserMedia) {
     msg(window.isSecureContext
       ? 'This browser exposes no microphone API.'
-      : 'Microphone needs HTTPS (or localhost). Phase 3 adds TLS via Tailscale.', true);
+      : 'Microphone needs HTTPS (or localhost). See docs/DEPLOY.md to serve over TLS.', true);
     return;
   }
 
@@ -204,7 +203,7 @@ function onServerMessage({ data }) {
     $('s-rtf').textContent = (m.segment.end_ms / 1000).toFixed(1) + 's';
     window.scrollTo(0, document.body.scrollHeight);
   } else if (m.type === 'partial') {
-    // Provisional -- Phase 2 starts sending these.
+    // Provisional: may be replaced at any time.
     $('partial').textContent = m.text;
   } else if (m.type === 'error') {
     msg(`${m.code}: ${m.message}`, true);

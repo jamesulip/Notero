@@ -3,7 +3,7 @@ import TranscriberCore
 
 // The seam. Everything above this file talks to these three protocols and
 // never to WhisperKit or FluidAudio directly, so replacing a backend is a new
-// conformance plus one line in `EngineFactory` -- not a rewrite of the UI.
+// conformance plus one line in `EngineHost` -- not a rewrite of the UI.
 
 // MARK: - Speech recognition
 
@@ -119,7 +119,18 @@ public protocol SpeakerDiarizing: Sendable {
     /// memory-mapped file: two hours of 16 kHz audio is 460 MB as an array, and
     /// on a 16 GB machine already holding a 1.6 GB model that is the difference
     /// between running and swapping.
+    ///
+    /// `speechRegions` lets the backend skip long stretches VAD has already
+    /// proved silent. Nil means no VAD information is available and the whole
+    /// source must be processed. `mode` chooses whether the expensive per-turn
+    /// embedding pass runs after the first speaker pass.
+    ///
+    /// `expectedSpeakers` is how many people the user says were in the room.
+    /// A target for the clustering, never a cap; nil means no opinion.
     func diarize(_ source: any PCMSource,
+                 speechRegions: [SpeechRegion]?,
+                 mode: DiarizationMode,
+                 expectedSpeakers: Int?,
                  progress: (@Sendable (Double) -> Void)?) async throws -> [SpeakerSpan]
     func unload() async
 }
@@ -130,7 +141,6 @@ public enum EngineError: LocalizedError, Sendable {
     case modelNotLoaded
     case backendUnavailable(String)
     case audioUnreadable(String)
-    case cancelled
 
     public var errorDescription: String? {
         switch self {
@@ -140,8 +150,6 @@ public enum EngineError: LocalizedError, Sendable {
             return why
         case .audioUnreadable(let why):
             return "Could not read that audio: \(why)"
-        case .cancelled:
-            return "Cancelled."
         }
     }
 }

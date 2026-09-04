@@ -116,12 +116,33 @@ public enum OfflinePipeline {
     public struct DecodeReport: Sendable {
         public var tokens: [Token]
         public var detectedLanguage: String?
+        /// What the decoder reported for each window, in order. The single
+        /// `detectedLanguage` above is the first of these; on `auto` the rest
+        /// show whether the decoder changed its mind mid-recording, which is
+        /// the failure mode auto-detect is flagged for on Taglish.
+        public var windowLanguages: [String?] = []
         /// Windows that came back empty and succeeded on a warmer retry.
         public var retriedWindows: Int
         /// Windows that came back empty every time. Audio the transcript is
         /// missing, and the caller is expected to say so rather than present a
         /// short transcript as complete.
         public var droppedWindows: Int
+        /// Boundary to carry into a following batch. Kept public because the
+        /// whole-file streaming wrapper invokes this decoder once per VAD
+        /// batch while preserving overlap deduplication across calls.
+        public var nextFloorMs: Int = 0
+    }
+
+    /// Whole-file output when VAD and decoding are interleaved a few minutes
+    /// at a time. Timings are separate so the app can persist a useful stage
+    /// profile even though the two stages no longer run in two large blocks.
+    public struct FileDecodeReport: Sendable {
+        public var regions: [SpeechRegion]
+        public var decode: DecodeReport
+        public var windowCount: Int
+        public var speechWindowMs: Int
+        public var vadMs: Int
+        public var decodeMs: Int
     }
 
     /// Decodes every window and returns words on the file's timeline.
@@ -149,16 +170,22 @@ public enum OfflinePipeline {
         using asr: any SpeechRecognizing,
         language: String,
         prompt: String?,
-        progress: (@Sendable (Double) -> Void)? = nil
+        progress: (@Sendable (Double) -> Void)? = nil,
+        initialFloorMs: Int = 0,
+        /// Called after each window with the words it produced, already on the
+        /// file timeline and in order. What lets a two-hour transcript appear
+        /// as it is decoded rather than after.
+        onWindow: (@Sendable (_ tokens: [Token], _ window: SpeechRegion) -> Void)? = nil
     ) async throws -> DecodeReport {
         var tokens: [Token] = []
         var detected: String?
+        var perWindow: [String?] = []
         var retried = 0
         var dropped = 0
         /// Nothing may be emitted starting before this. Windows overlap by
         /// `padMs` so onsets are not clipped, and a word inside the overlap was
         /// already committed by the window before.
-        var floorMs = 0
+        var floorMs = initialFloorMs
 
         for (index, window) in windows.enumerated() {
             try Task.checkCancellation()
@@ -167,6 +194,7 @@ public enum OfflinePipeline {
                 notBefore: floorMs, depth: 0
             )
             detected = detected ?? outcome.language
+            perWindow.append(outcome.language)
             if outcome.tokens.isEmpty {
                 dropped += 1
             } else if outcome.neededRetry {
@@ -178,13 +206,112 @@ public enum OfflinePipeline {
                 floorMs = max(floorMs, last.endMs - 120)
             }
             tokens.append(contentsOf: outcome.tokens)
+            onWindow?(outcome.tokens, window)
             progress?(Double(index + 1) / Double(max(1, windows.count)))
         }
         return DecodeReport(
             tokens: tokens.sorted { $0.startMs < $1.startMs },
             detectedLanguage: detected,
+            windowLanguages: perWindow,
             retriedWindows: retried,
-            droppedWindows: dropped
+            droppedWindows: dropped,
+            nextFloorMs: floorMs
+        )
+    }
+
+    /// Scans and decodes a long file in bounded batches.
+    ///
+    /// The old path scanned the complete recording before the first Whisper
+    /// call. A four-hour file therefore sat at "Transcribing" with no text even
+    /// though every five-minute VAD result except its final seam was already
+    /// safe to decode. Here only a region touching the right processing seam is
+    /// carried forward; everything else is packed and decoded immediately.
+    /// VAD and ASR remain sequential so they do not contend for the ANE.
+    public static func transcribeFile(
+        source: any PCMSource,
+        using vad: any VoiceActivityDetecting,
+        asr: any SpeechRecognizing,
+        language: String,
+        prompt: String?,
+        progress: (@Sendable (Double) -> Void)? = nil,
+        onWindow: (@Sendable (_ tokens: [Token], _ window: SpeechRegion) -> Void)? = nil
+    ) async throws -> FileDecodeReport {
+        let chunks = source.windows(ofMs: 5 * 60 * 1000)
+        var carry: [SpeechRegion] = []
+        var allRegions: [SpeechRegion] = []
+        var allTokens: [Token] = []
+        var detected: String?
+        var languages: [String?] = []
+        var retried = 0
+        var dropped = 0
+        var floorMs = 0
+        var windowCount = 0
+        var speechWindowMs = 0
+        var vadMs = 0
+        var decodeMs = 0
+
+        for (index, chunk) in chunks.enumerated() {
+            try Task.checkCancellation()
+            let offsetMs = Audio.samplesToMs(chunk.lowerBound)
+            let chunkEndMs = Audio.samplesToMs(chunk.upperBound)
+
+            let vadStarted = Date()
+            let found = try await vad.regions(in: source.floats(chunk)).map {
+                SpeechRegion(startMs: $0.startMs + offsetMs,
+                             endMs: $0.endMs + offsetMs)
+            }
+            vadMs += Int(Date().timeIntervalSince(vadStarted) * 1000)
+
+            var candidates = joinAcrossSeam(carry, found, at: offsetMs)
+            carry.removeAll(keepingCapacity: true)
+            let isLast = index == chunks.count - 1
+            if !isLast, let last = candidates.last,
+               abs(last.endMs - chunkEndMs) <= seamToleranceMs {
+                carry = [last]
+                candidates.removeLast()
+            }
+            allRegions.append(contentsOf: candidates)
+            let batchWindows = windows(for: candidates, durationMs: source.durationMs)
+            windowCount += batchWindows.count
+            speechWindowMs += batchWindows.reduce(0) { $0 + $1.durationMs }
+
+            if !batchWindows.isEmpty {
+                let decodeStarted = Date()
+                let report = try await transcribe(
+                    source: source, windows: batchWindows, using: asr,
+                    language: language, prompt: prompt,
+                    progress: { batchFraction in
+                        let completed = Double(index) + batchFraction
+                        progress?(completed / Double(max(1, chunks.count)))
+                    },
+                    initialFloorMs: floorMs,
+                    onWindow: onWindow
+                )
+                decodeMs += Int(Date().timeIntervalSince(decodeStarted) * 1000)
+                allTokens.append(contentsOf: report.tokens)
+                detected = detected ?? report.detectedLanguage
+                languages.append(contentsOf: report.windowLanguages)
+                retried += report.retriedWindows
+                dropped += report.droppedWindows
+                floorMs = report.nextFloorMs
+            }
+            progress?(Double(index + 1) / Double(max(1, chunks.count)))
+        }
+
+        return FileDecodeReport(
+            regions: allRegions.sorted { $0.startMs < $1.startMs },
+            decode: DecodeReport(
+                tokens: allTokens.sorted { $0.startMs < $1.startMs },
+                detectedLanguage: detected,
+                windowLanguages: languages,
+                retriedWindows: retried,
+                droppedWindows: dropped,
+                nextFloorMs: floorMs
+            ),
+            windowCount: windowCount,
+            speechWindowMs: speechWindowMs,
+            vadMs: vadMs,
+            decodeMs: decodeMs
         )
     }
 

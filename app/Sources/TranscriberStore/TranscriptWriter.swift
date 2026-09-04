@@ -20,9 +20,11 @@ public actor TranscriptWriter {
         try modelContext.save()
     }
 
-    public func updateDuration(_ durationMs: Int, for id: UUID) throws {
+    /// Records that the job finished imperfectly. Nil clears it, which a new
+    /// job does before it starts.
+    public func setWarning(_ message: String?, for id: UUID) throws {
         guard let recording = try find(id) else { return }
-        recording.durationMs = durationMs
+        recording.warningMessage = message
         try modelContext.save()
     }
 
@@ -50,20 +52,6 @@ public actor TranscriptWriter {
         try modelContext.save()
     }
 
-    public func setWaveform(_ waveform: [Float], for id: UUID) throws {
-        guard let recording = try find(id) else { return }
-        recording.waveform = waveform
-        try modelContext.save()
-    }
-
-    public func setTitle(_ title: String, for id: UUID) throws {
-        guard let recording = try find(id) else { return }
-        recording.title = title
-        recording.updatedAt = Date()
-        RecordingStore.reindexOffMain(recording)
-        try modelContext.save()
-    }
-
     /// Replaces the transcript with a new revision.
     ///
     /// A revision rather than an edit: notes and action items hold segment ids,
@@ -72,7 +60,8 @@ public actor TranscriptWriter {
     @discardableResult
     public func storeTranscript(
         segments: [Segment], roster: [SpeakerLabel], modelId: String,
-        language: String, processMs: Int, didDiarize: Bool, for id: UUID
+        language: String, processMs: Int, didDiarize: Bool,
+        performanceJSON: String? = nil, for id: UUID
     ) throws -> Int {
         guard let recording = try find(id) else { return 0 }
 
@@ -80,10 +69,95 @@ public actor TranscriptWriter {
         let transcript = StoredTranscript(revision: revision, modelId: modelId,
                                           language: language)
         transcript.processMs = processMs
+        transcript.performanceJSON = performanceJSON
         transcript.didDiarize = didDiarize
         transcript.recording = recording
         modelContext.insert(transcript)
+        insert(segments, into: transcript)
 
+        syncSpeakers(roster, on: recording)
+        recording.updatedAt = Date()
+        RecordingStore.reindexOffMain(recording)
+        try modelContext.save()
+        return revision
+    }
+
+    // MARK: - Progressive transcription
+
+    /// Starts a revision that segments will be appended to while the job
+    /// decodes. Returns its id; `appendPartial` and `completeTranscript` take
+    /// it back, so a second job on the same recording can never append to the
+    /// first job's revision.
+    public func openPartialTranscript(modelId: String, language: String,
+                                      for id: UUID) throws -> UUID? {
+        guard let recording = try find(id) else { return nil }
+        let revision = ((recording.transcripts ?? []).map(\.revision).max() ?? 0) + 1
+        let transcript = StoredTranscript(revision: revision, modelId: modelId,
+                                          language: language)
+        transcript.isComplete = false
+        transcript.recording = recording
+        modelContext.insert(transcript)
+        recording.updatedAt = Date()
+        try modelContext.save()
+        return transcript.id
+    }
+
+    /// One decoded window's worth of segments.
+    ///
+    /// No reindex here: the search text is rebuilt once at completion. Doing it
+    /// per batch would walk every segment so far on every window.
+    public func appendPartial(_ segments: [Segment], to transcriptId: UUID) throws {
+        guard !segments.isEmpty, let transcript = try findTranscript(transcriptId) else { return }
+        insert(segments, into: transcript)
+        try modelContext.save()
+    }
+
+    /// Finishes a progressive transcript with the final segmentation.
+    ///
+    /// The final pass has the speaker spans and cuts segments at turns, which
+    /// the partial rows could not. So the partial rows are replaced, not kept:
+    /// a note lifted from a row during processing degrades to "no source" the
+    /// same way it does after a re-transcription. With no open revision
+    /// (nothing was decoded, or the job predates this path) it stores a new
+    /// one as `storeTranscript` does.
+    @discardableResult
+    public func completeTranscript(
+        _ transcriptId: UUID?, segments: [Segment], roster: [SpeakerLabel],
+        modelId: String, language: String, processMs: Int, didDiarize: Bool,
+        performanceJSON: String? = nil,
+        for id: UUID
+    ) throws -> Int {
+        guard let transcriptId,
+              let transcript = try findTranscript(transcriptId),
+              let recording = transcript.recording
+        else {
+            return try storeTranscript(segments: segments, roster: roster, modelId: modelId,
+                                       language: language, processMs: processMs,
+                                       didDiarize: didDiarize,
+                                       performanceJSON: performanceJSON, for: id)
+        }
+
+        for row in transcript.segments ?? [] { modelContext.delete(row) }
+        // Saved before the inserts, so the relationship the reindex walks
+        // holds only the final rows.
+        try modelContext.save()
+
+        insert(segments, into: transcript)
+        transcript.modelId = modelId
+        transcript.language = language
+        transcript.processMs = processMs
+        transcript.performanceJSON = performanceJSON
+        transcript.didDiarize = didDiarize
+        transcript.isComplete = true
+
+        syncSpeakers(roster, on: recording)
+        recording.updatedAt = Date()
+        RecordingStore.reindexOffMain(recording)
+        try modelContext.save()
+        return transcript.revision
+    }
+
+    private func insert(_ segments: [Segment], into transcript: StoredTranscript) {
         for segment in segments {
             let row = StoredSegment(
                 id: segment.id, index: segment.index, startMs: segment.startMs,
@@ -94,12 +168,14 @@ public actor TranscriptWriter {
             row.transcript = transcript
             modelContext.insert(row)
         }
+    }
 
-        syncSpeakers(roster, on: recording)
-        recording.updatedAt = Date()
-        RecordingStore.reindexOffMain(recording)
-        try modelContext.save()
-        return revision
+    private func findTranscript(_ id: UUID) throws -> StoredTranscript? {
+        var descriptor = FetchDescriptor<StoredTranscript>(
+            predicate: #Predicate { $0.id == id }
+        )
+        descriptor.fetchLimit = 1
+        return try modelContext.fetch(descriptor).first
     }
 
     /// Stamps speakers onto an existing transcript after diarization finishes.

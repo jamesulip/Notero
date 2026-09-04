@@ -34,6 +34,14 @@ public final class StoredRecording {
     /// 0...1 within the current stage. Stage comes from `status`.
     public var progress: Double = 0
     public var errorMessage: String?
+    /// The job finished, but not intact -- a window that would not decode,
+    /// speaker identification that failed. Kept on the row so it survives a
+    /// relaunch; a transcript missing a window looks merely short.
+    public var warningMessage: String?
+
+    /// How many people the user says were in the room, for speaker
+    /// identification to aim at. Nil until they say.
+    public var expectedSpeakers: Int?
 
     /// Meeting summary, hand-written in v1.
     public var summary: String = ""
@@ -107,9 +115,16 @@ public final class StoredTranscript {
     public var modelId: String = ""
     public var language: String = LanguageCatalogue.defaultLanguage
     public var createdAt: Date = Date.now
-    /// Wall-clock cost of producing it. Feeds the benchmark panel.
+    /// Wall-clock cost of producing it. Shown in the recording info bar.
     public var processMs: Int = 0
+    /// Per-stage performance counters encoded by the engine. Optional keeps
+    /// older stores and live-only transcripts valid without a migration shim.
+    public var performanceJSON: String?
     public var didDiarize: Bool = false
+    /// False while a whole-file job is still appending segments, and left
+    /// false if that job fails or is cancelled part-way: a partial transcript
+    /// is kept and labelled rather than thrown away.
+    public var isComplete: Bool = true
 
     public var recording: StoredRecording?
 
@@ -124,8 +139,11 @@ public final class StoredTranscript {
         self.language = language
     }
 
+    /// Deleted rows drop out at once rather than at the next save: a line the
+    /// user just removed must not reappear in the reindex or the export that
+    /// follows in the same breath.
     public var orderedSegments: [StoredSegment] {
-        (segments ?? []).sorted { $0.startMs < $1.startMs }
+        (segments ?? []).filter { !$0.isDeleted }.sorted { $0.startMs < $1.startMs }
     }
 }
 

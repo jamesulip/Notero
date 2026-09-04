@@ -58,10 +58,13 @@ public enum AudioCache {
         }
         reader.add(output)
 
-        guard let writer = WavWriter(url: destination) else {
-            throw EngineError.audioUnreadable("cannot write the working copy")
-        }
+        let writer = try WavWriter(url: destination)
         defer { writer.close() }
+
+        // Reported in whole percent, not per buffer. A 3h51m file yields 27,091
+        // sample buffers -- decoding them takes ~3 s, and telling anyone about
+        // each one costs orders of magnitude more than the decode.
+        var lastReported = -1.0
 
         guard reader.startReading() else {
             throw EngineError.audioUnreadable(reader.error?.localizedDescription ?? "reader failed")
@@ -80,7 +83,11 @@ public enum AudioCache {
                 }
             }
             let at = CMSampleBufferGetPresentationTimeStamp(sample)
-            progress?(min(1, max(0, CMTimeGetSeconds(at) / totalSeconds)))
+            let fraction = min(1, max(0, CMTimeGetSeconds(at) / totalSeconds))
+            if fraction - lastReported >= 0.01 {
+                lastReported = fraction
+                progress?(fraction)
+            }
             CMSampleBufferInvalidate(sample)
         }
 
@@ -102,15 +109,63 @@ public final class WavWriter: @unchecked Sendable {
     private var closed = false
     public let url: URL
 
-    public init?(url: URL) {
+    /// Why the working copy could not be opened.
+    ///
+    /// Worth a real error rather than a nil: this failure only ever shows up on
+    /// someone else's Mac, and `createFile` returns a bare `Bool` while the
+    /// `FileHandle` error was being swallowed by `try?`. The result was a
+    /// message that said "cannot open the working copy for writing" and named
+    /// neither the path nor the reason -- undiagnosable remotely, which is the
+    /// only place it happens.
+    public struct CannotWrite: LocalizedError {
+        public let url: URL
+        public let reason: String
+        /// Free space on the volume, when it could be read. A full disk is the
+        /// most common cause and the least obvious from the message.
+        public let availableBytes: Int64?
+
+        public var errorDescription: String? {
+            var text = "Could not open the working copy for writing.\n\(url.path)\n\(reason)"
+            if let availableBytes {
+                let free = ByteCountFormatter.string(fromByteCount: availableBytes,
+                                                     countStyle: .file)
+                text += "\n\(free) free on this volume."
+            }
+            return text
+        }
+    }
+
+    private static func freeBytes(near url: URL) -> Int64? {
+        try? url.deletingLastPathComponent()
+            .resourceValues(forKeys: [.volumeAvailableCapacityKey])
+            .volumeAvailableCapacity
+            .map(Int64.init)
+    }
+
+    public init(url: URL) throws {
         self.url = url
-        try? FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true
-        )
+        let directory = url.deletingLastPathComponent()
+
+        func fail(_ reason: String) -> CannotWrite {
+            CannotWrite(url: url, reason: reason, availableBytes: Self.freeBytes(near: url))
+        }
+
+        do {
+            try FileManager.default.createDirectory(at: directory,
+                                                    withIntermediateDirectories: true)
+        } catch {
+            throw fail("The folder could not be created: \(error.localizedDescription)")
+        }
         guard FileManager.default.createFile(atPath: url.path,
-                                             contents: Self.header(dataBytes: 0)),
-              let handle = try? FileHandle(forWritingTo: url) else { return nil }
-        self.handle = handle
+                                             contents: Self.header(dataBytes: 0)) else {
+            throw fail("The file could not be created. The folder may be read-only, "
+                     + "or the disk may be full.")
+        }
+        do {
+            handle = try FileHandle(forWritingTo: url)
+        } catch {
+            throw fail(error.localizedDescription)
+        }
         handle.seekToEndOfFile()
     }
 
@@ -215,11 +270,6 @@ public struct MappedPCM: @unchecked Sendable {
         }
     }
 
-    public func floats(msRange: Range<Int>) -> [Float] {
-        floats(Audio.msToSamples(msRange.lowerBound)..<Audio.msToSamples(msRange.upperBound))
-    }
-
-    public var allFloats: [Float] { floats(0..<sampleCount) }
 }
 
 extension Data {

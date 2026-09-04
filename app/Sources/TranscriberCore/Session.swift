@@ -41,8 +41,9 @@ public struct SessionConfig: Sendable, Equatable, Codable {
     }
 }
 
-/// Counters for the live path. Surfaced in the benchmark panel, because every
-/// one of them was a bug that was invisible until it was counted.
+/// Counters for the live path. The headline ones are surfaced in the recording
+/// footer's Stats popover, because every one of them was a bug that was
+/// invisible until it was counted.
 public struct SessionStats: Sendable, Equatable {
     public init() {}
 

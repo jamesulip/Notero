@@ -1,20 +1,55 @@
+# Runtime dependencies for the legacy Python server under server/.
+# The native macOS app under app/ needs none of this — see README.md.
+#
+#     python3 -m venv .venv
+#     ./.venv/bin/pip install -r requirements.txt
+#
+# Test dependencies are in requirements-dev.txt.
+# Pins are exact so a fresh install reproduces a measured configuration.
+
+# --- web layer -------------------------------------------------------------
+fastapi==0.141.1
+starlette==1.6.0
+uvicorn==0.52.4
+websockets==17.1
+
+# --- voice activity detection ----------------------------------------------
+# server/vad.py is on the mandatory live path: Pipeline defaults to SileroVAD()
+# when no VAD is injected, so the server cannot run a session without these.
+# onnxruntime is what load_silero_vad(onnx=True) needs (silero-vad declares it
+# only under its onnx-cpu extra); torch is imported directly by server/vad.py.
+# Spelled out rather than as an extra so this file also works as a pip
+# constraints file (-c), which extras are not allowed in.
+silero-vad==6.2.1
+onnxruntime==1.29.0
+torch==2.13.0
+numpy==2.5.2
+
+# --- transitive pins ------------------------------------------------------
+# Not imported directly. Kept pinned so an install is reproducible.
+# From fastapi:            pydantic, pydantic_core, annotated-*, typing-*
+# From uvicorn:            click, h11
+# From uvicorn[standard]:  httptools, python-dotenv, PyYAML, uvloop, watchfiles
+#   python-dotenv is what makes `uvicorn --env-file .env` work (see .env.example)
+#   and PyYAML is what makes `uvicorn --log-config <file>.yaml` work.
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.14.2
 click==8.5.0
-fastapi==0.141.1
 h11==0.16.0
 httptools==0.8.0
 idna==3.19
-numpy==2.5.2
 pydantic==2.13.5
 pydantic_core==2.46.5
 python-dotenv==1.2.3
 PyYAML==6.0.3
-starlette==1.6.0
 typing-inspection==0.4.4
 typing_extensions==4.16.0
-uvicorn==0.52.4
 uvloop==0.22.1
 watchfiles==1.2.0
-websockets==17.1
+
+# --- optional: the LLM cleanup pass ----------------------------------------
+# server/cleanup.py backs the /cleanup endpoint and imports mlx_lm lazily, so
+# the server starts and every other route works without this. Install it only
+# if you want that endpoint; it is Apple-silicon-only and pulls ~2 GB.
+#     ./.venv/bin/pip install mlx-lm==0.31.3

@@ -11,8 +11,8 @@ import TranscriberEngine
 //
 //   swift run -c release transcribe --audio clip.wav [--reference ref.txt]
 //                                   [--models DIR] [--model ID] [--tier fast]
-//                                   [--language tl] [--no-diarize] [--room-mode]
-//                                   [--format txt]
+//                                   [--language tl] [--fast-diarize|--no-diarize]
+//                                   [--room-mode] [--format txt]
 
 struct Options {
     var audio: URL?
@@ -22,7 +22,7 @@ struct Options {
     var modelId: String?
     var tier: ModelTier = .balanced
     var language = LanguageCatalogue.defaultLanguage
-    var diarize = true
+    var diarizationMode: DiarizationMode = .accurate
     var roomMode = false
     var format: ExportFormat = .txt
     var output: URL?
@@ -47,14 +47,15 @@ func parse() -> Options {
         case "--language": options.language = value() ?? options.language
         case "--format": options.format = value().flatMap(ExportFormat.init(rawValue:)) ?? options.format
         case "--out": options.output = value().map { URL(fileURLWithPath: $0) }
-        case "--no-diarize": options.diarize = false
+        case "--fast-diarize": options.diarizationMode = .fast
+        case "--no-diarize": options.diarizationMode = .off
         case "--room-mode": options.roomMode = true
         case "--help", "-h":
             print("""
             transcribe --audio FILE [--reference FILE] [--models DIR]
                        [--model ID | --tier fast|balanced|accurate]
-                       [--language tl] [--no-diarize] [--format txt|srt|vtt|json]
-                       [--out FILE]
+                       [--language tl] [--fast-diarize | --no-diarize] [--room-mode]
+                       [--format txt|markdown|srt|vtt|json] [--out FILE]
             """)
             exit(0)
         default:
@@ -74,6 +75,13 @@ guard let audioURL = options.audio else {
     log("error: --audio is required (see --help)")
     exit(2)
 }
+// Checked here so a wrong path says so. AVFoundation reports a missing file
+// as "The operation could not be completed", which sends people looking for
+// a codec problem they do not have.
+guard FileManager.default.fileExists(atPath: audioURL.path) else {
+    log("error: no such file: \(audioURL.path)")
+    exit(2)
+}
 
 let started = Date()
 let scratch = FileManager.default.temporaryDirectory
@@ -81,8 +89,19 @@ let scratch = FileManager.default.temporaryDirectory
 defer { try? FileManager.default.removeItem(at: scratch) }
 
 log("preparing 16 kHz working copy…")
-_ = try await AudioCache.build(from: audioURL, to: scratch)
-let rawPCM = try MappedPCM(contentsOf: scratch)
+do {
+    _ = try await AudioCache.build(from: audioURL, to: scratch)
+} catch {
+    log("error: could not read \(audioURL.path): \(error.localizedDescription)")
+    exit(1)
+}
+let rawPCM: MappedPCM
+do {
+    rawPCM = try MappedPCM(contentsOf: scratch)
+} catch {
+    log("error: \(error.localizedDescription)")
+    exit(1)
+}
 // Room mode wraps the source exactly as the queue does, so this verifies
 // the shipping filter rather than a second implementation of it.
 let source: any PCMSource = options.roomMode ? HighPassPCM(rawPCM) : rawPCM
@@ -93,11 +112,22 @@ let engines = EngineHost(modelsDirectory: options.models)
 let modelId = options.modelId ?? options.tier.defaultModelId
 log("model: \(modelId)")
 
-try await engines.loadModel(modelId) { message, _ in log("  \(message)") }
+do {
+    try await engines.loadModel(modelId) { message, _ in log("  \(message)") }
+} catch {
+    log("error: could not load model \(modelId): \(error.localizedDescription)")
+    exit(1)
+}
 try? await engines.prepareVAD { message, _ in log("  \(message)") }
 
 let vad = await engines.voiceActivity
-let regions = try await OfflinePipeline.speechRegions(in: source, using: vad)
+let regions: [SpeechRegion]
+do {
+    regions = try await OfflinePipeline.speechRegions(in: source, using: vad)
+} catch {
+    log("error: voice activity detection failed: \(error.localizedDescription)")
+    exit(1)
+}
 let windows = OfflinePipeline.windows(for: regions, durationMs: source.durationMs)
 if ProcessInfo.processInfo.environment["TRANSCRIBE_DEBUG_SPANS"] != nil {
     for region in regions {
@@ -110,10 +140,16 @@ log("speech: \(regions.count) regions, \(TimeFormat.short(ms: speechMs)) in \(wi
 
 let decodeStarted = Date()
 let asr = await engines.recognizer
-let decoded = try await OfflinePipeline.transcribe(
-    source: source, windows: windows, using: asr,
-    language: options.language, prompt: nil
-)
+let decoded: OfflinePipeline.DecodeReport
+do {
+    decoded = try await OfflinePipeline.transcribe(
+        source: source, windows: windows, using: asr,
+        language: options.language, prompt: nil
+    )
+} catch {
+    log("error: transcription failed: \(error.localizedDescription)")
+    exit(1)
+}
 let decodeMs = Int(Date().timeIntervalSince(decodeStarted) * 1000)
 log("decoded \(decoded.tokens.count) words in \(TimeFormat.short(ms: decodeMs)) "
     + "(RTF \(String(format: "%.3f", Double(decodeMs) / Double(max(1, source.durationMs)))))")
@@ -122,11 +158,13 @@ if decoded.droppedWindows > 0 { log("  WARNING \(decoded.droppedWindows) window(
 
 var spans: [SpeakerSpan] = []
 var roster: [SpeakerLabel] = []
-if options.diarize {
+if options.diarizationMode.performsDiarization {
     do {
         try await engines.prepareDiarizer { message, _ in log("  \(message)") }
         let diarizeStarted = Date()
-        let raw = try await engines.diarize(source)
+        let raw = try await engines.diarize(
+            source, mode: options.diarizationMode
+        )
         if ProcessInfo.processInfo.environment["TRANSCRIBE_DEBUG_SPANS"] != nil {
             for span in raw.sorted(by: { $0.startMs < $1.startMs }) {
                 log(String(format: "  span %7.2f-%7.2f %@ q=%.2f",
@@ -149,7 +187,7 @@ let segments = SegmentMerger.segments(from: decoded.tokens, spans: spans)
 let document = MeetingDocument(
     id: UUID(),
     title: audioURL.deletingPathExtension().lastPathComponent,
-    kind: options.diarize ? .meeting : .recording,
+    kind: options.diarizationMode.performsDiarization ? .meeting : .recording,
     createdAt: Date(),
     durationMs: source.durationMs,
     language: decoded.detectedLanguage ?? options.language,
@@ -161,14 +199,25 @@ let document = MeetingDocument(
 
 let rendered = Exporter.render(options.format, document: document)
 if let output = options.output {
-    try rendered.write(to: output, atomically: true, encoding: .utf8)
+    do {
+        try rendered.write(to: output, atomically: true, encoding: .utf8)
+    } catch {
+        log("error: could not write \(output.path): \(error.localizedDescription)")
+        exit(1)
+    }
     log("wrote \(output.path)")
 } else {
     print(rendered)
 }
 
 if let referenceURL = options.reference {
-    let reference = try String(contentsOf: referenceURL, encoding: .utf8)
+    let reference: String
+    do {
+        reference = try String(contentsOf: referenceURL, encoding: .utf8)
+    } catch {
+        log("error: could not read \(referenceURL.path): \(error.localizedDescription)")
+        exit(1)
+    }
     let hypothesis = segments.map(\.displayText).joined(separator: " ")
     let wer = WordErrorRate.score(reference: reference, hypothesis: hypothesis)
     log(String(format: "WER %.4f (%.1f%%)", wer, wer * 100))

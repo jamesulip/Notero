@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 
 SAMPLE_RATE = 16_000
 BYTES_PER_SAMPLE = 2
-BYTES_PER_MS = SAMPLE_RATE * BYTES_PER_SAMPLE // 1000  # 32
 
 
 def ms_to_bytes(ms: int) -> int:
@@ -121,13 +120,11 @@ class Session:
     # agreement and forces commits instead. See docs/FINDINGS.md.
     hop_ms: int = 1_500
     silence_boundary_ms: int = 700
-    min_speech_ms: int = 120
 
     ring: RingBuffer = field(init=False)
     stats: Stats = field(default_factory=Stats)
     next_segment_id: int = 0
     _ms_since_hop: int = 0
-    _boundary_pending: bool = False
 
     def __post_init__(self) -> None:
         self.ring = RingBuffer(self.context_ms)

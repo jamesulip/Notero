@@ -81,6 +81,19 @@ public struct BenchmarkReport: Sendable, Codable {
         let pick = live.max { $0.rtf < $1.rtf } ?? usable.min { $0.rtf < $1.rtf }
         return pick?.tier
     }
+
+    /// The tier that actually finished fastest on this machine and clip.
+    ///
+    /// Quantized models use less memory but are not necessarily lower latency
+    /// on every Apple Silicon generation. Keeping this separate from
+    /// `recommendedTier` lets the UI offer a speed-first choice without
+    /// changing the existing accuracy-first recommendation.
+    public var fastestTier: ModelTier? {
+        runs
+            .filter { $0.failure == nil && $0.processMs > 0 }
+            .min { $0.processMs < $1.processMs }?
+            .tier
+    }
 }
 
 /// Resident memory of this process, in megabytes.

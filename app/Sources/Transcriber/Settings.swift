@@ -13,6 +13,9 @@ final class AppSettings {
         static let overrides = "model.overrides"
         static let language = "transcription.language"
         static let prompt = "transcription.prompt"
+        static let diarizationMode = "transcription.diarizationMode"
+        /// Legacy Boolean, read once when upgrading from builds before the
+        /// Off/Fast/Accurate choice existed.
         static let diarize = "transcription.diarize"
         static let neuralVAD = "transcription.neuralVAD"
         static let liveTranscription = "recording.live"
@@ -20,6 +23,9 @@ final class AppSettings {
         static let inputGainDb = "recording.inputGainDb"
         static let roomMode = "recording.roomMode"
         static let benchmark = "benchmark.lastReport"
+        static let inspectorShown = "ui.inspectorShown"
+        static let clockTimestamps = "ui.clockTimestamps"
+        static let hasSeenWelcome = "ui.hasSeenWelcome"
     }
 
     private let defaults: UserDefaults
@@ -29,7 +35,13 @@ final class AppSettings {
         tier = ModelTier(rawValue: defaults.string(forKey: Key.tier) ?? "") ?? .balanced
         language = defaults.string(forKey: Key.language) ?? LanguageCatalogue.defaultLanguage
         prompt = defaults.string(forKey: Key.prompt) ?? ""
-        diarize = defaults.object(forKey: Key.diarize) as? Bool ?? true
+        if let raw = defaults.string(forKey: Key.diarizationMode),
+           let mode = DiarizationMode(rawValue: raw) {
+            diarizationMode = mode
+        } else {
+            let legacy = defaults.object(forKey: Key.diarize) as? Bool ?? true
+            diarizationMode = legacy ? .accurate : .off
+        }
         neuralVAD = defaults.object(forKey: Key.neuralVAD) as? Bool ?? true
         liveTranscription = defaults.object(forKey: Key.liveTranscription) as? Bool ?? true
         keepWorkingCopy = defaults.object(forKey: Key.keepWorkingCopy) as? Bool ?? false
@@ -38,12 +50,40 @@ final class AppSettings {
         gainDb = InputGain.clampDb(
             defaults.object(forKey: Key.inputGainDb) as? Float ?? InputGain.defaultDb
         )
+        inspectorShown = defaults.dictionary(forKey: Key.inspectorShown) as? [String: Bool] ?? [:]
+        clockTimestamps = defaults.object(forKey: Key.clockTimestamps) as? Bool ?? false
+        hasSeenWelcome = defaults.object(forKey: Key.hasSeenWelcome) as? Bool ?? false
+    }
+
+    // MARK: - Interface
+
+    /// Show transcript times as time of day ("9:47:12 PM") rather than offsets.
+    var clockTimestamps: Bool { didSet { defaults.set(clockTimestamps, forKey: Key.clockTimestamps) } }
+
+    /// The first-run card has been dismissed.
+    var hasSeenWelcome: Bool { didSet { defaults.set(hasSeenWelcome, forKey: Key.hasSeenWelcome) } }
+
+    /// Whether the meeting workspace is open, remembered per recording kind:
+    /// meetings want it, plain recordings usually do not, and the choice
+    /// used to reset every time a row was selected.
+    private(set) var inspectorShown: [String: Bool] {
+        didSet { defaults.set(inspectorShown, forKey: Key.inspectorShown) }
+    }
+
+    func inspectorShown(for kind: RecordingKind) -> Bool {
+        inspectorShown[kind.rawValue] ?? (kind == .meeting)
+    }
+
+    func setInspectorShown(_ shown: Bool, for kind: RecordingKind) {
+        inspectorShown[kind.rawValue] = shown
     }
 
     var tier: ModelTier { didSet { defaults.set(tier.rawValue, forKey: Key.tier) } }
     var language: String { didSet { defaults.set(language, forKey: Key.language) } }
     var prompt: String { didSet { defaults.set(prompt, forKey: Key.prompt) } }
-    var diarize: Bool { didSet { defaults.set(diarize, forKey: Key.diarize) } }
+    var diarizationMode: DiarizationMode {
+        didSet { defaults.set(diarizationMode.rawValue, forKey: Key.diarizationMode) }
+    }
     var neuralVAD: Bool { didSet { defaults.set(neuralVAD, forKey: Key.neuralVAD) } }
     var liveTranscription: Bool { didSet { defaults.set(liveTranscription, forKey: Key.liveTranscription) } }
     var keepWorkingCopy: Bool { didSet { defaults.set(keepWorkingCopy, forKey: Key.keepWorkingCopy) } }
@@ -69,8 +109,9 @@ final class AppSettings {
         }
     }
 
-    /// Per-tier model id, once the benchmark has found something better than
-    /// the default mapping on this machine.
+    /// Per-tier model id override. Read-only in the app: the benchmark
+    /// recommends a tier but does not persist one, so this is empty unless an
+    /// earlier build wrote it. `modelId(for:)` falls back to the tier default.
     private(set) var overrides: [String: String] {
         didSet { defaults.set(overrides, forKey: Key.overrides) }
     }
@@ -78,12 +119,6 @@ final class AppSettings {
     func modelId(for tier: ModelTier) -> String {
         overrides[tier.rawValue] ?? tier.defaultModelId
     }
-
-    func setModel(_ id: String, for tier: ModelTier) {
-        overrides[tier.rawValue] = id
-    }
-
-    func resetOverrides() { overrides = [:] }
 
     /// The model used for the live path.
     ///

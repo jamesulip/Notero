@@ -154,7 +154,7 @@ struct BenchmarkView: View {
 
             if let recommended = report.recommendedTier {
                 HStack {
-                    Label("Recommended for this Mac: \(recommended.label)",
+                    Label("Best quality that keeps up: \(recommended.label)",
                           systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.green)
                     Spacer()
@@ -163,6 +163,19 @@ struct BenchmarkView: View {
                     }
                 }
                 .padding(.top, 4)
+            }
+
+            if let fastest = report.fastestTier,
+               fastest != report.recommendedTier {
+                HStack {
+                    Label("Fastest measured: \(fastest.label)",
+                          systemImage: "bolt.fill")
+                        .foregroundStyle(.blue)
+                    Spacer()
+                    Button("Use \(fastest.label)") {
+                        state.settings.tier = fastest
+                    }
+                }
             }
         }
     }

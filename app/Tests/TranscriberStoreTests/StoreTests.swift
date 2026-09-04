@@ -73,6 +73,22 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(sections[0].items.first?.title, "Today")
     }
 
+    func testFailedRecordingsAreGroupedForAttentionAheadOfTheDates() throws {
+        let now = Date()
+        let context = try makeContext()
+        let fine = try RecordingStore.create(kind: .recording, title: "Fine", in: context, at: now)
+        let broken = try RecordingStore.create(
+            kind: .recording, title: "Broken", in: context,
+            at: Calendar.current.date(byAdding: .day, value: -40, to: now)!
+        )
+        broken.status = .failed
+
+        let sections = RecordingStore.group([fine, broken], now: now)
+        XCTAssertEqual(sections.map(\.bucket), [.attention, .today])
+        XCTAssertEqual(sections[0].items.map(\.title), ["Broken"],
+                       "a failed row surfaces however old it is")
+    }
+
     func testHistoryIsNewestFirstWithinASection() throws {
         // Midday, fixed. With `Date()` this passed all day and failed after
         // midnight: "an hour ago" crosses into yesterday, so the two recordings
@@ -116,6 +132,52 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(speaker.displayName, "Speaker 2")
     }
 
+    func testMergingASpeakerRecreditsTheirLinesAndRemovesTheRow() throws {
+        let context = try makeContext()
+        let recording = try seed(context)
+        let juan = (recording.speakers ?? []).first { $0.speakerId == "S1" }!
+        let maria = (recording.speakers ?? []).first { $0.speakerId == "S2" }!
+
+        try RecordingStore.merge(maria, into: juan, in: context)
+
+        XCTAssertEqual((recording.speakers ?? []).map(\.speakerId), ["S1"])
+        XCTAssertEqual(recording.transcript?.orderedSegments.map(\.speakerId), ["S1", "S1"])
+        XCTAssertEqual(juan.speechMs, 6_000, "talk time moves with the lines")
+        XCTAssertEqual(RecordingStore.document(for: recording).name(for: "S1"), "Juan")
+    }
+
+    func testMergingASpeakerIntoItselfIsANoOp() throws {
+        let context = try makeContext()
+        let recording = try seed(context)
+        let juan = (recording.speakers ?? []).first { $0.speakerId == "S1" }!
+        try RecordingStore.merge(juan, into: juan, in: context)
+        XCTAssertEqual(recording.speakers?.count, 2)
+    }
+
+    func testAssigningLinesMovesTalkTimeBetweenSpeakers() throws {
+        let context = try makeContext()
+        let recording = try seed(context)
+        let juan = (recording.speakers ?? []).first { $0.speakerId == "S1" }!
+        let maria = (recording.speakers ?? []).first { $0.speakerId == "S2" }!
+        let mariasLine = recording.transcript!.orderedSegments[1]
+
+        try RecordingStore.assign([mariasLine], to: juan, on: recording, in: context)
+
+        XCTAssertEqual(mariasLine.speakerId, "S1")
+        XCTAssertEqual(juan.speechMs, 6_000)
+        XCTAssertEqual(maria.speechMs, 0)
+        XCTAssertEqual(recording.speakers?.count, 2, "an emptied speaker stays until merged")
+    }
+
+    func testANewSpeakerIsNumberedAfterTheRoster() throws {
+        let context = try makeContext()
+        let recording = try seed(context)
+        let added = try RecordingStore.addSpeaker(to: recording, in: context)
+        XCTAssertEqual(added.speakerId, "S3")
+        XCTAssertEqual(added.displayName, "Speaker 3")
+        XCTAssertEqual(added.colorIndex, 2, "gets the next colour, not a reused one")
+    }
+
     func testSyncSpeakersDropsLabelsTheNewTranscriptNoLongerUses() throws {
         let context = try makeContext()
         let recording = try seed(context)
@@ -123,6 +185,40 @@ final class StoreTests: XCTestCase {
                                     on: recording, in: context)
         try context.save()
         XCTAssertEqual((recording.speakers ?? []).map(\.speakerId), ["S1"])
+    }
+
+    // MARK: - Editing
+
+    func testAnEditedLineIsWhatSearchAndExportSee() throws {
+        // Edits go to textClean; the raw model output stays. Search text is
+        // rebuilt on reindex, and the exporter reads displayText.
+        let context = try makeContext()
+        let recording = try seed(context)
+        let row = recording.transcript!.orderedSegments[1]
+
+        row.textClean = "Let's target September 16 for launch."
+        RecordingStore.reindex(recording)
+        try context.save()
+
+        XCTAssertEqual(row.text, "Let's target September 15 for launch.", "raw text is kept")
+        XCTAssertFalse(try SearchService.search("September 16", in: context).isEmpty)
+        XCTAssertTrue(try SearchService.search("September 15", in: context).isEmpty)
+        let exported = Exporter.render(.txt, document: RecordingStore.document(for: recording))
+        XCTAssertTrue(exported.contains("September 16"))
+        XCTAssertFalse(exported.contains("September 15"))
+    }
+
+    func testDeletingALineLeavesTheRestOfTheTranscript() throws {
+        let context = try makeContext()
+        let recording = try seed(context)
+        let doomed = recording.transcript!.orderedSegments[0]
+
+        context.delete(doomed)
+        RecordingStore.reindex(recording)
+        try context.save()
+
+        XCTAssertEqual(recording.transcript?.orderedSegments.count, 1)
+        XCTAssertFalse(recording.searchText.contains("Magandang"))
     }
 
     // MARK: - Notes

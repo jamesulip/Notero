@@ -67,11 +67,30 @@ public enum ModelCatalogue {
     }
 
     /// WhisperKit lays models out under <base>/models/<repo>/<model-id>/.
+    public static func directory(for id: String, modelsDirectory: URL) -> URL {
+        modelsDirectory.appendingPathComponent("models/argmaxinc/whisperkit-coreml/\(id)",
+                                               isDirectory: true)
+    }
+
+    /// The decoder is the last file WhisperKit writes, so its presence means
+    /// the download finished rather than merely started.
     public static func isDownloaded(_ id: String, modelsDirectory: URL) -> Bool {
-        let path = modelsDirectory
-            .appendingPathComponent("models/argmaxinc/whisperkit-coreml/\(id)")
+        let path = directory(for: id, modelsDirectory: modelsDirectory)
             .appendingPathComponent("TextDecoder.mlmodelc")
         return FileManager.default.fileExists(atPath: path.path)
+    }
+
+    /// Bytes on disk for a downloaded model, or nil when it is not there.
+    public static func sizeOnDisk(_ id: String, modelsDirectory: URL) -> Int64? {
+        let root = directory(for: id, modelsDirectory: modelsDirectory)
+        guard FileManager.default.fileExists(atPath: root.path),
+              let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.fileSizeKey])
+        else { return nil }
+        var total: Int64 = 0
+        for case let file as URL in files {
+            total += Int64((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+        return total
     }
 }
 
@@ -167,4 +186,38 @@ public enum ModelTier: String, CaseIterable, Identifiable, Sendable, Codable {
     /// every hop would be dropped and the commit policy would never see two
     /// consecutive passes.
     public var suitableForLive: Bool { self != .accurate }
+}
+
+/// How much speaker-identification work to do after transcription.
+///
+/// The first FluidAudio pass already finds turns and speaker clusters. The
+/// accurate mode then extracts a fresh embedding for every turn and clusters
+/// them again, fixing similar voices that shared an internal 10-second chunk.
+/// That second pass is valuable, but on a multi-hour recording it is also a
+/// substantial, optional tail after the transcript itself is complete.
+public enum DiarizationMode: String, CaseIterable, Identifiable, Sendable, Codable {
+    case off, fast, accurate
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .off: return "Off"
+        case .fast: return "Fast"
+        case .accurate: return "Accurate"
+        }
+    }
+
+    public var summary: String {
+        switch self {
+        case .off:
+            return "Skip speaker identification. The transcript finishes as soon as speech recognition does."
+        case .fast:
+            return "One speaker pass. Much shorter on long recordings, but similar voices may be merged."
+        case .accurate:
+            return "Rechecks every speaker turn. Best labels, with a longer post-transcription pass."
+        }
+    }
+
+    public var performsDiarization: Bool { self != .off }
 }
