@@ -26,7 +26,7 @@ public actor VADEngine: VoiceActivityDetecting {
     private let fallback = EnergyVoiceActivity()
 
     /// 4096 samples at 16 kHz: 256 ms. FluidAudio's unified model's window.
-    private static let chunkSamples = VadManager.chunkSize
+    public static let chunkSamples = VadManager.chunkSize
     private static var chunkMs: Int { chunkSamples * 1000 / Audio.sampleRate }
 
     private var pending: [Float] = []

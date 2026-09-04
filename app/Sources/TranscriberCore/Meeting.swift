@@ -32,7 +32,7 @@ public enum RecordingKind: String, Codable, CaseIterable, Sendable {
 /// durations, and a progress bar that sits at "working" for eleven minutes of
 /// diarization reads as a hang.
 public enum TranscriptionStatus: String, Codable, CaseIterable, Sendable {
-    case pending, preparing, transcribing, diarizing, finalizing, completed, failed
+    case pending, preparing, transcribing, diarizing, finalizing, completed, cancelled, failed
     /// Live transcription in progress; the recording is still being captured.
     case recording
 
@@ -45,11 +45,12 @@ public enum TranscriptionStatus: String, Codable, CaseIterable, Sendable {
         case .diarizing: return "Identifying speakers"
         case .finalizing: return "Finalizing"
         case .completed: return "Completed"
+        case .cancelled: return "Cancelled"
         case .failed: return "Failed"
         }
     }
 
-    public var isTerminal: Bool { self == .completed || self == .failed }
+    public var isTerminal: Bool { self == .completed || self == .cancelled || self == .failed }
     public var isBusy: Bool { !isTerminal && self != .pending }
 }
 

@@ -58,6 +58,11 @@ DerivedData/
 # compiled from app/scripts/click.swift on demand
 app/scripts/click
 
+# the release signing key. It lives at ~/.config/transcriber/release-key, but
+# TRANSCRIBER_RELEASE_KEY can point anywhere, so refuse it here as well.
+release-key
+*.pem
+
 # screenshots from app/scripts/snap.sh show the real library, with real
 # meeting titles and transcript text. Scoped to app/ so a deliberate
 # docs/ screenshot stays committable.
@@ -66,3 +71,6 @@ app/scripts/click
 
 # logs, including the test.log the CI workflow tees
 *.log
+
+# Replay and benchmark outputs (eval/compare_language.py, transcribe --json)
+eval/out/

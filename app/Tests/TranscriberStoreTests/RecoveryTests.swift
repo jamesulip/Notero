@@ -62,12 +62,14 @@ final class RecoveryTests: XCTestCase {
 
     func testFinishedRecordingsAreLeftAlone() throws {
         let done = try recording(.completed)
+        let cancelled = try recording(.cancelled)
         let failed = try recording(.failed)
         failed.errorMessage = "the original reason"
 
         XCTAssertEqual(try RecordingStore.recoverInterrupted(in: context), 0)
 
         XCTAssertEqual(done.status, .completed)
+        XCTAssertEqual(cancelled.status, .cancelled)
         XCTAssertEqual(failed.errorMessage, "the original reason",
                        "recovery must not overwrite a real failure")
     }
@@ -118,6 +120,37 @@ final class RecoveryTests: XCTestCase {
         XCTAssertTrue(recording.errorMessage?.contains("part-way") ?? false,
                       "got: \(recording.errorMessage ?? "nil")")
         XCTAssertEqual(recording.transcript?.orderedSegments.count, 1, "the rows stay")
+        XCTAssertEqual(recording.transcript?.isComplete, false)
+    }
+}
+
+extension RecoveryTests {
+    func testAnInterruptedLiveRecordingKeepsItsCommittedLines() throws {
+        // The live session writes committed lines as it goes. A crash
+        // mid-meeting leaves those rows under an open revision on a row still
+        // marked `recording`; they must survive, and the message must say so.
+        let recording = try RecordingStore.create(kind: .meeting, in: context)
+        recording.status = .recording
+        recording.audioFileName = "2026/09/live.m4a"
+        let transcript = StoredTranscript(modelId: "turbo", language: "tl")
+        transcript.isComplete = false
+        transcript.recording = recording
+        context.insert(transcript)
+        for (index, text) in ["So yung quotation", "kailangan nating i-send tomorrow"].enumerated() {
+            let row = StoredSegment(index: index, startMs: index * 2_000,
+                                    endMs: index * 2_000 + 1_900, text: text)
+            row.transcript = transcript
+            context.insert(row)
+        }
+        try context.save()
+
+        try RecordingStore.recoverInterrupted(in: context)
+
+        XCTAssertEqual(recording.status, .failed)
+        XCTAssertTrue(recording.errorMessage?.contains("Recording was interrupted") ?? false,
+                      "got: \(recording.errorMessage ?? "nil")")
+        XCTAssertEqual(recording.transcript?.orderedSegments.map(\.text),
+                       ["So yung quotation", "kailangan nating i-send tomorrow"])
         XCTAssertEqual(recording.transcript?.isComplete, false)
     }
 }

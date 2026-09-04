@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assembles Transcriber.app.
+# Assembles Notero.app.
 #
 # The bundle is not cosmetic. macOS only grants microphone access to a signed
 # app bundle carrying NSMicrophoneUsageDescription -- a bare SwiftPM executable
@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 CONFIG=${1:-release}
-APP="Transcriber.app"
+APP="Notero.app"
 BIN=".build/$CONFIG/Transcriber"
 
 # Marketing version from VERSION; build number from the commit count, so two
@@ -23,26 +23,26 @@ swift build -c "$CONFIG"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/Transcriber"
+cp "$BIN" "$APP/Contents/MacOS/Notero"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>              <string>Transcriber</string>
-    <key>CFBundleDisplayName</key>       <string>Transcriber</string>
-    <key>CFBundleIdentifier</key>        <string>local.transcriber</string>
+    <key>CFBundleName</key>              <string>Notero</string>
+    <key>CFBundleDisplayName</key>       <string>Notero</string>
+    <key>CFBundleIdentifier</key>        <string>local.notero</string>
     <key>CFBundleVersion</key>           <string>$BUILD</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundlePackageType</key>       <string>APPL</string>
-    <key>CFBundleExecutable</key>        <string>Transcriber</string>
+    <key>CFBundleExecutable</key>        <string>Notero</string>
     <key>LSMinimumSystemVersion</key>    <string>15.0</string>
     <key>LSApplicationCategoryType</key> <string>public.app-category.productivity</string>
     <key>NSHighResolutionCapable</key>   <true/>
     <key>NSSupportsAutomaticTermination</key><false/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Transcriber records audio from your microphone to transcribe it on this Mac. Audio never leaves the machine.</string>
+    <string>Notero records audio from your microphone to transcribe it on this Mac. Audio never leaves the machine.</string>
     <!-- Declared so dropping media onto the Dock icon works, not only onto the window. -->
     <key>CFBundleDocumentTypes</key>
     <array>

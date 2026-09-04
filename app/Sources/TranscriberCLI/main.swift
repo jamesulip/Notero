@@ -4,15 +4,22 @@ import TranscriberEngine
 
 // Headless end-to-end run of the same pipeline the app uses.
 //
-// Not a second implementation: it calls `OfflinePipeline`, `SpeakerEngine` and
-// `Exporter` exactly as the queue does. That is the point -- it verifies the
-// real path on real audio without a window, a microphone, or a human, which is
-// what makes it usable from CI and from the eval harness in ../eval.
+// Not a second implementation: it calls `OfflinePipeline`, `LiveDecoder`,
+// `SpeakerEngine` and `Exporter` exactly as the app does. That is the point --
+// it verifies the real path on real audio without a window, a microphone, or a
+// human, which is what makes it usable from CI and from the eval harness in
+// ../eval.
 //
 //   swift run -c release transcribe --audio clip.wav [--reference ref.txt]
 //                                   [--models DIR] [--model ID] [--tier fast]
 //                                   [--language tl] [--fast-diarize|--no-diarize]
-//                                   [--room-mode] [--format txt]
+//                                   [--format txt] [--json report.json]
+//
+// `--live` replays the file through the live path instead -- ring buffer, VAD,
+// hop schedule, LocalAgreement and finalization -- feeding 100 ms at a time.
+// By default every decode is awaited so the schedule runs as if the model were
+// infinitely fast and nothing is dropped: that measures the mechanism.
+// `--realtime` paces the feed at wall-clock speed instead and measures drops.
 
 struct Options {
     var audio: URL?
@@ -26,6 +33,14 @@ struct Options {
     var roomMode = false
     var format: ExportFormat = .txt
     var output: URL?
+    var json: URL?
+    // Live replay.
+    var live = false
+    var realtime = false
+    var hopMs = SessionConfig().hopMs
+    var preRollMs = SessionConfig().preRollMs
+    var contextMs = SessionConfig().contextMs
+    var adaptiveHop = false
 }
 
 func parse() -> Options {
@@ -47,15 +62,23 @@ func parse() -> Options {
         case "--language": options.language = value() ?? options.language
         case "--format": options.format = value().flatMap(ExportFormat.init(rawValue:)) ?? options.format
         case "--out": options.output = value().map { URL(fileURLWithPath: $0) }
+        case "--json": options.json = value().map { URL(fileURLWithPath: $0) }
         case "--fast-diarize": options.diarizationMode = .fast
         case "--no-diarize": options.diarizationMode = .off
         case "--room-mode": options.roomMode = true
+        case "--live": options.live = true
+        case "--realtime": options.realtime = true
+        case "--adaptive-hop": options.adaptiveHop = true
+        case "--hop": options.hopMs = value().flatMap(Int.init) ?? options.hopMs
+        case "--pre-roll": options.preRollMs = value().flatMap(Int.init) ?? options.preRollMs
+        case "--context": options.contextMs = value().flatMap(Int.init) ?? options.contextMs
         case "--help", "-h":
             print("""
             transcribe --audio FILE [--reference FILE] [--models DIR]
                        [--model ID | --tier fast|balanced|accurate]
                        [--language tl] [--fast-diarize | --no-diarize] [--room-mode]
-                       [--format txt|markdown|srt|vtt|json] [--out FILE]
+                       [--format txt|markdown|srt|vtt|json] [--out FILE] [--json FILE]
+                       [--live [--realtime] [--hop MS] [--pre-roll MS] [--context MS] [--adaptive-hop]]
             """)
             exit(0)
         default:
@@ -68,6 +91,26 @@ func parse() -> Options {
 
 func log(_ message: String) {
     FileHandle.standardError.write(Data((message + "\n").utf8))
+}
+
+/// One run, machine-readable. What `eval/compare_language.py` reads.
+struct RunReport: Codable {
+    var audio: String
+    var mode: String
+    var model: String
+    var language: String
+    var detectedLanguage: String?
+    var windowLanguages: [String?]
+    var durationMs: Int
+    var decodeMs: Int
+    /// Wall-clock decode time over audio duration.
+    var rtf: Double
+    var wordCount: Int
+    var transcript: String
+    var words: [Token]
+    var wer: Double?
+    var live: SessionStats?
+    var config: SessionConfig?
 }
 
 let options = parse()
@@ -119,42 +162,104 @@ do {
     exit(1)
 }
 try? await engines.prepareVAD { message, _ in log("  \(message)") }
-
 let vad = await engines.voiceActivity
-let regions: [SpeechRegion]
-do {
-    regions = try await OfflinePipeline.speechRegions(in: source, using: vad)
-} catch {
-    log("error: voice activity detection failed: \(error.localizedDescription)")
-    exit(1)
-}
-let windows = OfflinePipeline.windows(for: regions, durationMs: source.durationMs)
-if ProcessInfo.processInfo.environment["TRANSCRIBE_DEBUG_SPANS"] != nil {
-    for region in regions {
-        log(String(format: "  region %7.2f-%7.2f",
-                   Double(region.startMs) / 1000, Double(region.endMs) / 1000))
+let asr = await engines.recognizer
+
+var tokens: [Token] = []
+var detectedLanguage: String?
+var windowLanguages: [String?] = []
+var offlineRegions: [SpeechRegion]?
+var liveStats: SessionStats?
+var liveConfig: SessionConfig?
+let decodeStarted = Date()
+
+if options.live {
+    // The live path, fed from the file. Same decoder, same schedule, same
+    // commit policy as a recording -- minus the microphone.
+    let config = SessionConfig(
+        contextMs: options.contextMs, hopMs: options.hopMs, language: options.language,
+        preRollMs: options.preRollMs, adaptiveHop: options.adaptiveHop
+    )
+    liveConfig = config
+    await vad.reset()
+    let decoder = LiveDecoder(config: config, recognizer: asr, vad: vad)
+    decoder.onCommitted = { tokens += $0 }
+    log("live replay: hop \(config.hopMs) ms, pre-roll \(config.preRollMs) ms, context "
+        + "\(config.contextMs) ms\(config.adaptiveHop ? ", adaptive hop" : "")"
+        + "\(options.realtime ? ", real-time pacing" : ", every decode awaited")")
+
+    let chunkMs = 100
+    var cursor = 0
+    while cursor < source.durationMs {
+        let end = min(source.durationMs, cursor + chunkMs)
+        decoder.ingest(PCM.data(from: source.floats(msRange: cursor..<end)))
+        cursor = end
+        if options.realtime {
+            try? await Task.sleep(for: .milliseconds(chunkMs))
+        } else {
+            await decoder.drain()
+        }
+    }
+    await decoder.finish()
+    let stats = decoder.stats
+    liveStats = stats
+    detectedLanguage = options.language
+    log("live: \(stats.hops) decodes, \(stats.droppedHops) dropped, \(stats.skippedSilent) silent, "
+        + "\(stats.forcedCommits) forced, \(stats.boundaries) boundaries "
+        + "(\(stats.finalizations) final decodes, \(stats.finalizationsAbandoned) abandoned), "
+        + "\(stats.unagreedTailCommits) unagreed tail words, \(stats.finalFlushOnEmpty) empty finals, "
+        + "\(stats.duplicatesDropped) deduplicated, "
+        + "mean RTF \(String(format: "%.3f", stats.meanRtf))")
+    if stats.failedHops > 0 {
+        log("  WARNING \(stats.failedHops) decode(s) failed: \(stats.lastError ?? "")")
+    }
+} else {
+    let regions: [SpeechRegion]
+    do {
+        regions = try await OfflinePipeline.speechRegions(in: source, using: vad)
+    } catch {
+        log("error: voice activity detection failed: \(error.localizedDescription)")
+        exit(1)
+    }
+    let windows = OfflinePipeline.windows(for: regions, durationMs: source.durationMs)
+    offlineRegions = regions
+    if ProcessInfo.processInfo.environment["TRANSCRIBE_DEBUG_SPANS"] != nil {
+        for region in regions {
+            log(String(format: "  region %7.2f-%7.2f",
+                       Double(region.startMs) / 1000, Double(region.endMs) / 1000))
+        }
+    }
+    let speechMs = regions.reduce(0) { $0 + $1.durationMs }
+    log("speech: \(regions.count) regions, \(TimeFormat.short(ms: speechMs)) in \(windows.count) windows")
+
+    let decoded: OfflinePipeline.DecodeReport
+    do {
+        decoded = try await OfflinePipeline.transcribe(
+            source: source, windows: windows, using: asr,
+            language: options.language, prompt: nil
+        )
+    } catch {
+        log("error: transcription failed: \(error.localizedDescription)")
+        exit(1)
+    }
+    tokens = decoded.tokens
+    detectedLanguage = decoded.detectedLanguage
+    windowLanguages = decoded.windowLanguages
+    if decoded.retriedWindows > 0 { log("  \(decoded.retriedWindows) window(s) needed a warmer retry") }
+    if decoded.droppedWindows > 0 { log("  WARNING \(decoded.droppedWindows) window(s) never decoded — audio is missing from this transcript") }
+    if options.language == "auto" {
+        let seen = decoded.windowLanguages.compactMap { $0 }
+        let histogram = Dictionary(seen.map { ($0, 1) }, uniquingKeysWith: +)
+            .sorted { $0.value > $1.value }
+            .map { "\($0.key)×\($0.value)" }
+            .joined(separator: " ")
+        log("  detected per window: \(histogram)")
     }
 }
-let speechMs = regions.reduce(0) { $0 + $1.durationMs }
-log("speech: \(regions.count) regions, \(TimeFormat.short(ms: speechMs)) in \(windows.count) windows")
 
-let decodeStarted = Date()
-let asr = await engines.recognizer
-let decoded: OfflinePipeline.DecodeReport
-do {
-    decoded = try await OfflinePipeline.transcribe(
-        source: source, windows: windows, using: asr,
-        language: options.language, prompt: nil
-    )
-} catch {
-    log("error: transcription failed: \(error.localizedDescription)")
-    exit(1)
-}
 let decodeMs = Int(Date().timeIntervalSince(decodeStarted) * 1000)
-log("decoded \(decoded.tokens.count) words in \(TimeFormat.short(ms: decodeMs)) "
+log("decoded \(tokens.count) words in \(TimeFormat.short(ms: decodeMs)) "
     + "(RTF \(String(format: "%.3f", Double(decodeMs) / Double(max(1, source.durationMs)))))")
-if decoded.retriedWindows > 0 { log("  \(decoded.retriedWindows) window(s) needed a warmer retry") }
-if decoded.droppedWindows > 0 { log("  WARNING \(decoded.droppedWindows) window(s) never decoded — audio is missing from this transcript") }
 
 var spans: [SpeakerSpan] = []
 var roster: [SpeakerLabel] = []
@@ -163,7 +268,7 @@ if options.diarizationMode.performsDiarization {
         try await engines.prepareDiarizer { message, _ in log("  \(message)") }
         let diarizeStarted = Date()
         let raw = try await engines.diarize(
-            source, mode: options.diarizationMode
+            source, speechRegions: offlineRegions, mode: options.diarizationMode
         )
         if ProcessInfo.processInfo.environment["TRANSCRIBE_DEBUG_SPANS"] != nil {
             for span in raw.sorted(by: { $0.startMs < $1.startMs }) {
@@ -183,14 +288,14 @@ if options.diarizationMode.performsDiarization {
     await engines.releaseDiarizer()
 }
 
-let segments = SegmentMerger.segments(from: decoded.tokens, spans: spans)
+let segments = SegmentMerger.segments(from: tokens, spans: spans)
 let document = MeetingDocument(
     id: UUID(),
     title: audioURL.deletingPathExtension().lastPathComponent,
     kind: options.diarizationMode.performsDiarization ? .meeting : .recording,
     createdAt: Date(),
     durationMs: source.durationMs,
-    language: decoded.detectedLanguage ?? options.language,
+    language: detectedLanguage ?? options.language,
     modelId: modelId,
     audioFileName: audioURL.lastPathComponent,
     speakers: roster,
@@ -210,6 +315,8 @@ if let output = options.output {
     print(rendered)
 }
 
+let hypothesis = segments.map(\.displayText).joined(separator: " ")
+var wer: Double?
 if let referenceURL = options.reference {
     let reference: String
     do {
@@ -218,9 +325,40 @@ if let referenceURL = options.reference {
         log("error: could not read \(referenceURL.path): \(error.localizedDescription)")
         exit(1)
     }
-    let hypothesis = segments.map(\.displayText).joined(separator: " ")
-    let wer = WordErrorRate.score(reference: reference, hypothesis: hypothesis)
-    log(String(format: "WER %.4f (%.1f%%)", wer, wer * 100))
+    let score = WordErrorRate.score(reference: reference, hypothesis: hypothesis)
+    wer = score
+    log(String(format: "WER %.4f (%.1f%%)", score, score * 100))
+}
+
+if let jsonURL = options.json {
+    let report = RunReport(
+        audio: audioURL.path,
+        mode: options.live ? (options.realtime ? "live-realtime" : "live") : "offline",
+        model: modelId,
+        language: options.language,
+        detectedLanguage: detectedLanguage,
+        windowLanguages: windowLanguages,
+        durationMs: source.durationMs,
+        decodeMs: decodeMs,
+        rtf: Double(decodeMs) / Double(max(1, source.durationMs)),
+        wordCount: tokens.count,
+        transcript: hypothesis,
+        words: tokens,
+        wer: wer,
+        live: liveStats,
+        config: liveConfig
+    )
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    do {
+        try FileManager.default.createDirectory(at: jsonURL.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try encoder.encode(report).write(to: jsonURL)
+        log("wrote \(jsonURL.path)")
+    } catch {
+        log("error: could not write \(jsonURL.path): \(error.localizedDescription)")
+        exit(1)
+    }
 }
 
 log("peak memory \(MemoryProbe.footprintMB()) MB, "

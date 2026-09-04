@@ -1,64 +1,87 @@
 # Security
 
-## Reporting a vulnerability
+## How to report a vulnerability
 
-Please report security issues privately rather than opening a public issue.
+Report a security problem privately. Do not open a public issue.
 
-Use GitHub's **Report a vulnerability** button under this repository's Security
-tab, which opens a private advisory visible only to the maintainers.
+Use the **Report a vulnerability** button on the Security tab of this
+repository. That button opens a private advisory that only the maintainers can
+read.
 
-Please include what you were doing, what happened, and the smallest input or
-sequence that reproduces it. There is no bounty programme.
+In the report, give the action that you did, the result that you saw, and the
+smallest input or sequence that reproduces the result. There is no bounty
+programme.
 
-## What this project's security posture actually is
+## The security position of this project
 
-The design goal is that recordings and transcripts never leave the machine, so
-most of the usual attack surface does not exist here:
+The design goal is that recordings and transcripts stay on your machine. Most
+of the usual attack surface therefore does not exist:
 
-- **No accounts, no API keys, no tokens, no secrets.** Nothing in this
-  repository authenticates against anything. There is no credential to leak.
-- **No telemetry, no crash reporting, no analytics, no network calls** from the
-  native app other than downloading model weights from Hugging Face on first
-  launch.
+- **There are no accounts, API keys, tokens or secrets.** No part of this
+  repository authenticates against any service. There is no credential to lose.
+- **The native app sends no telemetry, no crash reports and no analytics.** It
+  makes two kinds of network call. It downloads the model weights from Hugging
+  Face at the first start. It asks GitHub which releases exist, if you ask it
+  to, or once a day if you turn on automatic checks in Settings ▸ Updates. The
+  automatic check is off until you turn it on. Neither call carries an
+  identifier, and neither sends audio or text.
 - **All inference is local.** Whisper, voice activity detection and speaker
-  diarization all run on-device via CoreML.
+  identification all run on your Mac through CoreML.
 
-## Where the real risk is
+## Where the risk is
 
-**Untrusted media files.** The app decodes whatever audio or video you drop on
-it through AVFoundation, and the CLI does the same for `--audio`. A malicious
-media file is the most plausible attack on the native app. Treat imported files
-the way you would treat opening them in any other media application.
+**Media files from an unknown source.** The app decodes each audio file and
+video file that you drop on it with AVFoundation. The command-line tool does
+the same for `--audio`. A malicious media file is the most probable attack on
+the native app. Treat an imported file as you treat a file that you open in any
+other media application.
 
-**Model weights.** First launch downloads roughly 1.6 GB of CoreML weights from
-Hugging Face over HTTPS. Those weights are third-party code that runs on your
-machine. Pointing the app or `transcribe --models DIR` at a weights directory
-means trusting whatever produced it.
+**The model weights.** At the first start, the app downloads approximately
+1.6 GB of CoreML weights from Hugging Face over HTTPS. Those weights are
+third-party code that runs on your Mac. If you point the app or
+`transcribe --models DIR` at a different weights directory, you also trust the
+person who made that directory.
 
-**The legacy Python server** under `server/` is the exposed component, and it
-has no authentication of any kind. It is superseded by the native app and kept
-only as prior work. If you run it:
+**The updater.** The app can replace its own bundle. Each release is signed
+with an Ed25519 key, and the public half is compiled into the app. The app
+refuses a download when the SHA-256 digest disagrees with the signature file,
+when the signature is not from that key, or when the bundle in the download is
+not Notero at the version that the release gives. The app holds no token,
+thus a person who takes control of the release page still cannot make a
+download that the app accepts. The private key is the one secret in this
+project. `docs/RELEASE.md` tells you where it is and how to protect it.
 
-- Bind it to loopback (`--host 127.0.0.1`) and put TLS and access control in
-  front of it. `docs/DEPLOY.md` describes doing this with Tailscale.
-- Do **not** put it on the public internet. Anyone who can reach the port can
-  open sessions, read stored transcripts and delete archived audio.
-- Session ids are validated against `SESSION_ID_RE` in `server/main.py` because
-  they become filenames, SQLite keys and HTTP header values. Do not loosen that
-  pattern; `../../x` would otherwise write and delete files outside the archive.
+The app installs into its own position on disk. It does not ask for an
+administrator password, and it does not write outside its own bundle and
+`~/Library/Application Support/Transcriber/Updates/`.
+
+**The legacy Python server** in `server/` is the exposed component, and it has
+no authentication of any kind. The native app replaces it, and the repository
+keeps it only as prior work. If you run the server:
+
+- Bind it to the loopback interface with `--host 127.0.0.1`. To reach it from
+  another device, use an SSH tunnel, or put TLS and a password in front of it.
+  `docs/DEPLOY.md` gives a procedure for each case.
+- **Do not put the server on the public internet.** A person who can reach the
+  port can open sessions, read the stored transcripts and delete the archived
+  audio.
+- `server/main.py` validates each session id against `SESSION_ID_RE`, because a
+  session id becomes a filename, an SQLite key and an HTTP header value. **Do
+  not make that pattern less strict.** The id `../../x` would then write and
+  delete files outside the archive directory.
 
 ## Your own data
 
-Recordings, transcripts and the SwiftData store live under
-`~/Library/Application Support/Transcriber/` and are not encrypted beyond
-whatever FileVault gives you. The Python server writes the same kind of data
-under `data/`, which is gitignored.
+The recordings, the transcripts and the SwiftData store are in
+`~/Library/Application Support/Transcriber/`. The app adds no encryption of its
+own, thus FileVault is the only protection. The Python server writes the same
+kind of data to `data/`, which is not in git.
 
-Exports contain full verbatim transcripts. Meeting audio is usually the most
-sensitive thing this project touches — check what you are attaching before you
-share an export.
+An export contains the full transcript, word for word. Meeting audio is usually
+the most sensitive data that this project touches. Read an export before you
+send it to another person.
 
 ## Supported versions
 
-This is a single-maintainer project. Fixes land on the default branch; there are
-no backports to older tags.
+This project has one maintainer. Fixes go to the default branch. There are no
+backports to an older tag.

@@ -105,6 +105,11 @@ public enum AudioCache {
 public final class WavWriter: @unchecked Sendable {
     private let handle: FileHandle
     private let lock = NSLock()
+    /// Live capture must never wait for a disk write on the main actor. The
+    /// offline builder still uses `write` directly so it naturally applies
+    /// back-pressure instead of queueing an entire imported file in memory.
+    private let liveWriteQueue = DispatchQueue(label: "transcriber.live-pcm",
+                                               qos: .utility)
     private var byteCount = 0
     private var closed = false
     public let url: URL
@@ -179,13 +184,23 @@ public final class WavWriter: @unchecked Sendable {
         }
     }
 
+    /// Enqueues a small live-capture buffer for ordered background writing.
+    /// `close()` drains this queue before rewriting the WAV header, so callers
+    /// do not need to keep track of individual writes and no tail audio is
+    /// lost when a recording stops.
+    public func writeAsync(_ pcm: Data) {
+        liveWriteQueue.async { [self] in write(pcm) }
+    }
+
     public func close() {
-        lock.withLock {
-            guard !closed else { return }
-            closed = true
-            handle.seek(toFileOffset: 0)
-            handle.write(Self.header(dataBytes: byteCount))
-            try? handle.close()
+        liveWriteQueue.sync {
+            lock.withLock {
+                guard !closed else { return }
+                closed = true
+                handle.seek(toFileOffset: 0)
+                handle.write(Self.header(dataBytes: byteCount))
+                try? handle.close()
+            }
         }
     }
 

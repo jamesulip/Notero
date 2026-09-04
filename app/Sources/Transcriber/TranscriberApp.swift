@@ -29,11 +29,14 @@ struct TranscriberApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("Transcriber") {
+        WindowGroup("Notero") {
             ContentView()
                 .environment(state)
                 .modelContainer(state.container)
-                .frame(minWidth: 900, minHeight: 560)
+                // Small enough to sit beside another window. Below ~700 pt the
+                // sidebar folds, below ~1060 the inspector does; every row in
+                // the detail has a compact form (see ViewThatFits uses).
+                .frame(minWidth: 300, minHeight: 420)
                 .alert(item: Binding(
                     get: { state.alert },
                     set: { state.alert = $0 }
@@ -45,6 +48,8 @@ struct TranscriberApp: App {
                     // several seconds between hitting record and the recording
                     // starting.
                     state.warmUpEngines()
+                    // Off unless the user asked for it, and at most once a day.
+                    state.updater.checkOnLaunch()
                     if let startupFailure {
                         state.alert = AppState.AppAlert(
                             title: "Storage unavailable",

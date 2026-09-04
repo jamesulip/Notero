@@ -1,125 +1,158 @@
-# Contributing
+# How to contribute
 
-Thanks for looking. This is a small, single-maintainer, local-first project, and
-the bar for a change is that it keeps working on someone else's Mac without a
-microphone, without model weights and without a network.
+Thank you for your interest. This is a small, local-first project with one
+maintainer. A change must continue to work on a different Mac that has no
+microphone, no model weights and no network.
 
 ## Requirements
 
-For the native app — the part most contributions touch:
+For the native app, which most contributions touch:
 
-- **macOS 15 or newer.** `Package.swift` declares `.macOS(.v15)`.
-- **Xcode 26 or newer.** `Package.swift` is `swift-tools-version: 6.2`, which
-  ships with Xcode 26. Developed against Swift 6.3.
-- **Apple silicon.** The models run on the Neural Engine.
-- About **2 GB of free disk** for model weights, downloaded on first launch into
+- **macOS 15 or later.** `Package.swift` declares `.macOS(.v15)`.
+- **Xcode 26 or later.** `Package.swift` sets `swift-tools-version: 6.2`, which
+  Xcode 26 supplies. The maintainer develops against Swift 6.3.3.
+- **A Mac with Apple silicon.** The models run on the Neural Engine.
+- **Approximately 1.9 GB of free disk space** for the model weights. The app
+  downloads them at the first start to
   `~/Library/Application Support/Transcriber/Models`.
 
-For the legacy Python server under `server/`:
+For the legacy Python server in `server/`:
 
-- **Python 3.11 or newer** (developed on 3.14).
+- **Python 3.11 or later.** The maintainer develops on 3.14.
 
-## Getting set up
+## How to set up
 
 ```bash
-git clone <your fork> && cd live-transcriber-server
+git clone <your fork> && cd notero
 
 # The app
 cd app && swift build && swift test
 
-# The Python server, if you are touching it
+# The Python server, if you change it
 cd .. && python3 -m venv .venv
 ./.venv/bin/pip install -r requirements.txt -r requirements-dev.txt
 ./.venv/bin/python -m pytest
 ```
 
-Neither test suite needs model weights, a microphone or a network. That is
-deliberate, and it is the property to preserve — see "The four-layer split".
+Neither test suite needs model weights, a microphone or a network. This is
+deliberate, and you must keep this property. Refer to "The four layers".
 
 ## Before you open a pull request
 
-Run everything that applies:
+Run each command that applies to your change:
 
 ```bash
-cd app && swift build && swift test    # 183 tests, 0 warnings expected
+cd app && swift build && swift test    # 248 tests, and 0 warnings
 ./.venv/bin/python -m pytest           # 75 tests
 ```
 
-A pull request should keep `swift build` at **zero warnings**. There is no
-linter or formatter configured for either language; match the surrounding style
-instead. `.editorconfig` covers indentation.
+The 248 tests are 226 XCTest tests and 22 swift-testing tests. Keep
+`swift build` at **zero warnings**. There is no linter and no formatter for
+either language. Write code in the style of the code around it.
+`.editorconfig` gives the indentation.
 
-CI (`.github/workflows/app.yml`) builds the app, runs `swift test` and assembles
-the release bundle on every push and pull request that touches `app/`. It needs
-no secrets, so it runs on forks.
+CI (`.github/workflows/app.yml`) builds the app, runs `swift test`, and
+assembles the release bundle. It does this on each push and each pull request
+that touches `app/`. CI needs no secrets, thus it also runs on a fork.
 
-## The four-layer split
+## The four layers
 
-`app/Sources/` is four layers, and each one must build and be testable without
+`app/Sources/` has four layers. Each layer must build and be testable without
 the layer above it:
 
-| Layer | May depend on | Must not touch |
+| Layer | Can depend on | Must not touch |
 | --- | --- | --- |
 | `TranscriberCore` | nothing | AVFoundation, CoreML, SwiftUI, SwiftData, models |
 | `TranscriberStore` | Core | inference of any kind |
 | `TranscriberEngine` | Core | SwiftUI |
 | `Transcriber` | Core, Store, Engine | — |
 
-This is what lets the commit policy, the segment merger, the exporters and the
-search index be tested on a machine with no microphone and no 1.6 GB of weights.
-**Putting inference into Core, or a view into Engine, breaks CI for everyone.**
+This split lets you test the commit policy, the segment merger, the exporters
+and the search index on a Mac that has no microphone and no model weights.
+**Do not put inference into Core, and do not put a view into Engine. Either
+change breaks CI for everyone.**
 
-New logic belongs in `TranscriberCore` with a test, not in a view. The ASR, VAD
-and diarization backends sit behind `SpeechRecognizing`,
-`VoiceActivityDetecting` and `SpeakerDiarizing` in
-`TranscriberEngine/Protocols.swift` — add a conformance rather than reaching for
-a concrete engine.
+Put new logic in `TranscriberCore` with a test. Do not put it in a view. Three
+protocols in `TranscriberEngine/Protocols.swift` hide the ASR, VAD and speaker
+backends: `SpeechRecognizing`, `VoiceActivityDetecting` and `SpeakerDiarizing`.
+Write a new conformance instead of a call to a concrete engine.
 
-## What tends to get pull requests rejected
+## Changes that are usually refused
 
-- **Changing a model id by name-matching.** Read `docs/FINDINGS.md` finding 1
-  first. WhisperKit's `_turbo` suffix is a compute variant, not OpenAI's
-  large-v3-turbo, and getting this wrong silently changes which model the
-  accuracy numbers were measured on.
-- **Translating or rewriting transcript text.** Tagalog is forced by default and
-  code-switched English is written as spoken. That is a product decision, not an
-  oversight.
-- **Loading whole audio files into memory.** The 16 kHz working copy is
-  memory-mapped and read in slices on purpose; two hours as a `[Float]` is
-  460 MB resident. Go through `PCMSource`.
-- **Adding a dependency.** There are two Swift dependencies and the Python
-  server's are pinned. Adding one needs a reason beyond convenience.
-- **Cloud anything.** No telemetry, no analytics, no crash reporting, no remote
-  inference. Audio not leaving the machine is the whole premise.
+- **A change of model id by name match.** Read finding 1 in
+  `docs/FINDINGS.md` first. The `_turbo` suffix of WhisperKit marks a compute
+  variant and not the large-v3-turbo model of OpenAI. This mistake silently
+  changes the model that gave the accuracy numbers.
+- **Translation or correction of transcript text.** The app forces Tagalog and
+  writes code-switched English as the speaker said it. This is a product
+  decision and not an oversight.
+- **A read of a complete audio file into memory.** The app maps the 16 kHz
+  working copy and reads it in slices, because two hours in a `[Float]` array
+  holds 460 MB. Use `PCMSource`.
+- **A new dependency.** There are two Swift dependencies, and the Python server
+  pins its own. A new one needs a better reason than convenience.
+- **Any cloud function.** No telemetry, no analytics, no crash reports, no
+  remote inference. Audio that stays on the machine is the primary rule of this
+  project.
 
 ## Tests
 
-- `TranscriberCoreTests`, `TranscriberStoreTests` — pure logic, no fakes needed.
-- `TranscriberEngineTests` — drives the real pipeline through fakes for the
-  three engine protocols. Add a fake rather than skipping a test when weights
-  are unavailable.
+- `TranscriberCoreTests` and `TranscriberStoreTests` test pure logic. They need
+  no fakes.
+- `TranscriberEngineTests` drives the real pipeline through fakes for the three
+  engine protocols. If model weights are unavailable, add a fake. Do not skip a
+  test.
 
-Findings worth remembering go in `docs/FINDINGS.md` with the measurement that
-produced them. Several entries there exist because a plausible-looking change
-quietly lost transcript data; that file is why.
+Record a finding that is worth memory in `docs/FINDINGS.md`, together with the
+measurement that produced it. Several entries in that file exist because a
+change that looked correct silently lost transcript data.
+
+## The language of the documentation
+
+Write the documentation for readers in ASD-STE100 Simplified Technical
+English. Many readers of this project use English as a second language, and
+Simplified Technical English keeps the instructions unambiguous for them. These
+files use it:
+
+- `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`
+- `docs/DEPLOY.md`
+- The comments in `.env.example`
+
+The most important rules are:
+
+1. Use one word for one meaning. Use the same term for the same thing in every
+   file.
+2. Write in the active voice.
+3. Keep a descriptive sentence to 25 words or fewer. Keep an instruction to
+   20 words or fewer.
+4. Give one instruction in one sentence.
+5. Do not use the -ing form of a verb, unless it is part of a technical name.
+6. Do not use idioms, metaphors or humour.
+7. Start a warning with the command, then give the condition.
+8. Do not remove articles or other words to make a sentence shorter.
+
+These four files in `docs/` are design history: `PLAN.md`, `FINDINGS.md`,
+`ENVIRONMENT.md` and `APP-UPDATE-PLAN.md`. They keep the words that they had on
+the date at the top. Do not rewrite them, in Simplified Technical English or in
+any other form. Add a new dated entry instead.
 
 ## Commit messages and history
 
-Describe what changed in the imperative, in a sentence a reader can check
-against the diff. `docs/` records design history in
-`PLAN.md`, `FINDINGS.md`, `ENVIRONMENT.md` and `APP-UPDATE-PLAN.md`; those are
-kept as written at the time rather than retconned.
+Write the commit message in the imperative and say what changed. A reader must
+be able to compare the message to the diff.
 
-## Reporting bugs
+## How to report a bug
 
-Include your macOS version, your Mac's chip, the app version (in
-`app/VERSION`), and what the recording was — length, roughly how many speakers,
-near-mic or across a room. Far-field multi-speaker Tagalog is the case this
-project is built for and the hardest one to reproduce blind.
+Give your macOS version, the chip in your Mac, the app version from
+`app/VERSION`, and a description of the recording. Give the length of the
+recording, the approximate number of speakers, and the distance to the
+microphone. The primary case for this project is Tagalog that several people
+speak across a room. It is also the hardest case to reproduce without your
+data.
 
-**Never attach a real meeting recording or transcript to a public issue.**
-Reproduce with `eval/make-synthetic.sh` output or a clip you own outright.
+**Do not attach a real meeting recording or a real transcript to a public
+issue.** Use the output of `eval/make-synthetic.sh`, or a clip that you own.
 
 ## Security
 
-Report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
+Report a vulnerability privately. Refer to [SECURITY.md](SECURITY.md).

@@ -32,33 +32,11 @@ struct SidebarView: View {
     }
 
     var body: some View {
-        List(selection: $selection) {
-            ForEach(RecordingStore.group(filtered), id: \.bucket.id) { section in
-                Section(section.bucket.label) {
-                    ForEach(section.items) { recording in
-                        HistoryRow(recording: recording, renaming: $renaming)
-                            .tag(Route.recording(recording.id))
-                            .contextMenu { menu(for: recording) }
-                    }
-                }
-            }
-
-            if filtered.isEmpty {
-                ContentUnavailableView {
-                    Label(filter == .all ? "No recordings yet" : "Nothing here",
-                          systemImage: filter == .active ? "hourglass" : "waveform")
-                } description: {
-                    Text(filter == .all
-                         ? "Press ⌘R to record, or drop an audio file onto the window."
-                         : (filter == .active ? "Nothing is recording or being transcribed."
-                            : "Nothing matches this filter."))
-                }
-                .listRowSeparator(.hidden)
-            }
+        VStack(spacing: 0) {
+            filterBar
+            list
+            footer
         }
-        .listStyle(.sidebar)
-        .safeAreaInset(edge: .top, spacing: 0) { filterBar }
-        .safeAreaInset(edge: .bottom) { footer }
         .onChange(of: selection) { _, picked in
             // One row is a navigation; several are a selection to act on, and
             // the detail keeps showing whatever it was showing.
@@ -87,6 +65,34 @@ struct SidebarView: View {
         }
     }
 
+    private var list: some View {
+        List(selection: $selection) {
+            ForEach(RecordingStore.group(filtered), id: \.bucket.id) { section in
+                Section(section.bucket.label) {
+                    ForEach(section.items) { recording in
+                        HistoryRow(recording: recording, renaming: $renaming)
+                            .tag(Route.recording(recording.id))
+                            .contextMenu { menu(for: recording) }
+                    }
+                }
+            }
+
+            if filtered.isEmpty {
+                ContentUnavailableView {
+                    Label(filter == .all ? "No recordings yet" : "Nothing here",
+                          systemImage: filter == .active ? "hourglass" : "waveform")
+                } description: {
+                    Text(filter == .all
+                         ? "Press ⌘R to record, or drop an audio file onto the window."
+                         : (filter == .active ? "Nothing is recording or being transcribed."
+                            : "Nothing matches this filter."))
+                }
+                .listRowSeparator(.hidden)
+            }
+        }
+        .listStyle(.sidebar)
+    }
+
     private var filtered: [StoredRecording] {
         switch filter {
         case .all: return recordings
@@ -109,27 +115,48 @@ struct SidebarView: View {
         }
     }
 
-    /// Pinned above the list rather than being its first row.
+    /// A sibling of the list rather than a row in it, and its material reaches
+    /// up through the titlebar.
     ///
-    /// As a row it scrolled away, so the filter you were in stopped being
-    /// visible once you scrolled. Worse, the sidebar's titlebar strip has no
-    /// material of its own -- the window controls sit straight on the list
+    /// As a row the picker scrolled away, so the filter you were in stopped
+    /// being visible once you scrolled. Worse, the sidebar's titlebar strip has
+    /// no material of its own -- the window controls sit straight on the list
     /// background -- so scrolled rows rode up under the traffic lights and the
-    /// close button landed on top of a recording's duration. An inset bar takes
-    /// that strip out of the scroll area, which fixes both.
+    /// close button landed on top of a recording's duration.
+    ///
+    /// Stacking the bar above the list, rather than insetting the list's safe
+    /// area with it, is what makes that hold: the list's frame stops where the
+    /// bar begins, whatever the split view does to the column afterwards, so
+    /// there is no arrangement in which a row can be laid out where the window
+    /// controls are. Reaching the background into the titlebar covers the strip
+    /// itself, which the list would otherwise be showing through.
     private var filterBar: some View {
         VStack(spacing: 0) {
-            Picker("Show", selection: $filter) {
-                ForEach(Filter.allCases) { Text($0.label).tag($0) }
+            // Segmented while the column is wide enough for four labels; a
+            // menu once it is not, rather than clipped segments. The width is
+            // stated rather than left to the control: a segmented picker takes
+            // whatever width it is given and clips the labels inside, so it
+            // would never report that it does not fit.
+            ViewThatFits(in: .horizontal) {
+                filterPicker.pickerStyle(.segmented).frame(width: 220)
+                filterPicker.pickerStyle(.menu)
             }
-            .pickerStyle(.segmented)
             .labelsHidden()
             .help("Active: recording, queued or being transcribed right now")
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
             Divider()
         }
-        .background(.bar)
+        .background {
+            Rectangle().fill(.bar).ignoresSafeArea(edges: .top)
+        }
+    }
+
+    private var filterPicker: some View {
+        Picker("Show", selection: $filter) {
+            ForEach(Filter.allCases) { Text($0.label).tag($0) }
+        }
     }
 
     private var footer: some View {
@@ -271,6 +298,8 @@ struct HistoryRow: View {
                     StatusChip(status: recording.status, fraction: 0)
                 } else if recording.status == .failed {
                     StatusChip(status: .failed, fraction: 0)
+                } else if recording.status == .cancelled {
+                    StatusChip(status: .cancelled, fraction: 0)
                 }
             }
             Spacer(minLength: 0)

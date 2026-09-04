@@ -36,6 +36,8 @@ struct StatusChip: View {
             Image(systemName: "checkmark.circle.fill").font(.system(size: 9))
         case .failed:
             Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 9))
+        case .cancelled:
+            Image(systemName: "xmark.circle.fill").font(.system(size: 9))
         case .recording:
             Circle().fill(.red).frame(width: 7, height: 7)
         case .pending:
@@ -56,6 +58,7 @@ struct StatusChip: View {
     private var tint: Color {
         switch status {
         case .failed: return .orange
+        case .cancelled: return .secondary
         case .completed: return .secondary
         case .recording: return .red
         default: return .secondary

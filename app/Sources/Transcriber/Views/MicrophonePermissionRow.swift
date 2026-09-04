@@ -19,14 +19,18 @@ struct MicrophonePermissionRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 7) {
-                Image(systemName: symbol)
-                    .foregroundStyle(tint)
-                Text("Microphone access")
-                Spacer(minLength: 8)
-                Text(access.label)
-                    .foregroundStyle(.secondary)
-                action
+            // One line when it fits, the state and button on a second line in
+            // a narrow window.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 7) {
+                    title
+                    Spacer(minLength: 8)
+                    status.fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    title
+                    status
+                }
             }
 
             Text(access.detail)
@@ -42,6 +46,23 @@ struct MicrophonePermissionRow: View {
             access = .current
         }
         .onAppear { access = .current }
+    }
+
+    private var title: some View {
+        HStack(spacing: 7) {
+            Image(systemName: symbol)
+                .foregroundStyle(tint)
+            Text("Microphone access")
+        }
+        .fixedSize()
+    }
+
+    private var status: some View {
+        HStack(spacing: 7) {
+            Text(access.label)
+                .foregroundStyle(.secondary)
+            action
+        }
     }
 
     @ViewBuilder

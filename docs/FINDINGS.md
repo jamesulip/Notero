@@ -354,6 +354,131 @@ distances are cleanly bimodal (same speaker ≤ 0.56, different ≥ 0.77 against
 the 0.7 threshold), the roster drops from three speakers to the true two, and
 every turn in the transcript lands on the right one.
 
+## 11. Pre-roll and VAD-timed finalization on the live path
+
+The native app's live path had never been measured: the numbers in finding 6
+came from the retired Python server. `transcribe --live` now replays a file
+through the same `LiveDecoder` a recording uses, so the live path can be scored
+against the offline pass on identical audio. Two clips exist on disk -- the
+57 s synthetic Taglish fixture and a 25 s real meeting excerpt with a hand-kept
+reference -- and the second is too noisy a reference to draw conclusions from
+(offline WER 60%; live 60-67% with every variant inside that spread). The
+synthetic clip is the one that separates the variants.
+
+**Cold start at the commit was costing six WER points.** The window used to be
+trimmed exactly to the last committed word, so every decode began mid-stream
+with no acoustic context. Keeping 1.5 s of committed audio in front of the
+active region (`SessionConfig.preRollMs`), and dropping what the model re-reads
+from it by time and, for the boundary word, by text:
+
+| Live variant (1.5 s hop, 15 s context) | WER | Forced commits | Tail words committed unagreed | Dedup by text |
+|---|---:|---:|---:|---:|
+| pre-roll 0 (old context window) | 33.6% | 9 | 33 | 0 |
+| **pre-roll 1.5 s** | **27.3%** | **2** | 4 | 5 |
+| pre-roll 1.5 s, real-time pacing | 26.6% | 2 | 12 | 7 |
+| offline pass, same model | 27.3% | — | — | — |
+
+The live path with pre-roll lands *on* the offline number. Forced commits fell
+from 9 to 2 because agreement now succeeds where the cold start used to make
+consecutive passes disagree on the first words; the phrases the old path
+mangled at those points ("Bisa Portney Maria", "Ang Thank you for atapos") come
+back whole ("Base sa report ni Maria", "Ang problema kasi, hindi pa tapos"). No
+adjacent duplicated word appears in any variant's transcript. Real-time pacing
+dropped 4 of 38 hops (11%) on this machine, against 15% for the Python server
+at the same hop in finding 6.
+
+**The old boundary never decoded the end of an utterance.** `boundary()` fired
+at the next hop after 700 ms of silence and flushed the *previous* hop's
+hypothesis -- a window that ended up to 1.5 s before the pause. The speech
+between that hop and the pause was never decoded by anyone; the last second of
+every utterance could simply be missing, and the words that were committed were
+the least-evidenced ones in the transcript. Finalization is now requested by
+the VAD the moment trailing silence reaches the threshold, runs a decode of the
+audio up to the pause (or reuses the hop already in flight if its window
+reached past the speech), puts it through LocalAgreement, and commits the
+remainder only if the room is still silent when the decode returns.
+
+Neither clip contains a pause of 768 ms (three Silero chunks), so on them the
+boundary never fires and the whole effect is the one measured above. To
+exercise it, `eval/make_paused.py` inserts 1.2 s of silence after each
+sentence-final word of the synthetic clip:
+
+| Paused clip (87 s, 25 pauses) | Boundaries closed | Final decodes | Tail words committed unagreed | WER |
+|---|---:|---:|---:|---:|
+| live, pre-roll 0 | 24 | 21 | 30 | 44.5% |
+| **live, pre-roll 1.5 s** | 24 | 21 | 41 | **41.4%** |
+| live, pre-roll 1.5 s, real-time pacing | 13 (+11 abandoned) | 13 | 42 | 42.2% |
+| offline pass, same clip | — | — | — | 67.2% |
+
+Every pause closed an utterance, 21 of them with a decode of their own and 3
+on a hop that was already in flight and had reached past the speech. The
+offline number is worse than any live variant here: 1.2 s of digital zeros is
+not how a room falls silent, and the offline VAD/windowing loses whole windows
+on it -- so this clip is a stress test for the boundary logic, not a benchmark.
+Under real-time pacing 11 of the 24 requests were *abandoned*: the gap is
+shorter than a decode plus the VAD's lag, so someone was talking again by the
+time the decode returned, and the tail stayed provisional and was committed at
+the next pause instead. Nothing was lost; that is the policy working.
+
+The first run of this clip found a bug the unpaused clips could not: the same
+sentence committed two and three times around a pause ("Magyo dilet tayo ng
+one week pero managable panaman" three times over), every copy timestamped
+`start == end == ceiling`. Whisper pads each window to 30 s and reads the
+padding, most often by repeating the last phrase, with timestamps past the end
+of the audio; the offline path drops those in `rebase`, the live path clamped
+them to the ceiling and committed them. Two filters fixed it and took the clip
+from 58.6% to 41.4%: a word starting past the window's audio (plus the 250 ms
+the offline path already tolerates) is dropped, and at a final decode a word
+starting after the point where the VAD heard speech end is dropped too --
+that one is the "Thank you." Whisper reads out of a silence. Both are counted
+as `hallucinationsDropped`. One such phrase still survives at the first pause
+(it was decoded by a hop, not a final, and the hop's version agreed with the
+final's); a silence-aware filter on hops is the obvious next step if real
+recordings show it.
+
+**Adaptive hop: measured, and left off.** Shortening the hop to 1.0 s while
+decodes are fast (`SessionConfig.adaptiveHop`, gated on 1.5x the last decode's
+reported inference time) was tried under real-time pacing:
+
+| Real-time replay | Dropped hops | Forced commits | WER |
+|---|---:|---:|---:|
+| fixed 1.5 s hop | 4 / 38 | 2 | 26.6% |
+| adaptive 1.0-1.5 s | 10 / 46 | 9 | 29.7% |
+
+More drops and more forced commits, exactly the failure finding 6 predicted
+for a 1.0 s hop. The reported `inferMs` understates the wall-clock cost of a
+decode (audio conversion, actor hops and the main-actor ingest path all sit
+outside it), so the gate lets the hop shrink further than the machine can
+sustain. The flag stays available for a machine that is faster than this one;
+the default is off.
+
+**Forced `tl` beats `auto`, and `auto` hears Indonesian.**
+`eval/compare_language.py` runs both modes over the manifest and scores each
+with `eval/langscore.py`, which classes every reference word as Filipino or
+English (hyphenated Tagalog affixes and a function-word list first, then the
+system English lexicon) and reports error rates per class and at code-switch
+points:
+
+| clip | mode | WER | S/D/I | Filipino err | English err | code-switch err | RTF | detected |
+|---|---|---:|---|---:|---:|---:|---:|---|
+| synthetic | tl | 25.2% | 24/5/2 | 29.8% | 10.3% | 13.0% | 0.145 | tl |
+| synthetic | auto | 62.6% | 28/48/1 | 67.9% | 48.7% | 53.7% | 0.110 | id x3 |
+| meeting01 | tl | 72.9% | 13/30/0 | 75.5% | 60.0% | 64.3% | 0.120 | tl |
+| meeting01 | auto | 66.1% | 34/1/4 | 63.3% | 40.0% | 50.0% | 0.608 | tl x1 |
+| **all** | tl | **40.7%** | 37/35/2 | 46.6% | 20.4% | 23.5% | 0.137 | |
+| **all** | auto | 63.7% | 62/49/5 | 66.2% | 46.9% | 52.9% | 0.263 | |
+
+On the synthetic clip `auto` resolves to Indonesian for all three windows and
+loses 48 words to deletion -- which is the documented failure, though this
+fixture is the least fair test of it imaginable, since the voice *is*
+Indonesian. On the real excerpt `auto` edges `tl` (66% against 73%) at five
+times the decode time, and the reference there is too poor to trust either
+number. Pooled, `tl` is 23 points better and half the cost. **The default stays
+`tl`.** The harness is the point: run it on real Taglish recordings with clean
+references before revisiting this. (WER here is `langscore`'s, which keeps
+intra-word hyphens so "i-send" stays one Filipino word; the CLI's own WER
+splits it and reads 27.3% for the same transcript.)
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a

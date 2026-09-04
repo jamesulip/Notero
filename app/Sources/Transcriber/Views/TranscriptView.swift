@@ -137,7 +137,9 @@ struct TranscriptView: View {
             if let progress = state.progress[recording.id] {
                 // Rows are arriving under this. Without it a growing list with
                 // no status reads as a finished transcript that is oddly short.
-                TranscriptProgressBanner(progress: progress, durationMs: recording.durationMs)
+                TranscriptProgressBanner(progress: progress, durationMs: recording.durationMs) {
+                    state.cancelJob(recording.id)
+                }
                 Divider()
             }
             if isViewingOlderRevision, let shown = transcript, let latest = recording.transcript {
@@ -339,6 +341,7 @@ struct TranscriptView: View {
 
     private var label: String {
         if state.progress[recording.id] != nil { return "Working on it" }
+        if recording.status == .cancelled { return "Transcription cancelled" }
         guard recording.status == .failed else { return "No transcript yet" }
         // "Transcription failed" is wrong for a recording that never captured
         // anything -- nothing got as far as being transcribed.
@@ -346,7 +349,8 @@ struct TranscriptView: View {
     }
 
     private var icon: String {
-        recording.status == .failed ? "exclamationmark.triangle" : "text.alignleft"
+        if recording.status == .cancelled { return "xmark.circle" }
+        return recording.status == .failed ? "exclamationmark.triangle" : "text.alignleft"
     }
 
     private var detail: String {
@@ -398,10 +402,16 @@ private struct PlaybackFollower: View {
 struct TranscriptProgressBanner: View {
     let progress: AppState.JobProgress
     let durationMs: Int
+    let onCancel: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
-            ProgressView().controlSize(.small)
+            if progress.status == .cancelled {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            } else {
+                ProgressView().controlSize(.small)
+            }
             Text(summary)
                 .font(.callout)
                 .contentTransition(.numericText())
@@ -412,6 +422,11 @@ struct TranscriptProgressBanner: View {
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .help("How far into the audio the decode has reached")
+            }
+            if progress.status != .cancelled {
+                Button("Cancel", role: .destructive, action: onCancel)
+                    .buttonStyle(.borderless)
+                    .help("Stop this transcription and keep any transcript already produced")
             }
         }
         .padding(.horizontal, 16)

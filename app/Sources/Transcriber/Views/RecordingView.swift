@@ -59,7 +59,7 @@ struct RecordingView: View {
                 // A download has a length; a spinner over 1.6 GB reads as a hang.
                 HStack(spacing: 10) {
                     ProgressView(value: fraction)
-                        .frame(width: 260)
+                        .frame(maxWidth: 260)
                     Text("\(Int(fraction * 100))%")
                         .font(.caption)
                         .monospacedDigit()
@@ -123,35 +123,45 @@ struct RecordingView: View {
                 + "For a mic picking up a table rather than a person. "
                 + "The saved recording is not affected.")
 
-            HStack(spacing: 16) {
-                Button {
-                    state.live.isMuted.toggle()
-                } label: {
-                    Label(state.live.isMuted ? "Unmute" : "Mute",
-                          systemImage: state.live.isMuted ? "mic.slash.fill" : "mic.fill")
-                }
-
-                Button {
-                    Task { await state.stopRecording() }
-                } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                        .frame(minWidth: 76)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-                .keyboardShortcut(".", modifiers: .command)
-
-                Button {
-                    _ = state.addBookmark()
-                } label: {
-                    Label("Bookmark", systemImage: "bookmark")
-                }
-                .help("Bookmark this moment (⌘B)")
+            // Words on the buttons while there is room, icons in a narrow window.
+            ViewThatFits(in: .horizontal) {
+                transportButtons.fixedSize()
+                transportButtons.labelStyle(.iconOnly).fixedSize()
             }
         }
         .padding(.vertical, 24)
         .frame(maxWidth: .infinity)
         .background(.background.secondary)
+    }
+
+    private var transportButtons: some View {
+        HStack(spacing: 16) {
+            Button {
+                state.live.isMuted.toggle()
+            } label: {
+                Label(state.live.isMuted ? "Unmute" : "Mute",
+                      systemImage: state.live.isMuted ? "mic.slash.fill" : "mic.fill")
+            }
+            .help(state.live.isMuted ? "Unmute" : "Mute")
+
+            Button {
+                Task { await state.stopRecording() }
+            } label: {
+                Label("Stop", systemImage: "stop.fill")
+                    .frame(minWidth: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+            .keyboardShortcut(".", modifiers: .command)
+            .help("Stop recording (⌘.)")
+
+            Button {
+                _ = state.addBookmark()
+            } label: {
+                Label("Bookmark", systemImage: "bookmark")
+            }
+            .help("Bookmark this moment (⌘B)")
+        }
     }
 
     private var liveTranscript: some View {
@@ -216,6 +226,25 @@ struct RecordingView: View {
 
     private var footer: some View {
         HStack(spacing: 14) {
+            ViewThatFits(in: .horizontal) {
+                footerLeading.fixedSize()
+                footerLeading.labelStyle(.iconOnly).fixedSize()
+            }
+            Spacer()
+            Text(state.settings.language == "auto"
+                 ? "Auto-detect"
+                 : (LanguageCatalogue.option(state.settings.language)?.label ?? state.settings.language))
+                .lineLimit(1)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.bar)
+    }
+
+    private var footerLeading: some View {
+        HStack(spacing: 14) {
             if !state.live.decodeLive {
                 Label("Transcribes after you stop, on \(ModelCatalogue.option(state.settings.offlineModelId)?.label ?? state.settings.offlineModelId)",
                       systemImage: "clock")
@@ -239,16 +268,7 @@ struct RecordingView: View {
                 .foregroundStyle(state.live.stats.droppedHops > 0 ? .orange : .secondary)
                 .popover(isPresented: $showStats, arrowEdge: .top) { statsPopover }
             }
-            Spacer()
-            Text(state.settings.language == "auto"
-                 ? "Auto-detect"
-                 : (LanguageCatalogue.option(state.settings.language)?.label ?? state.settings.language))
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.bar)
     }
 
     private var statsPopover: some View {
@@ -279,6 +299,46 @@ struct RecordingView: View {
                 GridRow {
                     Text("Failed").foregroundStyle(.secondary)
                     Text("\(stats.failedHops)").foregroundStyle(.orange)
+                }
+            }
+            GridRow {
+                Text("Utterances").foregroundStyle(.secondary)
+                Text("\(stats.boundaries) closed · \(stats.finalizations) final decodes")
+                    .help("Pauses that ended an utterance, and how many needed a decode of "
+                          + "their own rather than reusing the hop already running.")
+            }
+            if stats.unagreedTailCommits > 0 || stats.finalFlushOnEmpty > 0 {
+                GridRow {
+                    Text("Unagreed").foregroundStyle(.secondary)
+                    Text("\(stats.unagreedTailCommits) words"
+                         + (stats.finalFlushOnEmpty > 0 ? " · \(stats.finalFlushOnEmpty) empty finals" : ""))
+                        .help("Words committed at a pause from the final decode alone, before a "
+                              + "second pass could agree with them.")
+                }
+            }
+            if stats.forcedCommits > 0 {
+                GridRow {
+                    Text("Forced").foregroundStyle(.secondary)
+                    Text("\(stats.forcedCommits)")
+                        .foregroundStyle(.orange)
+                        .help("Commits made without agreement because the window had to slide. "
+                              + "A high count means the hop and window are mistuned.")
+                }
+            }
+            if stats.hallucinationsDropped > 0 {
+                GridRow {
+                    Text("Not spoken").foregroundStyle(.secondary)
+                    Text("\(stats.hallucinationsDropped)")
+                        .help("Words the model placed past the end of the audio or inside a "
+                              + "pause the voice detector had already closed. Dropped.")
+                }
+            }
+            if stats.duplicatesDropped > 0 {
+                GridRow {
+                    Text("Deduplicated").foregroundStyle(.secondary)
+                    Text("\(stats.duplicatesDropped)")
+                        .help("Boundary words the model re-read from the pre-roll with drifted "
+                              + "timing, caught by text so they were not committed twice.")
                 }
             }
         }

@@ -34,6 +34,7 @@ final class AppState {
     let live: LiveSession
     let player = AudioPlayer()
     let writer: TranscriptWriter
+    let updater: Updater
 
     /// Sidebar selection. Nil is the empty state.
     var route: Route?
@@ -111,6 +112,23 @@ final class AppState {
     /// Below this a take is asked about rather than kept silently.
     static let shortTakeMs = 10_000
 
+    /// Width of the window's content, kept current by `ContentView`.
+    ///
+    /// The three columns cannot all have their way in a narrow window: the
+    /// split view gives the sidebar and the inspector their widths and lets
+    /// the transcript overflow, cropping the window at both edges. Below
+    /// `inspectorNeedsWidth` the inspector folds away instead.
+    var contentWidth: CGFloat = .infinity
+    /// Sidebar at its ideal (268), a readable transcript (~450) and the
+    /// inspector at its ideal (320), with slack for the dividers.
+    static let inspectorNeedsWidth: CGFloat = 1_060
+    var hasRoomForInspector: Bool { contentWidth >= Self.inspectorNeedsWidth }
+    /// Sidebar at its minimum (200) plus a transcript column worth reading.
+    /// Below this the sidebar folds and the detail has the window to itself;
+    /// the toolbar toggle still brings it back on request.
+    static let sidebarNeedsWidth: CGFloat = 800
+    var isCompact: Bool { contentWidth < Self.sidebarNeedsWidth }
+
     /// Per-recording pipeline progress, keyed by recording id.
     var progress: [UUID: JobProgress] = [:]
     /// Per-recording notes about work that finished imperfectly.
@@ -130,6 +148,9 @@ final class AppState {
     var queuedJobs: [UUID: TranscriptionJob] = [:]
     /// The revision each running job is appending to, from its first window.
     var openTranscripts: [UUID: UUID] = [:]
+    /// Writes the live session's committed lines as they land, so a crash
+    /// mid-meeting keeps everything up to the last commit.
+    var livePersister: LiveTranscriptPersister?
     /// When the current stage of each job began and the last estimate made
     /// from it. The estimate is smoothed against this.
     var stageClock: [UUID: StageClock] = [:]
@@ -164,6 +185,7 @@ final class AppState {
         self.queue = TranscriptionQueue(engines: engines)
         self.live = LiveSession(engines: engines, supportDirectory: Paths.support)
         self.writer = TranscriptWriter(modelContainer: container)
+        self.updater = Updater(settings: settings)
         live.config = settings.sessionConfig
         live.inputGainDb = settings.inputGainDb
         live.isRoomMode = settings.roomMode

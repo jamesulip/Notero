@@ -304,6 +304,8 @@ struct SpeakersPane: View {
             headCount
             Divider()
             if speakers.isEmpty {
+                // Filling, so that the head count above stays at the top of
+                // the pane rather than being centred with the empty state.
                 ContentUnavailableView {
                     Label("No speakers yet", systemImage: "person.2")
                 } description: {
@@ -311,6 +313,7 @@ struct SpeakersPane: View {
                          ? "Identifying speakers…"
                          : "Speakers are identified after transcription finishes.")
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
                     ForEach(speakers) { speaker in

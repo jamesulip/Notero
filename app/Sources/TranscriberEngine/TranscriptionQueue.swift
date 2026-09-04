@@ -161,8 +161,20 @@ public actor TranscriptionQueue {
     }
 
     public func cancel(_ id: UUID) {
-        pending.removeAll { $0.id == id }
+        if let index = pending.firstIndex(where: { $0.id == id }) {
+            pending.remove(at: index)
+            // A queued job has no task whose `finish` defer can close it, so
+            // cancellation must emit both events here. Without `.finished`,
+            // the app kept its progress row and Cancel appeared to do nothing.
+            sink.yield(.stage(id: id, status: .cancelled, progress: 0))
+            sink.yield(.finished(id: id))
+            return
+        }
         if running?.job.id == id {
+            // Reflect the click immediately. Core ML cancellation is
+            // cooperative, so the current inference call may need a moment to
+            // return before `finish` can release the queue.
+            sink.yield(.stage(id: id, status: .cancelled, progress: 0))
             running?.task.cancel()
         }
     }
@@ -383,7 +395,10 @@ public actor TranscriptionQueue {
             emit(.stage(id: job.id, status: .completed, progress: 1))
             if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
         } catch is CancellationError {
-            emit(.stage(id: job.id, status: .pending, progress: 0))
+            // Cancellation is deliberate and terminal. Calling it pending
+            // makes a relaunch "recover" it as an interrupted failure and
+            // leaves no honest indication of what the user asked for.
+            emit(.stage(id: job.id, status: .cancelled, progress: 0))
         } catch {
             emit(.failed(id: job.id, message: error.localizedDescription))
             emit(.stage(id: job.id, status: .failed, progress: 0))

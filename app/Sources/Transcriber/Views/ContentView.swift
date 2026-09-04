@@ -9,18 +9,51 @@ struct ContentView: View {
     @Environment(AppState.self) private var state
     @Environment(\.modelContext) private var context
     @State private var columnVisibility = NavigationSplitViewVisibility.all
+    /// What the user last chose while there was room, restored on widening.
+    @State private var wideVisibility = NavigationSplitViewVisibility.all
+    @State private var showWelcome = false
 
     var body: some View {
         @Bindable var state = state
 
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView()
-                .navigationSplitViewColumnWidth(min: 240, ideal: 268, max: 360)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 268, max: 300)
         } detail: {
             DetailView()
+                // The detail's ideal, stated where the split view reads it.
+                // Its rows all have compact forms; what it asks for by default
+                // is what decides whether the sidebar fits beside it.
+                .navigationSplitViewColumnWidth(min: 260, ideal: 400)
         }
+        // Up on every launch until a button answers it. An overlay, not a pane
+        // in the detail column and not a sheet: as a pane it took the split
+        // view's layout with it (see WelcomeCard), and a sheet cannot be left
+        // up -- macOS refuses to quit the app while one is open, so ⌘Q did
+        // nothing until the card was answered. An overlay is laid out inside
+        // the frame the window already gave the split view, so it can neither
+        // resize anything nor block the app.
+        .overlay { welcomeDialog }
+        .task { showWelcome = !state.settings.hasSeenWelcome }
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
+        .background {
+            // The window's width, not the split view's: an overflowing split
+            // view never reports a smaller size, so the fold below would
+            // never happen.
+            WindowWidthReader { width in state.contentWidth = width }
+        }
+        // Narrow: fold the sidebar rather than let the split view overflow.
+        // The user can still open it from the toolbar; that choice holds until
+        // the width changes again. Wide: put back whatever they had.
+        .onChange(of: state.isCompact) { _, compact in
+            withAnimation(.snappy) {
+                columnVisibility = compact ? .detailOnly : wideVisibility
+            }
+        }
+        .onChange(of: columnVisibility) { _, visibility in
+            if !state.isCompact { wideVisibility = visibility }
+        }
         // Drop anywhere in the window. Dropping onto a specific recording would
         // suggest the audio joins that recording, which is not what happens.
         .dropDestination(for: URL.self) { urls, _ in
@@ -40,6 +73,12 @@ struct ContentView: View {
                 state.alert = AppState.AppAlert(title: "Import failed",
                                                 message: error.localizedDescription)
             }
+        }
+        .sheet(isPresented: Binding(
+            get: { state.updater.isPresented },
+            set: { state.updater.isPresented = $0 }
+        )) {
+            UpdateSheet()
         }
         .sheet(isPresented: $state.isExporting) {
             if let recording = state.selectedRecording {
@@ -83,6 +122,30 @@ struct ContentView: View {
         .toolbar { toolbar }
     }
 
+    /// The first-run card, over a scrim that takes the clicks meant for the
+    /// window behind it.
+    ///
+    /// Held in its own state rather than read straight from `hasSeenWelcome`:
+    /// only the card's own buttons record an answer, so closing the window or
+    /// quitting with the card up asks again next launch.
+    @ViewBuilder
+    private var welcomeDialog: some View {
+        if showWelcome {
+            ZStack {
+                Rectangle()
+                    .fill(.black.opacity(0.4))
+                    .contentShape(Rectangle())
+                    .onTapGesture { }
+                WelcomeCard { showWelcome = false }
+                    .frame(maxWidth: 480)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(.background))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
+                    .shadow(color: .black.opacity(0.35), radius: 20, y: 10)
+                    .padding(20)
+            }
+        }
+    }
+
     static func shortTakeMessage(_ take: AppState.ShortTake) -> String {
         let seconds = max(1, (take.durationMs + 500) / 1000)
         let length = "It ran for \(seconds) second\(seconds == 1 ? "" : "s")"
@@ -98,8 +161,8 @@ struct ContentView: View {
         switch state.route {
         case .search: return "Search"
         case .benchmark: return "Model Benchmark"
-        case .recording: return state.selectedRecording?.title ?? "Transcriber"
-        case nil: return "Transcriber"
+        case .recording: return state.selectedRecording?.title ?? "Notero"
+        case nil: return "Notero"
         }
     }
 

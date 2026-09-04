@@ -102,10 +102,13 @@ final class LocalAgreementTests: XCTestCase {
         la.insert(toks("kailangan natin", start: 44_000))
         let end = la.committedEndMs
 
-        let drifted = [Token(text: " priority", startMs: end - 500, endMs: end + 700)]
+        // A start that bled 100 ms into the previous word: a real next word
+        // with drifted timing, to be kept and clamped rather than dropped.
+        let drifted = [Token(text: " priority", startMs: end - 100, endMs: end + 700)]
         la.insert(drifted)
         la.insert(drifted)
 
+        XCTAssertTrue(la.committedText.hasSuffix("priority"), "got: \(la.committedText)")
         for (earlier, later) in zip(la.committed, la.committed.dropFirst()) {
             XCTAssertGreaterThanOrEqual(later.startMs, earlier.endMs,
                                         "timeline went backwards")
@@ -158,5 +161,136 @@ final class LocalAgreementTests: XCTestCase {
         let forced = la.forceCommit(before: 1_500)
         XCTAssertFalse(forced.joinedText.contains("gusto"),
                        "re-committed already-committed words: \(forced.joinedText)")
+    }
+}
+
+/// The commit boundary with a pre-roll in front of every window.
+///
+/// Whisper re-reads the last second and a half of committed audio on every
+/// pass and may segment it however it likes. Timestamps drop the bulk of it;
+/// these are the boundary cases where timing alone is not enough, and the
+/// cases where a timing rule must *not* fire on a genuinely new word.
+extension LocalAgreementTests {
+
+    /// Commits `spec` outright: two agreeing passes.
+    private func commit(_ la: LocalAgreement, _ spec: String, start: Int = 0, step: Int = 300) {
+        la.insert(toks(spec, start: start, step: step))
+        la.insert(toks(spec, start: start, step: step))
+    }
+
+    private func word(_ text: String, _ start: Int, _ end: Int, confidence: Double? = nil) -> Token {
+        Token(text: " " + text, startMs: start, endMs: end, confidence: confidence)
+    }
+
+    func testPreRollReDecodeDoesNotDuplicateTheBoundaryWords() {
+        // The case from the request: a commit lands mid-sentence and the next
+        // window starts 1.5 s earlier, re-reading everything already committed
+        // with slightly different timing.
+        let la = LocalAgreement(agreement: 2)
+        commit(la, "So yung quotation kailangan nating")
+        XCTAssertEqual(la.committedText, "So yung quotation kailangan nating")
+        XCTAssertEqual(la.committedEndMs, 1_500)
+
+        let reread = [
+            word("So", 10, 290), word("yung", 290, 610), word("quotation", 610, 880),
+            word("kailangan", 880, 1_190), word("nating", 1_190, 1_560),
+            word("i-send", 1_560, 1_900), word("tomorrow", 1_900, 2_300),
+        ]
+        la.insert(reread)
+        // Second pass: same words, timings jittered the other way.
+        la.insert([
+            word("so", 0, 300), word("yung", 300, 600), word("quotation", 600, 900),
+            word("kailangan", 900, 1_230), word("nating", 1_230, 1_520),
+            word("i-send", 1_520, 1_880), word("tomorrow", 1_880, 2_310),
+        ])
+
+        XCTAssertEqual(la.committedText, "So yung quotation kailangan nating i-send tomorrow")
+        XCTAssertEqual(la.partial, "")
+    }
+
+    func testTwoBoundaryWordsDriftedPastTheCommitAreBothDropped() {
+        // Timestamps cannot tell the second one from new speech; text can.
+        let la = LocalAgreement(agreement: 2)
+        commit(la, "kailangan nating", start: 4_400)
+        XCTAssertEqual(la.committedEndMs, 5_000)
+
+        let drifted = [word("kailangan", 4_400, 5_010), word("nating", 5_010, 5_300),
+                       word("i-send", 5_300, 5_600)]
+        la.insert(drifted)
+        la.insert(drifted)
+
+        XCTAssertEqual(la.committedText, "kailangan nating i-send")
+        XCTAssertEqual(la.duplicatesDropped, 4, "two rescues per pass")
+    }
+
+    func testAReSegmentedPreRollWordIsDroppedByTiming() {
+        // The model merged the committed word with what follows. Whatever it
+        // is called, it starts where the committed word started.
+        let la = LocalAgreement(agreement: 2)
+        commit(la, "kailangan nating", start: 4_400)
+
+        let merged = [word("kailangang", 4_400, 5_100), word("i-send", 5_100, 5_400)]
+        la.insert(merged)
+        la.insert(merged)
+
+        XCTAssertEqual(la.committedText, "kailangan nating i-send")
+    }
+
+    func testAShortNewWordWhoseStartBledEarlyIsKept() {
+        // 150 ms function word, timestamped 100 ms before the previous word
+        // ended. A plain midpoint test would drop it on every pass, so it
+        // could never commit; anchoring on the previous word keeps it.
+        let la = LocalAgreement(agreement: 2)
+        commit(la, "sabi ko")
+        XCTAssertEqual(la.committedEndMs, 600)
+
+        let next = [word("na", 500, 650), word("pupunta", 650, 1_000)]
+        la.insert(next)
+        la.insert(next)
+
+        XCTAssertEqual(la.committedText, "sabi ko na pupunta")
+    }
+
+    func testTheSameWordJustPastTheAnchorIsDroppedByText() {
+        let la = LocalAgreement(agreement: 2)
+        commit(la, "sabi ko")
+
+        // Starts after the anchor (450) so timing keeps it; text catches it.
+        let reread = [word("ko", 480, 700), word("na", 700, 900)]
+        la.insert(reread)
+        la.insert(reread)
+
+        XCTAssertEqual(la.committedText, "sabi ko na")
+    }
+
+    func testAGenuineRepeatPastTheSlackIsKept() {
+        // "hindi... hindi" -- the second one starts well after the boundary.
+        let la = LocalAgreement(agreement: 2)
+        commit(la, "hindi")
+        XCTAssertEqual(la.committedEndMs, 300)
+
+        let again = [word("hindi", 600, 900)]
+        la.insert(again)
+        la.insert(again)
+
+        XCTAssertEqual(la.committedText, "hindi hindi")
+    }
+
+    func testFlushCanStopAtWhereSpeechEnded() {
+        let la = LocalAgreement(agreement: 2)
+        la.insert(toks("sige na po"))
+        // The VAD heard speech end at 600 ms; "po" was read out of the silence.
+        let flushed = la.flush(notAfter: 600)
+        XCTAssertEqual(flushed.joinedText, "sige na")
+        XCTAssertEqual(la.committedText, "sige na")
+        XCTAssertEqual(la.partial, "")
+    }
+
+    func testConfidenceSurvivesTheCommit() {
+        let la = LocalAgreement(agreement: 2)
+        let sure = [word("sige", 0, 300, confidence: 0.8), word("na", 300, 500, confidence: 0.6)]
+        la.insert(sure)
+        la.insert(sure)
+        XCTAssertEqual(la.committed.map(\.confidence), [0.8, 0.6])
     }
 }

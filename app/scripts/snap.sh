@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Screenshots the running Transcriber window, optionally clicking first.
+# Screenshots the running Notero window, optionally clicking first.
 #
 #     scripts/snap.sh out.png                       # capture the main window
 #     scripts/snap.sh out.png 858 296               # click, wait, capture
@@ -11,7 +11,7 @@
 # and the scale so image coordinates map back to screen points:
 # screen = origin + image_xy * scale.
 #
-# Refuses to click unless Transcriber is frontmost: clicks go to whatever is
+# Refuses to click unless Notero is frontmost: clicks go to whatever is
 # in front, and a right-click meant for the app once opened another app's
 # menu instead. If the app will not come to the front, someone is using the
 # Mac -- stop rather than fight them for focus.
@@ -24,16 +24,16 @@ MODE=${4:-left}
 WINDOW=${WINDOW:-1}
 HERE=$(cd "$(dirname "$0")" && pwd)
 
-if ! pgrep -x Transcriber >/dev/null; then
-    echo "Transcriber is not running" >&2
+if ! pgrep -x Notero >/dev/null; then
+    echo "Notero is not running" >&2
     exit 1
 fi
 
-osascript -e 'tell application "Transcriber" to activate' >/dev/null
+osascript -e 'tell application "Notero" to activate' >/dev/null
 sleep 0.6
 FRONT=$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true')
-if [[ "$FRONT" != "Transcriber" ]]; then
-    echo "refusing: $FRONT is frontmost, not Transcriber" >&2
+if [[ "$FRONT" != "Notero" ]]; then
+    echo "refusing: $FRONT is frontmost, not Notero" >&2
     exit 3
 fi
 
@@ -46,7 +46,7 @@ if [[ -n "$X" && -n "$Y" ]]; then
     sleep 1.2
 fi
 
-BOUNDS=$(osascript -e "tell application \"System Events\" to tell process \"Transcriber\" to get {position, size} of window $WINDOW")
+BOUNDS=$(osascript -e "tell application \"System Events\" to tell process \"Notero\" to get {position, size} of window $WINDOW")
 # "717, 39, 1083, 1065"
 IFS=', ' read -r PX PY W H <<<"$(echo "$BOUNDS" | tr -d ' ' | tr ',' ' ')"
 

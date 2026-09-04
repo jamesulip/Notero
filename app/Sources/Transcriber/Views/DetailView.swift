@@ -32,17 +32,15 @@ struct DetailView: View {
                 ContentUnavailableView("Recording not found", systemImage: "questionmark.folder")
             }
         case nil:
-            if !state.settings.hasSeenWelcome {
-                WelcomeCard()
-            } else {
-                ContentUnavailableView {
-                    Label("Nothing selected", systemImage: "waveform")
-                } description: {
-                    Text("Pick something from the sidebar, press ⌘R to record, or drop an audio file here.")
-                } actions: {
-                    Button("New Recording") { state.newItem(.recording) }
-                    Button("New Meeting") { state.newItem(.meeting) }
-                }
+            // The welcome card is a dialog over the window, not a pane here.
+            // See WelcomeCard.
+            ContentUnavailableView {
+                Label("Nothing selected", systemImage: "waveform")
+            } description: {
+                Text("Pick something from the sidebar, press ⌘R to record, or drop an audio file here.")
+            } actions: {
+                Button("New Recording") { state.newItem(.recording) }
+                Button("New Meeting") { state.newItem(.meeting) }
             }
         }
     }
@@ -52,8 +50,23 @@ struct DetailView: View {
 /// rather than discovered by it: the microphone permission (a refusal sounds
 /// like silence), the model (1.6 GB, which used to start downloading with
 /// only the preparing header to explain it), and the language.
+///
+/// Shown as a dialog over the window (see `ContentView.welcomeDialog`), not as
+/// a pane in the detail column. In the column it took the whole split view
+/// down with it: the split view stopped being laid out at the window's height
+/// and was laid out at the sidebar list's full content height instead, so the
+/// sidebar came up empty with its rows above the window, over the traffic
+/// lights, and no resize of the window would bring them back. Whatever in this
+/// card the split view was reading, it cannot read it from an overlay.
+///
+/// A dialog is also the right shape for what this is: asked once, and up until
+/// it is answered.
 struct WelcomeCard: View {
     @Environment(AppState.self) private var state
+
+    /// Called when a button has answered the card. Recording that it was seen
+    /// is the card's; taking it off the screen is the caller's.
+    var onAnswer: () -> Void = {}
 
     private var modelId: String { state.settings.liveModelId }
     private var model: ModelOption? { ModelCatalogue.option(modelId) }
@@ -97,54 +110,80 @@ struct WelcomeCard: View {
             }
 
             HStack {
+                Button("Import Audio…") {
+                    answered()
+                    state.isImporting = true
+                }
+                Spacer()
+                // Closing is always allowed, download running or not: the
+                // download continues without the card, and everything on it
+                // is in Settings too.
+                Button("Done") { answered() }
+                    .help("Close this. Everything on it is also in Settings.")
                 Button("New Recording") {
-                    settings.hasSeenWelcome = true
+                    answered()
                     state.newItem(.recording)
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                Button("Import Audio…") {
-                    settings.hasSeenWelcome = true
-                    state.isImporting = true
-                }
-                Spacer()
-                Button("Done") { settings.hasSeenWelcome = true }
-                    .help("Hide this card. Everything on it is also in Settings.")
             }
         }
-        .frame(maxWidth: 520)
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
+        // Wide enough to read, and no wider; the caller caps it. Stated as a
+        // maximum rather than a width so a narrow window shrinks the card
+        // instead of cropping it.
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Closes the card for good. Only a button calls this, so a card closed
+    /// any other way -- by quitting with it up -- is asked again next launch.
+    private func answered() {
+        state.settings.hasSeenWelcome = true
+        onAnswer()
     }
 
     private var modelRow: some View {
         // Read against the revision so a finished download re-checks the disk.
         let _ = state.modelsRevision
         let downloaded = state.isModelDownloaded(modelId)
+        let fraction = state.modelDownloads[modelId]
         return HStack(alignment: .top, spacing: 8) {
             Image(systemName: downloaded ? "checkmark.circle.fill" : "arrow.down.circle")
                 .foregroundStyle(downloaded ? Color.green : Color.secondary)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Speech model")
-                Text(downloaded
-                     ? "\(model?.label ?? modelId) is on this Mac."
-                     : "\(model?.label ?? modelId) (\(model?.sizeLabel ?? "")) downloads once. "
-                       + "Starting it now means the first recording does not wait for it.")
+                Text(modelDetail(downloaded: downloaded, downloading: fraction != nil))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            if let fraction = state.modelDownloads[modelId] {
+            if let fraction {
                 HStack(spacing: 6) {
                     ProgressView(value: fraction).frame(width: 80)
                     Text("\(Int(fraction * 100))%")
                         .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                 }
             } else if !downloaded {
+                // Prominent because nothing transcribes without it, and this
+                // is the one place the app asks for it before a recording
+                // needs it.
                 Button("Download") { state.downloadModel(modelId) }
+                    .buttonStyle(.borderedProminent)
             }
         }
+    }
+
+    private func modelDetail(downloaded: Bool, downloading: Bool) -> String {
+        let name = model?.label ?? modelId
+        if downloaded { return "\(name) is on this Mac." }
+        let size = model?.sizeLabel ?? ""
+        if downloading {
+            return "Downloading \(name). This runs in the background; you can close this card."
+        }
+        return "\(name) (\(size)) is not on this Mac yet, and nothing can be transcribed "
+             + "without it. Downloading it now means the first recording does not wait for "
+             + "it. You can skip this and download it later in Settings."
     }
 }
 
@@ -189,10 +228,28 @@ struct RecordingDetailView: View {
                 PlayerBar(recording: recording)
             }
         }
+        // The column's floor. Without one, its minimum is whatever its widest
+        // row happens to need, and once the sidebar and inspector had taken
+        // their share of a 1000 pt window that was more than what was left:
+        // the split view overflowed and the window was cropped at both edges.
+        // Every row above can lay itself out in this much.
+        // The ideal matters as much as the minimum: the split view sizes
+        // this column to what it asks for and lets the window overflow, so
+        // the column must ask for less than a 700 pt window minus the sidebar.
+        .frame(minWidth: 260, idealWidth: 400, maxWidth: .infinity)
         // The system inspector rather than a hand-rolled HStack column: it
         // gets the standard divider, drags to resize, and remembers nothing
         // we do not tell it to.
-        .inspector(isPresented: $showInspector) {
+        // Shown only when wanted *and* there is room. In a window narrower
+        // than `AppState.inspectorNeedsWidth` the split view cannot fit the
+        // sidebar, a readable transcript and the inspector, and rather than
+        // shrink a column it overflows the window -- the sidebar's rows lose
+        // their left edge and the inspector its right. Folding the inspector
+        // keeps the transcript whole; widening the window brings it back.
+        .inspector(isPresented: Binding(
+            get: { showInspector && state.hasRoomForInspector },
+            set: { showInspector = $0 }
+        )) {
             VStack(spacing: 0) {
                 Picker("", selection: $inspector) {
                     ForEach(InspectorTab.allCases) { tab in
@@ -209,7 +266,7 @@ struct RecordingDetailView: View {
                 case .speakers: SpeakersPane(recording: recording)
                 }
             }
-            .inspectorColumnWidth(min: 280, ideal: 340, max: 520)
+            .inspectorColumnWidth(min: 260, ideal: 320, max: 520)
         }
         .onAppear { showInspector = state.settings.inspectorShown(for: recording.kind) }
         .onChange(of: showInspector) { _, shown in
@@ -222,7 +279,10 @@ struct RecordingDetailView: View {
                 } label: {
                     Label("Meeting Notes", systemImage: "sidebar.right")
                 }
-                .help("Show or hide the meeting workspace")
+                .disabled(!state.hasRoomForInspector)
+                .help(state.hasRoomForInspector
+                      ? "Show or hide the meeting workspace"
+                      : "Widen the window to show the meeting workspace beside the transcript")
             }
         }
     }
@@ -253,6 +313,20 @@ struct RecordingDetailView: View {
 
             Spacer(minLength: 12)
 
+            // Words on the buttons while there is room, icons when the column
+            // is narrow. Measured as a cluster so the title keeps the rest.
+            ViewThatFits(in: .horizontal) {
+                headerControls.fixedSize()
+                headerControls.labelStyle(.iconOnly).fixedSize()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private var headerControls: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             if let progress = state.progress[recording.id] {
                 StatusChip(status: progress.status, fraction: progress.fraction,
                            remaining: progress.remaining)
@@ -267,6 +341,9 @@ struct RecordingDetailView: View {
             } else if recording.status == .failed {
                 StatusChip(status: .failed)
                 if recording.hasAudio { RerunButton(recording: recording, label: "Retry") }
+            } else if recording.status == .cancelled {
+                StatusChip(status: .cancelled)
+                if recording.hasAudio { RerunButton(recording: recording, label: "Transcribe") }
             } else if let warning = recording.warningMessage ?? state.warnings[recording.id] {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
@@ -301,8 +378,6 @@ struct RecordingDetailView: View {
                 + "The arrow copies to the clipboard instead.")
             .disabled(recording.transcript == nil)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
     }
 }
 

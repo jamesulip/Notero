@@ -1,10 +1,12 @@
 # Environment findings — 2026-08-29
 
-> **Design history.** A dated snapshot of the machine this project was
-> developed and measured on, kept because the RTF and WER numbers in
-> [FINDINGS.md](FINDINGS.md) are relative to it. It is *not* a requirements
-> list — see the Requirements section of the [README](../README.md) for what
-> you actually need.
+> **Design history. Read this note first.** This is a dated record of the Mac
+> that the maintainer used to develop and measure this project. It keeps the
+> words that it had on the day of writing. It is here because the RTF and WER
+> numbers in [FINDINGS.md](FINDINGS.md) apply to this Mac only.
+>
+> This file is **not** a list of requirements. For the requirements, read the
+> Requirements section of the [README](../README.md).
 
 Measured on the machine rather than assumed. Two of the plan's premises change
 as a result.

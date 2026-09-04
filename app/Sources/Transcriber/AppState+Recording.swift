@@ -56,6 +56,19 @@ extension AppState {
                                  archiveURL: Paths.recordingURL(name))
             recording.status = .recording
             try? context.save()
+            if live.decodeLive {
+                // Committed lines go to the store as they are committed, not
+                // at Stop. The revision opened here is the one Stop completes.
+                let persister = LiveTranscriptPersister(
+                    writer: writer, recordingId: id,
+                    modelId: settings.liveModelId, language: settings.language
+                )
+                await persister.open()
+                live.onCommitted = { [weak persister] segments in
+                    persister?.append(segments)
+                }
+                livePersister = persister
+            }
         } catch {
             activeRecordingId = nil
             recording.status = .failed
@@ -70,6 +83,9 @@ extension AppState {
 
     func stopRecording() async {
         let finished = await live.stop()
+        live.onCommitted = nil
+        let persister = livePersister
+        livePersister = nil
         activeRecordingId = nil
         guard let result = finished else { return }
         await engines.endLive()
@@ -89,11 +105,19 @@ extension AppState {
         }
 
         if decodedLive {
-            try? await writer.storeTranscript(
-                segments: result.segments, roster: [], modelId: result.modelId,
-                language: result.language, processMs: result.stats.totalInferMs,
-                didDiarize: false, for: result.recordingId
-            )
+            // The final list replaces the rows written during the recording,
+            // through the same call the whole-file job uses; with no open
+            // revision it stores a fresh one, as before.
+            if let persister {
+                try? await persister.complete(segments: result.segments,
+                                              processMs: result.stats.totalInferMs)
+            } else {
+                try? await writer.storeTranscript(
+                    segments: result.segments, roster: [], modelId: result.modelId,
+                    language: result.language, processMs: result.stats.totalInferMs,
+                    didDiarize: false, for: result.recordingId
+                )
+            }
         }
         try? await writer.attachAudio(
             fileName: result.archiveFileName ?? "",

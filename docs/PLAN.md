@@ -1,13 +1,18 @@
 # Live Tagalog/Taglish Transcription Server — Build Plan v2
 
-> **Design history.** The original build plan for the Python server, kept as
-> written. The project diverged from it: the native macOS app under `app/`
-> superseded the server, the Vue frontend in section 8 was never built (`client/`
-> is a single hand-written page), and the repo layout in section 12 describes
-> what was planned rather than what exists. The [README](../README.md) describes
-> what was actually built and [FINDINGS.md](FINDINGS.md) records where reality
-> contradicted this document. Second-person phrasing and the open items in
-> section 15 are as of writing, not instructions to the reader.
+> **Design history. Read this note first.** This is the original build plan for
+> the Python server. It keeps the words that it had on the day of writing.
+>
+> The project went in a different direction. The native macOS app in `app/`
+> replaced the server. Nobody built the Vue frontend of section 8, and
+> `client/` is one hand-written page. The repository layout in section 12 is
+> the plan and not the result.
+>
+> The [README](../README.md) describes what the project actually contains.
+> [FINDINGS.md](FINDINGS.md) records each point where a measurement
+> contradicted this document. The word "you" in this file, and the open items
+> in section 15, speak to the author on the day of writing. They are not
+> instructions to you.
 
 *Supersedes v1. Changes: frontend stack fixed, FluidAudio evaluated and scoped, diarization added as Phase 6 with hooks in Phase 4, Swift sidecar fork documented.*
 

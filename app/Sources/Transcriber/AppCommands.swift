@@ -14,6 +14,12 @@ struct AppCommands: Commands {
     let state: AppState
 
     var body: some Commands {
+        // Under "About Transcriber", which is where every Mac app puts it.
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") { state.updater.checkNow() }
+                .disabled(state.updater.isBusy)
+        }
+
         CommandGroup(replacing: .newItem) {
             Button("New Recording") { state.newItem(.recording) }
                 .keyboardShortcut("r")

@@ -27,15 +27,26 @@ public enum Audio {
 /// window, but segments, exports and diarization all need positions relative to
 /// the start of the session.
 public final class RingBuffer {
+    /// The active region: audio not yet committed that every decode re-reads.
     public let contextMs: Int
+    /// Committed audio kept in front of the active region as acoustic context.
+    ///
+    /// Zero means the window starts exactly at the last commit, which is what
+    /// it did before pre-roll existed and what a decoder starting cold sounds
+    /// like. The live path asks for ~1.5 s; whoever consumes the window is
+    /// responsible for not committing what lies in it twice.
+    public let preRollMs: Int
     private var buffer = Data()
     private var discardedBytes = 0
 
-    public init(contextMs: Int = 15_000) {
+    public init(contextMs: Int = 15_000, preRollMs: Int = 0) {
         self.contextMs = contextMs
+        self.preRollMs = max(0, preRollMs)
     }
 
-    public var capacityBytes: Int { Audio.msToBytes(contextMs) }
+    /// Room for the pre-roll and a full active region together, so the
+    /// context never has to be traded for the pre-roll.
+    public var capacityBytes: Int { Audio.msToBytes(contextMs + preRollMs) }
 
     /// Audio received since the session began.
     public var totalMs: Int { Audio.bytesToMs(discardedBytes + buffer.count) }
@@ -54,7 +65,7 @@ public final class RingBuffer {
         }
     }
 
-    /// Drops audio before `absoluteMs`, anchoring the window to a commit.
+    /// Anchors the window to a commit, keeping `preRollMs` of audio before it.
     ///
     /// This is what makes LocalAgreement work. If the window slides freely,
     /// consecutive hypotheses begin at different points in the audio, their
@@ -62,8 +73,13 @@ public final class RingBuffer {
     /// forever -- the commit rate collapses while the provisional tail grows
     /// without bound. `contextMs` still caps the buffer, so a long stretch
     /// without agreement degrades to a sliding window rather than growing.
+    ///
+    /// The pre-roll sits in front of `absoluteMs`, so `windowStartMs` is
+    /// normally *earlier* than the commit. Callers that compare the two must
+    /// treat that as the resting state, not as the window having slid.
     public func trim(to absoluteMs: Int) {
-        let target = Audio.msToBytes(absoluteMs) - discardedBytes
+        let keepFrom = Swift.max(0, absoluteMs - preRollMs)
+        let target = Audio.msToBytes(keepFrom) - discardedBytes
         guard target > 0 else { return }
         let drop = Swift.min(target, buffer.count)
         buffer.removeFirst(drop)

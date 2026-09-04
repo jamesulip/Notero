@@ -35,18 +35,26 @@ struct SearchView: View {
 
             Divider()
 
-            if state.searchText.isEmpty {
-                ContentUnavailableView {
-                    Label("Search everything", systemImage: "magnifyingglass")
-                } description: {
-                    Text("Words from any transcript, note, action item or bookmark. "
-                         + "Quote a phrase to keep it together. Results jump to the moment.")
+            Group {
+                if state.searchText.isEmpty {
+                    ContentUnavailableView {
+                        Label("Search everything", systemImage: "magnifyingglass")
+                    } description: {
+                        Text("Words from any transcript, note, action item or bookmark. "
+                             + "Quote a phrase to keep it together. Results jump to the moment.")
+                    }
+                } else if visible.isEmpty {
+                    ContentUnavailableView.search(text: state.searchText)
+                } else {
+                    results
                 }
-            } else if visible.isEmpty {
-                ContentUnavailableView.search(text: state.searchText)
-            } else {
-                results
             }
+            // Told to fill, because an empty state asks for only the height it
+            // needs: a stack of things that all fit gets centred in the column
+            // instead of filling it, which floated the search field into the
+            // middle of the window whenever there was nothing to show under it.
+            // The results branch is greedy already and does not mind.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
             focused = true

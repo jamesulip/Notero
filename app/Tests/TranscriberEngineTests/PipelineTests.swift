@@ -317,3 +317,57 @@ final class PipelineDecodeTests: XCTestCase {
         XCTAssertTrue(report.tokens.isEmpty)
     }
 }
+
+extension PipelineDecodeTests {
+    func testEveryWindowReportsItsDetectedLanguage() async throws {
+        // `detectedLanguage` is the first window's answer; the per-window list
+        // is what shows auto-detect changing its mind mid-recording.
+        let asr = FakeRecognizer()
+        let report = try await OfflinePipeline.transcribe(
+            source: source(seconds: 40), windows: [window(0, 15_000), window(15_000, 30_000)],
+            using: asr, language: "auto", prompt: nil
+        )
+        XCTAssertEqual(report.windowLanguages.count, 2)
+        XCTAssertEqual(report.windowLanguages.compactMap { $0 }, ["tl", "tl"])
+        XCTAssertEqual(report.detectedLanguage, "tl")
+    }
+}
+
+final class TranscriptionQueueCancellationTests: XCTestCase {
+    func testCancellingAQueuedJobEmitsCancelledAndFinished() async throws {
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("queue-cancel-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: scratch) }
+
+        let queue = TranscriptionQueue(engines: EngineHost(modelsDirectory: scratch))
+        // Hold the pump so this exercises cancellation before a task exists --
+        // the path that used to remove the job silently and leave the UI stuck.
+        await queue.setLiveActive(true)
+        let id = UUID()
+        await queue.enqueue(TranscriptionJob(
+            id: id, title: "Queued", sourceURL: nil,
+            cacheURL: scratch.appendingPathComponent("queued.wav"),
+            modelId: "unused", language: "tl", discardCacheWhenDone: false
+        ))
+        await queue.cancel(id)
+
+        var iterator = queue.events.makeAsyncIterator()
+        var sawCancelled = false
+        var sawFinished = false
+        for _ in 0..<4 {
+            switch await iterator.next() {
+            case .stage(let eventId, let status, _) where eventId == id && status == .cancelled:
+                sawCancelled = true
+            case .finished(let eventId) where eventId == id:
+                sawFinished = true
+            default:
+                break
+            }
+        }
+
+        XCTAssertTrue(sawCancelled)
+        XCTAssertTrue(sawFinished)
+        let busy = await queue.isBusy
+        XCTAssertFalse(busy)
+    }
+}

@@ -17,13 +17,19 @@ public struct LiveSessionResult: Sendable {
     public var language: String
 }
 
-/// The live path: capture -> ring buffer -> VAD -> ASR -> commit -> UI.
+/// The live path: capture -> working copy -> `LiveDecoder` -> commit -> UI.
 ///
 /// The design contract this exists to keep is that committed text never
 /// changes. Provisional text at the tail may be rewritten on the next pass;
 /// once a word has been agreed by two consecutive windows it is frozen, and
 /// everything below -- segment ids, note back-links, bookmarks -- can depend on
 /// that.
+///
+/// This class owns the microphone, the working copy, the meter and the
+/// observable state. Everything between a chunk of audio and a committed token
+/// -- the ring buffer, the VAD, the hop schedule, LocalAgreement and
+/// finalization -- lives in `LiveDecoder`, where it can be tested without
+/// either a microphone or a model.
 @MainActor
 @Observable
 public final class LiveSession {
@@ -89,6 +95,12 @@ public final class LiveSession {
     /// model running keeps the machine cool and the fan quiet at the table.
     public var decodeLive = true
 
+    /// Called with each batch of newly committed segments, in order, as soon
+    /// as they are committed -- during the recording, not at Stop. This is how
+    /// committed text reaches disk while the meeting is still going; the
+    /// segments are also appended to `segments` for the UI.
+    public var onCommitted: (([Segment]) -> Void)?
+
     /// Microphone boost in decibels, live-adjustable while recording.
     ///
     /// Computed over a private store rather than a stored property with a
@@ -115,17 +127,16 @@ public final class LiveSession {
 
     private var capture: AudioCapture?
     private var cache: WavWriter?
-    private var ring = RingBuffer()
-    private var commit = LocalAgreement()
+    private var decoder: LiveDecoder?
+    /// One FIFO consumer replaces one unstructured main-actor task per audio
+    /// callback. Besides reducing scheduling churn, `stop()` can now drain it
+    /// explicitly before it closes the cache and finalizes the decoder.
+    private var audioSink: AsyncStream<CapturedAudio>.Continuation?
+    private var ingestTask: Task<Void, Never>?
 
     private var archiveFileName: String?
     private var modelId = ModelCatalogue.defaultModel
-    private var msSinceHop = 0
-    private var hopInFlight = false
-    private var vadInFlight = false
-    private var vadPending: [Float] = []
-    private var lastReading = VoiceActivityReading(isSpeech: false, probability: 0,
-                                                   trailingSilenceMs: 0, speechMs: 0)
+    private var ingestedBytes = 0
     private var nextIndex = 0
     private var meterCountdown = 0
 
@@ -187,13 +198,20 @@ public final class LiveSession {
         elapsedMs = 0
         meter = []
         nextIndex = 0
-        msSinceHop = 0
-        hopInFlight = false
-        vadInFlight = false
-        vadPending = []
-        ring = RingBuffer(contextMs: config.contextMs)
-        commit = LocalAgreement(agreement: config.agreement)
+        ingestedBytes = 0
+        meterCountdown = 0
         await engines.resetVAD()
+
+        if decodeLive {
+            let decoder = LiveDecoder(config: config,
+                                      recognizer: await engines.recognizer,
+                                      vad: await engines.voiceActivity)
+            decoder.onCommitted = { [weak self] tokens in self?.emit(tokens) }
+            decoder.onPartial = { [weak self] text in self?.partial = text }
+            self.decoder = decoder
+        } else {
+            decoder = nil
+        }
 
         let cacheURL = AudioCache.url(for: id, under: supportDirectory)
         // Thrown straight through: `WavWriter.CannotWrite` names the path and
@@ -214,11 +232,27 @@ public final class LiveSession {
         capture.isRoomMode = isRoomMode
         self.capture = capture
 
+        var continuation: AsyncStream<CapturedAudio>.Continuation!
+        let audio = AsyncStream<CapturedAudio>(bufferingPolicy: .unbounded) {
+            continuation = $0
+        }
+        audioSink = continuation
+        ingestTask = Task { [weak self] in
+            for await chunk in audio {
+                guard let self else { return }
+                self.ingest(chunk)
+            }
+        }
+
         do {
-            try capture.start(archiveURL: archiveURL) { [weak self] chunk in
-                Task { @MainActor in self?.ingest(chunk) }
+            try capture.start(archiveURL: archiveURL) { [continuation] chunk in
+                continuation.yield(chunk)
             }
         } catch {
+            continuation.finish()
+            ingestTask?.cancel()
+            ingestTask = nil
+            audioSink = nil
             self.capture = nil
             cache.close()
             self.cache = nil
@@ -228,7 +262,8 @@ public final class LiveSession {
         state = .recording
     }
 
-    /// Stops capture, flushes the provisional tail and returns what to persist.
+    /// Stops capture, lets the decoder finish what it was doing, commits the
+    /// provisional tail and returns what to persist.
     public func stop() async -> LiveSessionResult? {
         guard let capture, let id = recordingId else { return nil }
         state = .finishing
@@ -236,22 +271,42 @@ public final class LiveSession {
         let archive = capture.stop()
         self.capture = nil
 
-        // Nothing more is coming, so the provisional tail is as final as it gets.
-        commit.ceilingMs = ring.totalMs
-        emit(commit.flush())
+        // `removeTap` can race the final callback. Close the stream only after
+        // capture stops, then wait until every yielded chunk has reached the
+        // cache and decoder before finalizing either one.
+        audioSink?.finish()
+        audioSink = nil
+        await ingestTask?.value
+        ingestTask = nil
+
+        // Nothing more is coming. The decoder drains its in-flight pass, hears
+        // the tail once more, and commits what is left -- through the same
+        // callbacks as every other commit, so nothing lands after the result
+        // below is built.
+        if let decoder {
+            await decoder.finish()
+            stats = decoder.stats
+        }
         partial = ""
+        decoder = nil
 
         cache?.close()
         let cacheURL = AudioCache.url(for: id, under: supportDirectory)
         cache = nil
 
+        let ingestedMs = Audio.bytesToMs(ingestedBytes)
         let durationMs = archive.sampleRate > 0
             ? Int(Double(archive.frames) / Double(archive.sampleRate) * 1000)
-            : ring.totalMs
-        elapsedMs = max(durationMs, ring.totalMs)
+            : ingestedMs
+        elapsedMs = max(durationMs, ingestedMs)
 
-        let waveform = (try? MappedPCM(contentsOf: cacheURL))
-            .map { WaveformAnalyzer.envelope(of: $0) } ?? []
+        // A long recording contains millions of samples. The 600-bucket result
+        // is small, but producing it still scans the whole file and must not
+        // freeze the window while the session is finishing.
+        let waveform = await Task.detached(priority: .utility) {
+            (try? MappedPCM(contentsOf: cacheURL))
+                .map { WaveformAnalyzer.envelope(of: $0) } ?? []
+        }.value
 
         let result = LiveSessionResult(
             recordingId: id,
@@ -270,19 +325,20 @@ public final class LiveSession {
         return result
     }
 
-    /// The moment to bookmark. Reading it from the ring buffer rather than a
-    /// wall clock keeps it on the same timeline as the transcript.
-    public var currentMs: Int { ring.totalMs }
+    /// The moment to bookmark. Counted from the audio received rather than a
+    /// wall clock, so it stays on the same timeline as the transcript.
+    public var currentMs: Int { Audio.bytesToMs(ingestedBytes) }
 
     // MARK: - Live path
 
     private func ingest(_ chunk: CapturedAudio) {
-        guard state.isRecording else { return }
+        // Stop switches to `.finishing` before it closes the capture stream;
+        // chunks already yielded by the audio tap are still part of the file.
+        guard state.isRecording || state == .finishing else { return }
         level = chunk.peak
-        ring.push(chunk.pcm)
-        cache?.write(chunk.pcm)
-        elapsedMs = ring.totalMs
-        msSinceHop += Audio.bytesToMs(chunk.pcm.count)
+        cache?.writeAsync(chunk.pcm)
+        ingestedBytes += chunk.pcm.count
+        elapsedMs = Audio.bytesToMs(ingestedBytes)
 
         // One meter bar per ~100 ms, or the view redraws faster than anyone can
         // see and the array churns for nothing.
@@ -292,113 +348,9 @@ public final class LiveSession {
             meter = WaveformAnalyzer.appending(chunk.peak, to: meter)
         }
 
-        guard decodeLive else { return }
-
-        vadPending.append(contentsOf: PCM.floats(from: chunk.pcm))
-        if !vadInFlight, vadPending.count >= 4096 {
-            vadInFlight = true
-            let batch = vadPending
-            vadPending = []
-            Task { await pumpVAD(batch) }
-        }
-
-        guard msSinceHop >= config.hopMs else { return }
-        msSinceHop = 0
-
-        // A stale partial is worse than a missing one: if the previous hop is
-        // still decoding, drop this one rather than queueing behind it.
-        guard !hopInFlight else {
-            stats.droppedHops += 1
-            return
-        }
-        if lastReading.trailingSilenceMs >= config.silenceBoundaryMs {
-            boundary()
-            return
-        }
-        hopInFlight = true
-        Task { await runHop() }
-    }
-
-    private func pumpVAD(_ samples: [Float]) async {
-        defer { vadInFlight = false }
-        if let reading = try? await engines.pushVAD(samples) { lastReading = reading }
-    }
-
-    /// Trailing silence ends a segment: flush the tail, then stop decoding.
-    private func boundary() {
-        commit.ceilingMs = ring.totalMs
-        let tail = commit.flush()
-        if !tail.isEmpty {
-            stats.boundaries += 1
-            ring.trim(to: commit.committedEndMs)
-            emit(tail)
-            partial = ""
-            Task { await engines.clearVADSpeechCounter() }
-            return
-        }
-        // Nobody talking and nothing pending: skip inference entirely.
-        stats.skippedSilent += 1
-    }
-
-    private func runHop() async {
-        defer { hopInFlight = false }
-
-        let (window, windowStartMs) = ring.window()
-        guard !window.isEmpty else { return }
-        commit.ceilingMs = ring.totalMs
-
-        // The window has slid past the last commit, so audio at its head is
-        // about to be discarded unagreed. Commit it now, or the next hypothesis
-        // starts at a different word and prefixes stop aligning for good --
-        // permanently, not until the next pause.
-        if windowStartMs > commit.committedEndMs {
-            let forced = commit.forceCommit(before: windowStartMs)
-            if !forced.isEmpty {
-                stats.forcedCommits += 1
-                emit(forced)
-            }
-        }
-
-        let output: ASROutput
-        do {
-            output = try await engines.transcribe(ASRRequest(
-                samples: PCM.floats(from: window),
-                language: config.language,
-                prompt: config.prompt,
-                wordTimestamps: true
-            ))
-        } catch {
-            stats.failedHops += 1
-            stats.lastError = error.localizedDescription
-            return
-        }
-
-        stats.hops += 1
-        stats.totalAudioMs += output.audioMs
-        stats.totalInferMs += output.inferMs
-        stats.peakMemoryMB = max(stats.peakMemoryMB, MemoryProbe.footprintMB())
-
-        guard !output.tokens.isEmpty else {
-            // Not silence: a decode threshold tripped. Worth counting, since it
-            // is otherwise indistinguishable from nobody speaking.
-            stats.emptyResults += 1
-            return
-        }
-
-        // Window-relative timings become absolute, so segments, exports and
-        // diarization all share one timeline.
-        let absolute = output.tokens.map {
-            Token(text: $0.text,
-                  startMs: windowStartMs + $0.startMs,
-                  endMs: windowStartMs + $0.endMs,
-                  confidence: $0.confidence)
-        }
-        let newly = commit.insert(absolute)
-        if !newly.isEmpty {
-            ring.trim(to: commit.committedEndMs)
-            emit(newly)
-        }
-        partial = commit.partial
+        guard let decoder else { return }
+        decoder.ingest(chunk.pcm)
+        stats = decoder.stats
     }
 
     private func emit(_ tokens: [Token]) {
@@ -408,15 +360,18 @@ public final class LiveSession {
         if let id = recordingId, let name = archiveFileName {
             reference = AudioReference(recordingId: id, fileName: name, offsetMs: first.startMs)
         }
-        segments.append(Segment(
+        let segment = Segment(
             index: nextIndex,
             startMs: first.startMs,
             endMs: max(last.endMs, first.startMs + 1),
             text: text,
             confidence: tokens.meanConfidence,
             audio: reference
-        ))
+        )
+        segments.append(segment)
         nextIndex += 1
+        if let decoder { stats = decoder.stats }
+        onCommitted?([segment])
     }
 
     private func requestMicrophone() async -> Bool {

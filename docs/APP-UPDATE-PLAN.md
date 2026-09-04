@@ -1,10 +1,15 @@
 # Transcriber 1.1 — update plan
 
-> **Design history.** The plan for the 1.1 release: what was planned, why, and
-> in what order. Everything in it shipped — see [CHANGELOG.md](../CHANGELOG.md)
-> for the result. Kept as written, for the reasoning rather than as a to-do
-> list. Two items were noted as still wanting a pass on real room audio: the
-> soft speaker-target threshold (1.1) and the speaker consolidation distance.
+> **Design history. Read this note first.** This is the plan for release 1.1. It
+> gives the intended work, the reason for each item, and the order. It keeps
+> the words that it had on the day of writing.
+>
+> All of this work shipped. [CHANGELOG.md](../CHANGELOG.md) gives the result.
+> Read this file for the reasoning. It is not a list of open tasks.
+>
+> On the day of writing, two items still needed a test against real room audio:
+> the soft speaker-target threshold in section 1.1, and the distance for
+> speaker consolidation.
 
 Written 2026-09-03 against the `native-macos-app` branch, from a read of every
 view and engine file plus screenshots of the running app. Priority follows the

@@ -104,6 +104,28 @@ final class AudioFileTests: XCTestCase {
         XCTAssertEqual(tail.count, Audio.sampleRate / 10)
     }
 
+    func testLiveWavWritesStayOrderedAndDrainOnClose() throws {
+        let url = scratch.appendingPathComponent("live-copy.wav")
+        let writer = try WavWriter(url: url)
+        let chunkSamples = Audio.sampleRate / 100
+
+        // Distinct values make both a dropped write and reordering visible.
+        for index in 0..<100 {
+            let value = Float(index) / 200
+            writer.writeAsync(PCM.data(from: [Float](repeating: value,
+                                                     count: chunkSamples)))
+        }
+        // No separate await: close is the synchronization point used by Stop.
+        writer.close()
+
+        let mapped = try MappedPCM(contentsOf: url)
+        XCTAssertEqual(mapped.durationMs, 1_000)
+        for index in 0..<100 {
+            let sample = mapped.floats((index * chunkSamples)..<(index * chunkSamples + 1))[0]
+            XCTAssertEqual(sample, Float(index) / 200, accuracy: 0.0001)
+        }
+    }
+
     func testMappedPcmRejectsSomethingThatIsNotAWav() throws {
         let url = scratch.appendingPathComponent("bogus.wav")
         try Data("not audio at all, just some bytes sitting in a file".utf8).write(to: url)

@@ -39,46 +39,93 @@ struct PlayerBar: View {
             }
 
             HStack(spacing: 14) {
+                // Skip buttons go first when the column is narrow; play and
+                // the clock stay.
+                ViewThatFits(in: .horizontal) {
+                    transport(withSkips: true)
+                    transport(withSkips: false)
+                }
+
+                Spacer(minLength: 8)
+
+                // Labels while there is room, icons when the column is narrow,
+                // and no speed menu when there is barely that. A fixed row here
+                // is what stopped the detail column shrinking and made the
+                // window overflow beside the inspector.
+                ViewThatFits(in: .horizontal) {
+                    trailingControls(iconOnly: false, withSpeed: true)
+                    trailingControls(iconOnly: true, withSpeed: true)
+                    trailingControls(iconOnly: true, withSpeed: false)
+                }
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.bar)
+        .task(id: recording.id) { ensureLoaded() }
+    }
+
+    private func transport(withSkips: Bool) -> some View {
+        HStack(spacing: 14) {
+            if withSkips {
                 Button {
                     state.player.skip(seconds: -10)
                 } label: {
                     Image(systemName: "gobackward.10")
                 }
-                Button {
-                    ensureLoaded()
-                    state.player.toggle()
-                } label: {
-                    Image(systemName: state.player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 18))
-                        .frame(width: 26)
-                }
-                .keyboardShortcut(.return, modifiers: [])
+            }
+            Button {
+                ensureLoaded()
+                state.player.toggle()
+            } label: {
+                Image(systemName: state.player.isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 18))
+                    .frame(width: 26)
+            }
+            .keyboardShortcut(.return, modifiers: [])
+            if withSkips {
                 Button {
                     state.player.skip(seconds: 10)
                 } label: {
                     Image(systemName: "goforward.10")
                 }
+            }
 
-                Text("\(TimeFormat.short(ms: state.player.currentMs)) / \(TimeFormat.short(ms: duration))")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+            Text("\(TimeFormat.short(ms: state.player.currentMs)) / \(TimeFormat.short(ms: duration))")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
+        .fixedSize()
+    }
 
-                Spacer()
+    @ViewBuilder
+    private func trailingControls(iconOnly: Bool, withSpeed: Bool) -> some View {
+        if iconOnly {
+            trailingCluster(withSpeed: withSpeed).labelStyle(.iconOnly).fixedSize()
+        } else {
+            trailingCluster(withSpeed: withSpeed).labelStyle(.titleAndIcon).fixedSize()
+        }
+    }
 
-                Toggle(isOn: $state.followPlayback) {
-                    Label("Follow", systemImage: "text.line.first.and.arrowtriangle.forward")
-                }
-                .toggleStyle(.button)
-                .help("Keep the playing line in view. Scrolling by hand turns this off.")
+    private func trailingCluster(withSpeed: Bool) -> some View {
+        @Bindable var state = state
+        return HStack(spacing: 14) {
+            Toggle(isOn: $state.followPlayback) {
+                Label("Follow", systemImage: "text.line.first.and.arrowtriangle.forward")
+            }
+            .toggleStyle(.button)
+            .help("Keep the playing line in view. Scrolling by hand turns this off.")
 
-                Button {
-                    _ = state.addBookmark()
-                } label: {
-                    Label("Bookmark", systemImage: "bookmark")
-                }
-                .help("Bookmark this moment (⌘B)")
+            Button {
+                _ = state.addBookmark()
+            } label: {
+                Label("Bookmark", systemImage: "bookmark")
+            }
+            .help("Bookmark this moment (⌘B)")
 
+            if withSpeed {
                 Menu {
                     ForEach(AppState.playbackRates, id: \.self) { rate in
                         Button(String(format: "%.2gx", Double(rate))) { state.player.rate = rate }
@@ -92,12 +139,7 @@ struct PlayerBar: View {
                 .fixedSize()
                 .help("Playback speed (⌥↑ faster, ⌥↓ slower)")
             }
-            .buttonStyle(.borderless)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.bar)
-        .task(id: recording.id) { ensureLoaded() }
     }
 
     private var duration: Int {

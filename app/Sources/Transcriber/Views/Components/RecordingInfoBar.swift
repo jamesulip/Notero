@@ -40,16 +40,45 @@ struct RecordingInfoBar: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(Array(facts.summary.enumerated()), id: \.element.id) { index, item in
+            // The bar must be able to give up width: this row, the title row
+            // and the player bar are what set the detail column's minimum,
+            // and a minimum wider than the space left beside the sidebar and
+            // the inspector makes the whole window overflow and crop at both
+            // edges. Facts drop from the left (date first, words last); the
+            // ⓘ popover always has all of them.
+            let summary = facts.summary
+            ViewThatFits(in: .horizontal) {
+                factsRow(summary)
+                factsRow(Array(summary.dropFirst()))
+                factsRow(Array(summary.dropFirst(2)))
+                factsRow(Array(summary.suffix(2)))
+                factsRow([])
+            }
+            Spacer(minLength: 0)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+        .task(id: reloadKey) { facts = RecordingFacts(recording, transcript: shown) }
+    }
+
+    /// One candidate width for the bar. Every text is `fixedSize` so a row
+    /// that does not fit says so, rather than truncating and claiming it does.
+    private func factsRow(_ items: [RecordingFacts.Item]) -> some View {
+        HStack(spacing: 6) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 if index > 0 {
                     Text("·").foregroundStyle(.quaternary)
                 }
                 Text(item.value)
+                    .fixedSize()
                     .help("\(item.label): \(item.value)\(item.help.isEmpty ? "" : "\n\n\(item.help)")")
             }
 
             if let revisions = recording.transcripts, revisions.count > 1 {
-                Text("·").foregroundStyle(.quaternary)
+                if !items.isEmpty { Text("·").foregroundStyle(.quaternary) }
                 revisionMenu(revisions.sorted { $0.revision > $1.revision })
             }
 
@@ -65,15 +94,7 @@ struct RecordingInfoBar: View {
                     RecordingFactsTable(facts: facts)
                 }
             }
-
-            Spacer(minLength: 0)
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
-        .task(id: reloadKey) { facts = RecordingFacts(recording, transcript: shown) }
     }
 
     /// Earlier revisions are kept when a recording is transcribed again; this
