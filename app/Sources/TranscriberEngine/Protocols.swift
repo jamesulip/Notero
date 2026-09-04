@@ -120,9 +120,16 @@ public protocol SpeakerDiarizing: Sendable {
     /// on a 16 GB machine already holding a 1.6 GB model that is the difference
     /// between running and swapping.
     ///
+    /// `speechRegions` lets the backend skip long stretches VAD has already
+    /// proved silent. Nil means no VAD information is available and the whole
+    /// source must be processed. `mode` chooses whether the expensive per-turn
+    /// embedding pass runs after the first speaker pass.
+    ///
     /// `expectedSpeakers` is how many people the user says were in the room.
     /// A target for the clustering, never a cap; nil means no opinion.
     func diarize(_ source: any PCMSource,
+                 speechRegions: [SpeechRegion]?,
+                 mode: DiarizationMode,
                  expectedSpeakers: Int?,
                  progress: (@Sendable (Double) -> Void)?) async throws -> [SpeakerSpan]
     func unload() async

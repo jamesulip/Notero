@@ -9,6 +9,40 @@ import TranscriberCore
 /// are what went wrong in the six-person room that came back as fourteen.
 final class SpeakerClusteringTests: XCTestCase {
 
+    func testDiarizationWindowsSkipOnlyLongSilence() {
+        let windows = SpeakerEngine.processingWindows(
+            durationMs: 90_000,
+            speechRegions: [
+                SpeechRegion(startMs: 5_000, endMs: 10_000),
+                SpeechRegion(startMs: 14_000, endMs: 20_000),
+                SpeechRegion(startMs: 50_000, endMs: 60_000),
+            ]
+        )
+
+        XCTAssertEqual(windows, [
+            SpeechRegion(startMs: 4_000, endMs: 21_000),
+            SpeechRegion(startMs: 49_000, endMs: 61_000),
+        ])
+    }
+
+    func testDiarizationWindowsStayUnderTheMemoryCap() {
+        let windows = SpeakerEngine.processingWindows(
+            durationMs: 1_500_000,
+            speechRegions: [SpeechRegion(startMs: 0, endMs: 1_500_000)]
+        )
+        XCTAssertEqual(windows.map(\.durationMs), [600_000, 600_000, 300_000])
+    }
+
+    func testDiarizationWithoutVADFallsBackToTheWholeSource() {
+        let windows = SpeakerEngine.processingWindows(
+            durationMs: 700_000, speechRegions: nil
+        )
+        XCTAssertEqual(windows, [
+            SpeechRegion(startMs: 0, endMs: 600_000),
+            SpeechRegion(startMs: 600_000, endMs: 700_000),
+        ])
+    }
+
     /// Unit vector along one axis of an 8-dimensional space. Two different axes
     /// are at cosine distance 1.0 -- unmistakably different voices.
     private func axis(_ index: Int) -> [Float] {

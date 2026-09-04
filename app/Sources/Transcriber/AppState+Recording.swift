@@ -109,7 +109,7 @@ extension AppState {
             if let stored = recording(result.recordingId) {
                 enqueueTranscription(stored, work: .full)
             }
-        } else if settings.diarize {
+        } else if settings.diarizationMode.performsDiarization {
             let job = TranscriptionJob(
                 id: result.recordingId,
                 title: recording(result.recordingId)?.title ?? "Recording",
@@ -117,7 +117,7 @@ extension AppState {
                 cacheURL: result.cacheURL,
                 modelId: result.modelId,
                 language: result.language,
-                diarize: true,
+                diarizationMode: settings.diarizationMode,
                 work: .diarizeOnly,
                 discardCacheWhenDone: !settings.keepWorkingCopy,
                 expectedSpeakers: recording(result.recordingId)?.expectedSpeakers

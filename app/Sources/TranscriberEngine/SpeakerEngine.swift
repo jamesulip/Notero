@@ -24,6 +24,13 @@ public actor SpeakerEngine: SpeakerDiarizing {
     /// survives across calls because the manager's speaker database is not
     /// reset between them.
     private static let windowMs = 10 * 60 * 1000
+    /// A gap this long is worth skipping. Shorter pauses stay in the same
+    /// diarization call: turn segmentation needs some silence for context and
+    /// thousands of tiny model calls would give back the time saved.
+    static let silenceSkipMs = 10_000
+    /// Keep acoustic context around every VAD region so breaths and quiet word
+    /// endings are not clipped by a detector tuned for transcription.
+    static let speechPadMs = 1_000
 
     public init(modelsDirectory: URL) {
         self.modelsDirectory = modelsDirectory
@@ -62,18 +69,24 @@ public actor SpeakerEngine: SpeakerDiarizing {
     }
 
     public func diarize(_ source: any PCMSource,
+                        speechRegions: [SpeechRegion]? = nil,
+                        mode: DiarizationMode = .accurate,
                         expectedSpeakers: Int? = nil,
                         progress: (@Sendable (Double) -> Void)?) async throws -> [SpeakerSpan] {
         guard let manager else { throw EngineError.modelNotLoaded }
         guard source.sampleCount > Audio.sampleRate else { return [] }
+        guard mode.performsDiarization else { return [] }
 
         var spans: [SpeakerSpan] = []
-        let windows = source.windows(ofMs: Self.windowMs)
+        let windows = Self.processingWindows(
+            durationMs: source.durationMs, speechRegions: speechRegions
+        )
+        let firstPassShare = mode == .accurate ? 0.7 : 1.0
         for (offset, window) in windows.enumerated() {
             try Task.checkCancellation()
-            let samples = source.floats(window)
+            let samples = source.floats(msRange: window.startMs..<window.endMs)
             guard samples.count > Audio.sampleRate else { continue }
-            let startSeconds = Double(window.lowerBound) / Double(Audio.sampleRate)
+            let startSeconds = Double(window.startMs) / 1000
 
             let result = try manager.performCompleteDiarization(
                 samples, sampleRate: Audio.sampleRate, atTime: startSeconds
@@ -86,12 +99,58 @@ public actor SpeakerEngine: SpeakerDiarizing {
                     quality: Double($0.qualityScore)
                 )
             })
-            progress?(0.7 * Double(offset + 1) / Double(max(1, windows.count)))
+            progress?(firstPassShare * Double(offset + 1) / Double(max(1, windows.count)))
         }
-        return try recluster(merge(spans), in: source, using: manager,
+        let merged = merge(spans)
+        guard mode == .accurate else { return merged }
+        return try recluster(merged, in: source, using: manager,
                              expectedSpeakers: expectedSpeakers) { fraction in
             progress?(0.7 + 0.3 * fraction)
         }
+    }
+
+    /// Continuous ranges handed to FluidAudio. VAD is advisory: nil falls
+    /// back to the complete recording, while a non-empty list removes only
+    /// silences of at least `silenceSkipMs`. Every result remains on the source
+    /// timeline, so no timestamp remapping or audio concatenation is involved.
+    static func processingWindows(durationMs: Int,
+                                  speechRegions: [SpeechRegion]?) -> [SpeechRegion] {
+        guard durationMs > 0 else { return [] }
+        guard let speechRegions else {
+            return split(SpeechRegion(startMs: 0, endMs: durationMs))
+        }
+        guard !speechRegions.isEmpty else { return [] }
+
+        let padded = speechRegions
+            .map {
+                SpeechRegion(startMs: max(0, $0.startMs - speechPadMs),
+                             endMs: min(durationMs, $0.endMs + speechPadMs))
+            }
+            .filter { $0.durationMs > 0 }
+            .sorted { $0.startMs < $1.startMs }
+
+        var joined: [SpeechRegion] = []
+        for region in padded {
+            if var last = joined.last,
+               region.startMs - last.endMs < silenceSkipMs {
+                last.endMs = max(last.endMs, region.endMs)
+                joined[joined.count - 1] = last
+            } else {
+                joined.append(region)
+            }
+        }
+        return joined.flatMap(split)
+    }
+
+    private static func split(_ region: SpeechRegion) -> [SpeechRegion] {
+        var out: [SpeechRegion] = []
+        var start = region.startMs
+        while start < region.endMs {
+            let end = min(region.endMs, start + windowMs)
+            out.append(SpeechRegion(startMs: start, endMs: end))
+            start = end
+        }
+        return out
     }
 
     // MARK: - Second pass: one embedding per turn

@@ -19,7 +19,7 @@ public struct TranscriptionJob: Sendable, Identifiable, Equatable {
     public var modelId: String
     public var language: String
     public var prompt: String?
-    public var diarize: Bool
+    public var diarizationMode: DiarizationMode
     public var work: Work
     /// Delete the working copy when the job finishes. True for imports and
     /// finished recordings, false while the user is likely to re-run.
@@ -34,7 +34,7 @@ public struct TranscriptionJob: Sendable, Identifiable, Equatable {
 
     public init(id: UUID, title: String, sourceURL: URL?, cacheURL: URL,
                 modelId: String, language: String, prompt: String? = nil,
-                diarize: Bool = true, work: Work = .full,
+                diarizationMode: DiarizationMode = .accurate, work: Work = .full,
                 discardCacheWhenDone: Bool = true, roomMode: Bool = false,
                 expectedSpeakers: Int? = nil) {
         self.id = id
@@ -44,12 +44,32 @@ public struct TranscriptionJob: Sendable, Identifiable, Equatable {
         self.modelId = modelId
         self.language = language
         self.prompt = prompt
-        self.diarize = diarize
+        self.diarizationMode = diarizationMode
         self.work = work
         self.discardCacheWhenDone = discardCacheWhenDone
         self.roomMode = roomMode
         self.expectedSpeakers = expectedSpeakers
     }
+
+    public var diarize: Bool { diarizationMode.performsDiarization }
+}
+
+/// Wall-clock measurements for one whole-file job. Stored with the transcript
+/// so future optimization is based on stage costs rather than guesses.
+public struct TranscriptionMetrics: Sendable, Codable, Equatable {
+    public var prepareMs = 0
+    public var vadMs = 0
+    public var decodeMs = 0
+    public var diarizeMs = 0
+    public var finalizeMs = 0
+    public var totalMs = 0
+    public var sourceDurationMs = 0
+    public var speechWindowMs = 0
+    public var windowCount = 0
+    public var retriedWindows = 0
+    public var droppedWindows = 0
+
+    public init() {}
 }
 
 public struct TranscriptionPayload: Sendable {
@@ -61,6 +81,7 @@ public struct TranscriptionPayload: Sendable {
     public var language: String
     public var didDiarize: Bool
     public var waveform: [Float]
+    public var metrics: TranscriptionMetrics
 }
 
 public enum JobEvent: Sendable {
@@ -89,6 +110,19 @@ public enum JobEvent: Sendable {
 /// memory doubles. One job at a time, and none at all while a recording is in
 /// progress.
 public actor TranscriptionQueue {
+
+    /// Several decode windows per persistence event. The transcript still
+    /// appears progressively, while long files stop paying for one SQLite
+    /// transaction per 28 seconds of audio.
+    static let partialBatchWindows = 5
+    static let partialBatchSegments = 250
+
+    private struct PartialBatch {
+        var nextIndex = 0
+        var pending: [Segment] = []
+        var windows = 0
+        var coveredMs = 0
+    }
 
     private let engines: EngineHost
     private var pending: [TranscriptionJob] = []
@@ -163,6 +197,7 @@ public actor TranscriptionQueue {
 
     private func run(_ job: TranscriptionJob) async {
         let started = Date()
+        var metrics = TranscriptionMetrics()
         do {
             emit(.stage(id: job.id, status: .preparing, progress: 0))
 
@@ -190,6 +225,8 @@ public actor TranscriptionQueue {
                     self.emit(.stage(id: job.id, status: .preparing, progress: fraction))
                 }
             }
+            metrics.prepareMs = Int(Date().timeIntervalSince(started) * 1000)
+            metrics.sourceDurationMs = durationMs
 
             // Decode.
             emit(.stage(id: job.id, status: .transcribing, progress: 0))
@@ -197,43 +234,84 @@ public actor TranscriptionQueue {
 
             let vad = await engines.voiceActivity
             let asr = await engines.recognizer
-            let regions = try await OfflinePipeline.speechRegions(in: heard, using: vad) { fraction in
-                self.emit(.stage(id: job.id, status: .transcribing,
-                                 progress: fraction * 0.1))
+            let partial = Mutex(PartialBatch())
+            let onWindow: @Sendable ([Token], SpeechRegion) -> Void = { tokens, window in
+                    // Segmented per window rather than over everything so far:
+                    // windows end in silence, so no segment straddles two of
+                    // them, and the work stays proportional to the window.
+                    let emission: (segments: [Segment], coveredMs: Int)? = partial.withLock { state in
+                        let segments = SegmentMerger.segments(
+                            from: tokens, startingAt: state.nextIndex
+                        )
+                        state.nextIndex += segments.count
+                        state.pending.append(contentsOf: segments)
+                        state.windows += 1
+                        state.coveredMs = window.endMs
+
+                        guard state.windows >= Self.partialBatchWindows
+                                || state.pending.count >= Self.partialBatchSegments
+                        else { return nil }
+                        state.windows = 0
+                        guard !state.pending.isEmpty else { return nil }
+                        let batch = state.pending
+                        state.pending.removeAll(keepingCapacity: true)
+                        return (batch, state.coveredMs)
+                    }
+                    if let emission {
+                        self.emit(.partial(id: job.id, segments: emission.segments,
+                                           coveredMs: emission.coveredMs))
+                    }
+                }
+            let fileDecoded: OfflinePipeline.FileDecodeReport
+            do {
+                fileDecoded = try await OfflinePipeline.transcribeFile(
+                    source: heard, using: vad, asr: asr,
+                    language: job.language, prompt: job.prompt,
+                    progress: { fraction in
+                        self.emit(.stage(id: job.id, status: .transcribing,
+                                         progress: fraction))
+                    },
+                    onWindow: onWindow
+                )
+            } catch {
+                // Cooperative cancellation returns here cleanly, so preserve
+                // the last sub-batch instead of losing up to five decoded
+                // windows merely because they had not reached the DB threshold.
+                let tail: (segments: [Segment], coveredMs: Int)? = partial.withLock { state in
+                    guard !state.pending.isEmpty else { return nil }
+                    return (state.pending, state.coveredMs)
+                }
+                if let tail {
+                    emit(.partial(id: job.id, segments: tail.segments,
+                                  coveredMs: tail.coveredMs))
+                }
+                throw error
             }
-            let windows = OfflinePipeline.windows(for: regions, durationMs: durationMs)
-            if windows.isEmpty, durationMs > 0 {
+            let regions = fileDecoded.regions
+            let decoded = fileDecoded.decode
+            metrics.vadMs = fileDecoded.vadMs
+            metrics.decodeMs = fileDecoded.decodeMs
+            metrics.windowCount = fileDecoded.windowCount
+            metrics.speechWindowMs = fileDecoded.speechWindowMs
+            metrics.retriedWindows = decoded.retriedWindows
+            metrics.droppedWindows = decoded.droppedWindows
+            if fileDecoded.windowCount == 0, durationMs > 0 {
                 // Zero windows means VAD heard nothing anywhere -- which is
-                // either a genuinely silent file or a misfiring detector (the
-                // energy fallback's fixed threshold on a quiet recording).
-                // Without this, the job completes with a green checkmark and
-                // an empty transcript, indistinguishable from success.
+                // either a genuinely silent file or a misfiring detector.
                 emit(.warning(id: job.id, message:
                     "No speech was detected anywhere in this audio, so the "
                     + "transcript is empty. If the recording is not silent, "
                     + "try transcribing again."))
             }
-
-            let nextIndex = Mutex(0)
-            let decoded = try await OfflinePipeline.transcribe(
-                source: heard, windows: windows, using: asr,
-                language: job.language, prompt: job.prompt,
-                progress: { fraction in
-                    self.emit(.stage(id: job.id, status: .transcribing,
-                                     progress: 0.1 + fraction * 0.9))
-                },
-                onWindow: { tokens, window in
-                    // Segmented per window rather than over everything so far:
-                    // windows end in silence, so no segment straddles two of
-                    // them, and the work stays proportional to the window.
-                    let first = nextIndex.withLock { $0 }
-                    let segments = SegmentMerger.segments(from: tokens, startingAt: first)
-                    guard !segments.isEmpty else { return }
-                    nextIndex.withLock { $0 = first + segments.count }
-                    self.emit(.partial(id: job.id, segments: segments,
-                                       coveredMs: window.endMs))
-                }
-            )
+            let tail: (segments: [Segment], coveredMs: Int)? = partial.withLock { state in
+                guard !state.pending.isEmpty else { return nil }
+                let batch = state.pending
+                state.pending.removeAll()
+                return (batch, state.coveredMs)
+            }
+            if let tail {
+                emit(.partial(id: job.id, segments: tail.segments, coveredMs: tail.coveredMs))
+            }
             try Task.checkCancellation()
             if decoded.droppedWindows > 0 {
                 emit(.warning(id: job.id, message:
@@ -247,11 +325,22 @@ public actor TranscriptionQueue {
             var didDiarize = false
             if job.diarize {
                 emit(.stage(id: job.id, status: .diarizing, progress: 0))
+                let diarizeStarted = Date()
                 do {
-                    try await engines.prepareDiarizer(progress: nil)
-                    let raw = try await engines.diarize(source, expectedSpeakers: job.expectedSpeakers) { fraction in
-                        self.emit(.stage(id: job.id, status: .diarizing,
-                                         progress: fraction))
+                    let raw: [SpeakerSpan]
+                    if job.expectedSpeakers == 1 {
+                        raw = [SpeakerSpan(speakerId: "S1", startMs: 0,
+                                           endMs: durationMs, quality: 1)]
+                        emit(.stage(id: job.id, status: .diarizing, progress: 1))
+                    } else {
+                        try await engines.prepareDiarizer(progress: nil)
+                        raw = try await engines.diarize(
+                            source, speechRegions: regions, mode: job.diarizationMode,
+                            expectedSpeakers: job.expectedSpeakers
+                        ) { fraction in
+                            self.emit(.stage(id: job.id, status: .diarizing,
+                                             progress: fraction))
+                        }
                     }
                     let normalized = SegmentMerger.normalize(raw)
                     spans = normalized.spans
@@ -271,20 +360,25 @@ public actor TranscriptionQueue {
                     emit(.stage(id: job.id, status: .finalizing, progress: 0))
                 }
                 await engines.releaseDiarizer()
+                metrics.diarizeMs = Int(Date().timeIntervalSince(diarizeStarted) * 1000)
             }
 
             emit(.stage(id: job.id, status: .finalizing, progress: 0.5))
+            let finalizeStarted = Date()
             let segments = SegmentMerger.segments(from: decoded.tokens, spans: spans)
+            metrics.finalizeMs = Int(Date().timeIntervalSince(finalizeStarted) * 1000)
+            metrics.totalMs = Int(Date().timeIntervalSince(started) * 1000)
 
             emit(.transcribed(id: job.id, payload: TranscriptionPayload(
                 segments: segments,
                 roster: roster,
                 durationMs: durationMs,
-                processMs: Int(Date().timeIntervalSince(started) * 1000),
+                processMs: metrics.totalMs,
                 modelId: job.modelId,
                 language: decoded.detectedLanguage ?? job.language,
                 didDiarize: didDiarize,
-                waveform: waveform
+                waveform: waveform,
+                metrics: metrics
             )))
             emit(.stage(id: job.id, status: .completed, progress: 1))
             if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
@@ -303,9 +397,25 @@ public actor TranscriptionQueue {
         }
         emit(.stage(id: job.id, status: .diarizing, progress: 0))
         do {
-            try await engines.prepareDiarizer(progress: nil)
-            let raw = try await engines.diarize(source, expectedSpeakers: job.expectedSpeakers) { fraction in
-                self.emit(.stage(id: job.id, status: .diarizing, progress: fraction))
+            let raw: [SpeakerSpan]
+            if job.expectedSpeakers == 1 {
+                raw = [SpeakerSpan(speakerId: "S1", startMs: 0,
+                                   endMs: source.durationMs, quality: 1)]
+                emit(.stage(id: job.id, status: .diarizing, progress: 1))
+            } else {
+                // A diarize-only job has no regions left from transcription,
+                // so make the cheap VAD pass once and use it to avoid sending
+                // long silences through both speaker models.
+                try? await engines.prepareVAD(progress: nil)
+                let vad = await engines.voiceActivity
+                let regions = try await OfflinePipeline.speechRegions(in: source, using: vad)
+                try await engines.prepareDiarizer(progress: nil)
+                raw = try await engines.diarize(
+                    source, speechRegions: regions, mode: job.diarizationMode,
+                    expectedSpeakers: job.expectedSpeakers
+                ) { fraction in
+                    self.emit(.stage(id: job.id, status: .diarizing, progress: fraction))
+                }
             }
             let normalized = SegmentMerger.normalize(raw)
             emit(.diarized(id: job.id, spans: normalized.spans, roster: normalized.roster))

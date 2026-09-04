@@ -62,11 +62,14 @@ extension AppState {
             progress[id]?.coveredMs = coveredMs
 
         case .transcribed(let id, let payload):
+            let performanceJSON = (try? JSONEncoder().encode(payload.metrics))
+                .flatMap { String(data: $0, encoding: .utf8) }
             try? await writer.completeTranscript(
                 openTranscripts[id],
                 segments: payload.segments, roster: payload.roster,
                 modelId: payload.modelId, language: payload.language,
                 processMs: payload.processMs, didDiarize: payload.didDiarize,
+                performanceJSON: performanceJSON,
                 for: id
             )
             openTranscripts[id] = nil

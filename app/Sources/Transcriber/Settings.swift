@@ -13,6 +13,9 @@ final class AppSettings {
         static let overrides = "model.overrides"
         static let language = "transcription.language"
         static let prompt = "transcription.prompt"
+        static let diarizationMode = "transcription.diarizationMode"
+        /// Legacy Boolean, read once when upgrading from builds before the
+        /// Off/Fast/Accurate choice existed.
         static let diarize = "transcription.diarize"
         static let neuralVAD = "transcription.neuralVAD"
         static let liveTranscription = "recording.live"
@@ -32,7 +35,13 @@ final class AppSettings {
         tier = ModelTier(rawValue: defaults.string(forKey: Key.tier) ?? "") ?? .balanced
         language = defaults.string(forKey: Key.language) ?? LanguageCatalogue.defaultLanguage
         prompt = defaults.string(forKey: Key.prompt) ?? ""
-        diarize = defaults.object(forKey: Key.diarize) as? Bool ?? true
+        if let raw = defaults.string(forKey: Key.diarizationMode),
+           let mode = DiarizationMode(rawValue: raw) {
+            diarizationMode = mode
+        } else {
+            let legacy = defaults.object(forKey: Key.diarize) as? Bool ?? true
+            diarizationMode = legacy ? .accurate : .off
+        }
         neuralVAD = defaults.object(forKey: Key.neuralVAD) as? Bool ?? true
         liveTranscription = defaults.object(forKey: Key.liveTranscription) as? Bool ?? true
         keepWorkingCopy = defaults.object(forKey: Key.keepWorkingCopy) as? Bool ?? false
@@ -72,7 +81,9 @@ final class AppSettings {
     var tier: ModelTier { didSet { defaults.set(tier.rawValue, forKey: Key.tier) } }
     var language: String { didSet { defaults.set(language, forKey: Key.language) } }
     var prompt: String { didSet { defaults.set(prompt, forKey: Key.prompt) } }
-    var diarize: Bool { didSet { defaults.set(diarize, forKey: Key.diarize) } }
+    var diarizationMode: DiarizationMode {
+        didSet { defaults.set(diarizationMode.rawValue, forKey: Key.diarizationMode) }
+    }
     var neuralVAD: Bool { didSet { defaults.set(neuralVAD, forKey: Key.neuralVAD) } }
     var liveTranscription: Bool { didSet { defaults.set(liveTranscription, forKey: Key.liveTranscription) } }
     var keepWorkingCopy: Bool { didSet { defaults.set(keepWorkingCopy, forKey: Key.keepWorkingCopy) } }
