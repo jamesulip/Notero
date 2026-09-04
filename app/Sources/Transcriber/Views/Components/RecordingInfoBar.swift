@@ -1,5 +1,6 @@
 import SwiftUI
 import TranscriberCore
+import TranscriberEngine
 import TranscriberStore
 
 /// What produced this transcript, in a row under the title.
@@ -226,6 +227,12 @@ struct RecordingFacts {
                         + "itself rather than following it."))
             }
 
+            if let json = transcript.performanceJSON,
+               let data = json.data(using: .utf8),
+               let metrics = try? JSONDecoder().decode(TranscriptionMetrics.self, from: data) {
+                items.append(contentsOf: performanceItems(metrics))
+            }
+
             items.append(Item(
                 label: "Transcribed",
                 value: transcript.createdAt.formatted(date: .abbreviated, time: .shortened)))
@@ -278,6 +285,31 @@ struct RecordingFacts {
         return ratio >= 1
             ? String(format: "%@ · %.1f× faster than real time", time, ratio)
             : String(format: "%@ · %.1f× slower than real time", time, 1 / ratio)
+    }
+
+    private func performanceItems(_ metrics: TranscriptionMetrics) -> [Item] {
+        var result: [Item] = []
+        if metrics.prepareMs > 0 {
+            result.append(Item(label: "Prepare", value: TimeFormat.duration(ms: metrics.prepareMs)))
+        }
+        if metrics.vadMs > 0 {
+            result.append(Item(label: "Find speech", value: TimeFormat.duration(ms: metrics.vadMs)))
+        }
+        if metrics.decodeMs > 0 {
+            result.append(Item(
+                label: "Transcribe",
+                value: TimeFormat.duration(ms: metrics.decodeMs),
+                help: "\(metrics.windowCount) speech windows; "
+                    + "\(metrics.retriedWindows) retried and \(metrics.droppedWindows) dropped."))
+        }
+        if metrics.diarizeMs > 0 {
+            result.append(Item(label: "Identify speakers",
+                               value: TimeFormat.duration(ms: metrics.diarizeMs)))
+        }
+        if metrics.finalizeMs > 0 {
+            result.append(Item(label: "Finalize", value: TimeFormat.duration(ms: metrics.finalizeMs)))
+        }
+        return result
     }
 
     private func audioDescription(_ recording: StoredRecording, fileName: String) -> String {

@@ -187,3 +187,37 @@ public enum ModelTier: String, CaseIterable, Identifiable, Sendable, Codable {
     /// consecutive passes.
     public var suitableForLive: Bool { self != .accurate }
 }
+
+/// How much speaker-identification work to do after transcription.
+///
+/// The first FluidAudio pass already finds turns and speaker clusters. The
+/// accurate mode then extracts a fresh embedding for every turn and clusters
+/// them again, fixing similar voices that shared an internal 10-second chunk.
+/// That second pass is valuable, but on a multi-hour recording it is also a
+/// substantial, optional tail after the transcript itself is complete.
+public enum DiarizationMode: String, CaseIterable, Identifiable, Sendable, Codable {
+    case off, fast, accurate
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .off: return "Off"
+        case .fast: return "Fast"
+        case .accurate: return "Accurate"
+        }
+    }
+
+    public var summary: String {
+        switch self {
+        case .off:
+            return "Skip speaker identification. The transcript finishes as soon as speech recognition does."
+        case .fast:
+            return "One speaker pass. Much shorter on long recordings, but similar voices may be merged."
+        case .accurate:
+            return "Rechecks every speaker turn. Best labels, with a longer post-transcription pass."
+        }
+    }
+
+    public var performsDiarization: Bool { self != .off }
+}

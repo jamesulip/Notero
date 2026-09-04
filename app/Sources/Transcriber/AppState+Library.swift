@@ -97,7 +97,8 @@ extension AppState {
     }
 
     func enqueueTranscription(_ recording: StoredRecording, work: TranscriptionJob.Work,
-                              modelId: String? = nil, diarize: Bool? = nil) {
+                              modelId: String? = nil,
+                              diarizationMode: DiarizationMode? = nil) {
         guard let name = recording.audioFileName else { return }
         warnings[recording.id] = nil
         recording.warningMessage = nil
@@ -109,7 +110,7 @@ extension AppState {
             modelId: modelId ?? settings.offlineModelId,
             language: settings.language,
             prompt: settings.promptOrNil,
-            diarize: diarize ?? settings.diarize,
+            diarizationMode: diarizationMode ?? settings.diarizationMode,
             work: work,
             discardCacheWhenDone: !settings.keepWorkingCopy,
             roomMode: settings.roomMode,
@@ -131,7 +132,9 @@ extension AppState {
     /// Speaker identification only, over the transcript that exists. Forced on
     /// regardless of the setting: asking for it is the setting.
     func rediarize(_ recording: StoredRecording) {
-        enqueueTranscription(recording, work: .diarizeOnly, diarize: true)
+        enqueueTranscription(recording, work: .diarizeOnly,
+                             diarizationMode: settings.diarizationMode.performsDiarization
+                                ? settings.diarizationMode : .accurate)
     }
 
     func cancelJob(_ id: UUID) {

@@ -11,8 +11,8 @@ import TranscriberEngine
 //
 //   swift run -c release transcribe --audio clip.wav [--reference ref.txt]
 //                                   [--models DIR] [--model ID] [--tier fast]
-//                                   [--language tl] [--no-diarize] [--room-mode]
-//                                   [--format txt]
+//                                   [--language tl] [--fast-diarize|--no-diarize]
+//                                   [--room-mode] [--format txt]
 
 struct Options {
     var audio: URL?
@@ -22,7 +22,7 @@ struct Options {
     var modelId: String?
     var tier: ModelTier = .balanced
     var language = LanguageCatalogue.defaultLanguage
-    var diarize = true
+    var diarizationMode: DiarizationMode = .accurate
     var roomMode = false
     var format: ExportFormat = .txt
     var output: URL?
@@ -47,13 +47,14 @@ func parse() -> Options {
         case "--language": options.language = value() ?? options.language
         case "--format": options.format = value().flatMap(ExportFormat.init(rawValue:)) ?? options.format
         case "--out": options.output = value().map { URL(fileURLWithPath: $0) }
-        case "--no-diarize": options.diarize = false
+        case "--fast-diarize": options.diarizationMode = .fast
+        case "--no-diarize": options.diarizationMode = .off
         case "--room-mode": options.roomMode = true
         case "--help", "-h":
             print("""
             transcribe --audio FILE [--reference FILE] [--models DIR]
                        [--model ID | --tier fast|balanced|accurate]
-                       [--language tl] [--no-diarize] [--room-mode]
+                       [--language tl] [--fast-diarize | --no-diarize] [--room-mode]
                        [--format txt|markdown|srt|vtt|json] [--out FILE]
             """)
             exit(0)
@@ -157,11 +158,13 @@ if decoded.droppedWindows > 0 { log("  WARNING \(decoded.droppedWindows) window(
 
 var spans: [SpeakerSpan] = []
 var roster: [SpeakerLabel] = []
-if options.diarize {
+if options.diarizationMode.performsDiarization {
     do {
         try await engines.prepareDiarizer { message, _ in log("  \(message)") }
         let diarizeStarted = Date()
-        let raw = try await engines.diarize(source)
+        let raw = try await engines.diarize(
+            source, mode: options.diarizationMode
+        )
         if ProcessInfo.processInfo.environment["TRANSCRIBE_DEBUG_SPANS"] != nil {
             for span in raw.sorted(by: { $0.startMs < $1.startMs }) {
                 log(String(format: "  span %7.2f-%7.2f %@ q=%.2f",
@@ -184,7 +187,7 @@ let segments = SegmentMerger.segments(from: decoded.tokens, spans: spans)
 let document = MeetingDocument(
     id: UUID(),
     title: audioURL.deletingPathExtension().lastPathComponent,
-    kind: options.diarize ? .meeting : .recording,
+    kind: options.diarizationMode.performsDiarization ? .meeting : .recording,
     createdAt: Date(),
     durationMs: source.durationMs,
     language: decoded.detectedLanguage ?? options.language,

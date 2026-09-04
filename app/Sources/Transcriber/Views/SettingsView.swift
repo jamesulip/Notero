@@ -107,7 +107,16 @@ struct GeneralSettings: View {
             }
 
             Section("After recording") {
-                Toggle("Identify speakers", isOn: $settings.diarize)
+                Picker("Speaker identification", selection: $settings.diarizationMode) {
+                    ForEach(DiarizationMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text(settings.diarizationMode.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Toggle("Neural voice activity detection", isOn: $settings.neuralVAD)
                 Text(settings.neuralVAD
                      ? "Silero on the Neural Engine. Better in a noisy room; falls back "

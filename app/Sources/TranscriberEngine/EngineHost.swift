@@ -109,9 +109,14 @@ public actor EngineHost {
     }
 
     public func diarize(_ source: any PCMSource,
+                        speechRegions: [SpeechRegion]? = nil,
+                        mode: DiarizationMode = .accurate,
                         expectedSpeakers: Int? = nil,
                         progress: (@Sendable (Double) -> Void)? = nil) async throws -> [SpeakerSpan] {
-        try await diarizer.diarize(source, expectedSpeakers: expectedSpeakers, progress: progress)
+        try await diarizer.diarize(
+            source, speechRegions: speechRegions, mode: mode,
+            expectedSpeakers: expectedSpeakers, progress: progress
+        )
     }
 
     /// Called at the end of every job. The diarizer is only needed in bursts,

@@ -117,6 +117,9 @@ public final class StoredTranscript {
     public var createdAt: Date = Date.now
     /// Wall-clock cost of producing it. Shown in the recording info bar.
     public var processMs: Int = 0
+    /// Per-stage performance counters encoded by the engine. Optional keeps
+    /// older stores and live-only transcripts valid without a migration shim.
+    public var performanceJSON: String?
     public var didDiarize: Bool = false
     /// False while a whole-file job is still appending segments, and left
     /// false if that job fails or is cancelled part-way: a partial transcript

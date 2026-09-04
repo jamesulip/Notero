@@ -60,7 +60,8 @@ public actor TranscriptWriter {
     @discardableResult
     public func storeTranscript(
         segments: [Segment], roster: [SpeakerLabel], modelId: String,
-        language: String, processMs: Int, didDiarize: Bool, for id: UUID
+        language: String, processMs: Int, didDiarize: Bool,
+        performanceJSON: String? = nil, for id: UUID
     ) throws -> Int {
         guard let recording = try find(id) else { return 0 }
 
@@ -68,6 +69,7 @@ public actor TranscriptWriter {
         let transcript = StoredTranscript(revision: revision, modelId: modelId,
                                           language: language)
         transcript.processMs = processMs
+        transcript.performanceJSON = performanceJSON
         transcript.didDiarize = didDiarize
         transcript.recording = recording
         modelContext.insert(transcript)
@@ -122,6 +124,7 @@ public actor TranscriptWriter {
     public func completeTranscript(
         _ transcriptId: UUID?, segments: [Segment], roster: [SpeakerLabel],
         modelId: String, language: String, processMs: Int, didDiarize: Bool,
+        performanceJSON: String? = nil,
         for id: UUID
     ) throws -> Int {
         guard let transcriptId,
@@ -130,7 +133,8 @@ public actor TranscriptWriter {
         else {
             return try storeTranscript(segments: segments, roster: roster, modelId: modelId,
                                        language: language, processMs: processMs,
-                                       didDiarize: didDiarize, for: id)
+                                       didDiarize: didDiarize,
+                                       performanceJSON: performanceJSON, for: id)
         }
 
         for row in transcript.segments ?? [] { modelContext.delete(row) }
@@ -142,6 +146,7 @@ public actor TranscriptWriter {
         transcript.modelId = modelId
         transcript.language = language
         transcript.processMs = processMs
+        transcript.performanceJSON = performanceJSON
         transcript.didDiarize = didDiarize
         transcript.isComplete = true
 
