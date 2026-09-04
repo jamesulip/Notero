@@ -1,381 +1,168 @@
 # Notero
 
-Notero is a native macOS app. It records meetings in Tagalog and Taglish,
-writes the transcript, and keeps your notes with it. The app does all the work
-on your Mac. It has no account and no API key, and no audio goes off the
-machine.
+A native macOS app that records a meeting, transcribes it on your Mac, and
+keeps your notes with the transcript.
 
-**Status.** Version 1.0 shipped on 2026-09-02. Version 1.1 is complete but not
-released. [CHANGELOG.md](CHANGELOG.md) lists what each version contains. These
-functions are complete and tested:
+Notero runs every model on your own machine. It transcribes 15 languages and
+can also detect the language for you. Tagalog and Taglish are the default,
+because code-switched Filipino speech across a room is the case that this app
+is tuned and measured against. There is no account, no API key and no server.
+No recording, no transcript and no note goes off your Mac.
 
-- Recordings from the microphone, and imported media files
-- Live transcription and whole-file transcription
-- Speaker identification, with manual merge and reassignment
-- Transcript edits, with revisions
-- Synchronized transcript and audio playback
-- Full-text search of the library
-- The manual meeting workspace
-- Export to TXT, Markdown, SRT, VTT and JSON
-- The model benchmark
+![The Notero window: a sidebar of recordings, a transcript with one coloured badge for each speaker, and a pane of meeting notes on the right.](docs/images/transcript-and-notes.png)
 
-The maintainer builds and measures the app on an M-series Mac. The memory
-target is a 16 GB M2 Pro. On the Taglish test clip, whole-file transcription
-gives a real-time factor (RTF) of 0.09 to 0.14. That is 7 to 11 times faster
-than real time. The peak memory is approximately 300 MB. The word error rate
-(WER) is 20.3% to 25.8%. The offline WER that this repository recorded for the
-same clip is 27.3%.
+## Features
 
-Eleven findings changed the plan. In one of them, a single refused decode
-window deleted 44% of a transcript and reported no error. In another, the
-speaker model merged two different voices that shared a 10-second chunk. Read
-[docs/FINDINGS.md](docs/FINDINGS.md) before you trust a number on this page.
+- Record from the microphone, or import an MP3, WAV, M4A, MP4 or MOV file.
+- Live transcription while you record, and whole-file transcription after.
+- 15 languages and automatic detection. Tagalog and Taglish are the default.
+- Speaker identification, with manual merge and reassignment.
+- Meeting notes: a summary and five lists, which are key points, decisions,
+  action items, questions and follow-ups. Each item keeps the timestamp and the
+  transcript line that it came from.
+- Transcript editing, with revisions and one-step undo for each turn.
+- Synchronized transcript and audio playback, with bookmarks.
+- Full-text search across each transcript, note, action item and bookmark.
+- Export to TXT, Markdown, SRT, VTT and JSON.
+- A model benchmark that measures the three speed tiers on your own audio.
 
-## The app
+[docs/USAGE.md](docs/USAGE.md) explains each of these, and gives the keyboard
+shortcuts.
 
-```
-app/            Swift 6 and SwiftUI. The product.
-├── Sources/TranscriberCore/     pure logic: commit policy, merger, exports, search
-├── Sources/TranscriberStore/    SwiftData schema and queries
-├── Sources/TranscriberEngine/   audio, WhisperKit, FluidAudio VAD and speaker models
-├── Sources/Transcriber/         the SwiftUI app
-└── Sources/TranscriberCLI/      the same pipeline, with no window
-```
+## What It Looks Like
 
-There are four layers. You can build and test each layer without the layer
-above it. This split lets you test the commit policy, the segment merger and
-the exporters on a Mac that has no microphone and no model weights.
+| | |
+| --- | --- |
+| ![The transcript view. Each turn starts with a timestamp and a coloured speaker badge. A waveform and the playback controls are at the foot of the window.](docs/images/transcript.png) | ![The search view. One field, seven results, and the word "budget" highlighted in each transcript line and each note.](docs/images/search.png) |
+| **Speaker turns.** Every turn keeps its start time. Click the time to play from there. Move one turn to another speaker when the model gets it wrong. | **Search.** One field across every transcript, note, action item and bookmark. Filter the results by kind. |
+| ![The export sheet. Five formats on the left, the speakers and the time range on the right, and a preview of the plain-text output below.](docs/images/export.png) | ![The model settings. Three tiers, and a list of the models on this Mac with the size of each one.](docs/images/models.png) |
+| **Export.** Five formats. Pick the speakers and the time range, then save the file or copy it. | **Models.** Three speed tiers. Each one runs on the Neural Engine of your own Mac. |
 
-The app is Notero, but the Swift modules and the data directory keep the name
-Transcriber, which the app had up to version 1.1. The data directory holds the
-recordings that version 1.0 wrote, thus a rename there hides them. The module
-names are internal and a rename gives the user nothing.
+**The screenshots use a demo library, and not a real meeting.** The audio is a
+synthetic Taglish clip from the macOS `say` command. macOS has no Filipino
+voice, thus the clip uses an Indonesian and a Malay voice for the Tagalog
+turns. Those voices say Tagalog words incorrectly, therefore the transcript in
+the screenshots has more errors than a recording of real speech gives.
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md) gives the measured accuracy and the
+conditions of the measurement.
+`app/scripts/make-demo-meetings.sh` builds the clip, and its comments explain
+how to fill a demo library without a touch to your own recordings.
 
-Three protocols hide the engines: `SpeechRecognizing`, `VoiceActivityDetecting`
-and `SpeakerDiarizing`. To replace a backend, write a new conformance to the
-related protocol. You do not have to change the user interface.
+## Requirements
 
-### Requirements
-
-- **macOS 15 or later** to run the app. `Package.swift` declares `.macOS(.v15)`.
-- **Xcode 26 or later** to build the app. `Package.swift` sets
-  `swift-tools-version: 6.2`, which Xcode 26 supplies. To see your version,
-  run `swift --version`.
+- **macOS 15 or later** to run the app.
 - **A Mac with Apple silicon.** The models run on the Neural Engine.
+- **Xcode 26 or later** to build the app.
 - **Approximately 1.9 GB of free disk space** for the model weights.
-- **A network connection** for the first build and the first start. SwiftPM
-  gets WhisperKit and FluidAudio, and `app/Package.resolved` pins both.
+- **A network connection** for the first build and the first start.
 
-### Build and run
+## Build
 
 ```bash
 cd app && ./build-app.sh && open Notero.app
 ```
 
 The app bundle is necessary. macOS gives microphone access only to a signed app
-that declares `NSMicrophoneUsageDescription`. If it does not, macOS refuses
-access, and the refusal sounds like silence instead of an error. The signature
-is ad-hoc, thus the app runs only on the Mac that built it.
+bundle. At the first start, the app downloads the model weights to
+`~/Library/Application Support/Transcriber/Models`.
 
-At the first start, the app downloads the model weights to
-`~/Library/Application Support/Transcriber/Models`. The default speech model is
-approximately 1.6 GB. Voice activity detection and speaker identification add
-approximately 250 MB.
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) gives the tests, the CI job and the
+development workflow.
 
-```bash
-cd app && swift test
+## How It Works
+
+```
+SwiftUI              the window, the library and the transcript view
+  ↓
+TranscriberStore     the SwiftData schema and the queries
+  ↓
+TranscriberCore      the commit policy, the merger, the exports and the search
+  ↓
+TranscriberEngine    the audio, the models and the job queue
+  ├── WhisperKit     speech recognition
+  └── FluidAudio     voice activity detection and speaker identification
 ```
 
-There are 248 tests: 226 XCTest tests and 22 swift-testing tests. They need no
-model weights, no microphone and no network.
+There are four layers. Each layer builds and tests without the layer above it.
+Three protocols hide the engines, thus you can replace a backend without a
+change to the user interface.
 
-`build-app.sh` writes the version from `app/VERSION` and the commit count into
-the bundle. [`.github/workflows/app.yml`](.github/workflows/app.yml) runs the
-same build and the same tests on each push.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) gives the design, the two
+transcription pipelines and the algorithms.
 
-`app/scripts/snap.sh` makes a screenshot of the app, and clicks first if you
-ask it to. Use it to compare a change to the real app. The script refuses to
-click unless Notero is the frontmost app.
+## Performance
 
-### The command-line tool
+The maintainer measured these numbers on one Mac, on a 57-second synthetic
+Taglish test clip, with the default Balanced model:
 
-`transcribe` runs the same pipeline with no window. Use it for evaluation and
-for continuous integration.
-
-```bash
-cd app && swift build -c release --product transcribe
-./.build/release/transcribe --audio meeting.m4a --reference truth.txt --format srt
-```
-
-| Option | Function |
+| Measurement | Result |
 | --- | --- |
-| `--audio FILE` | The audio or video file to transcribe. Required. |
-| `--reference FILE` | A reference transcript. The tool then reports the WER. |
-| `--models DIR` | Read the model weights from this directory. |
-| `--model ID` | Use this WhisperKit model. |
-| `--tier fast\|balanced\|accurate` | Use the model for this tier. |
-| `--language CODE` | Force this language. The default is `tl`. |
-| `--fast-diarize` | Do one speaker pass only. |
-| `--no-diarize` | Do no speaker identification. |
-| `--room-mode` | Apply the high-pass filter for far-field room audio. |
-| `--format txt\|markdown\|srt\|vtt\|json` | The export format. |
-| `--out FILE` | Write the export to this file. |
-| `--json FILE` | Write a machine-readable report to this file. |
-| `--live` | Replay the file through the live path. |
-| `--realtime` | With `--live`, feed the audio at wall-clock speed. |
-| `--hop MS` | With `--live`, set the hop. |
-| `--pre-roll MS` | With `--live`, set the pre-roll. |
-| `--context MS` | With `--live`, set the context length. |
-| `--adaptive-hop` | With `--live`, shorten the hop while decodes are fast. |
+| Whole-file real-time factor (RTF) | 0.09 to 0.14, which is 7 to 11 times faster than real time |
+| Word error rate (WER) | 20.3% to 25.8% |
+| Peak memory | approximately 300 MB |
 
-The tool reports the number of decoded words, the RTF, the number of retried
-and dropped windows, and the peak memory. If you give `--reference`, it also
-reports the WER.
+**Read these numbers with their conditions.** The test clip is synthetic, the
+reference transcript is small, and the measurement Mac is faster than the 16 GB
+M2 Pro that the memory target assumes. Your own recordings will give different
+numbers. [docs/BENCHMARKS.md](docs/BENCHMARKS.md) gives the method, the
+conditions and the limits of each measurement.
 
-## What it does
+## Privacy
 
-**Record or import.** The app records from the microphone and writes two files
-from one audio tap. The first file is a 64 kbps AAC archive at the hardware
-sample rate. The second file is a 16 kHz mono working copy for the models. Both
-files come from the same tap, thus their samples stay aligned. You can also
-drop an MP3, WAV, M4A, MP4 or MOV file on the window. The app copies the file
-into the library and adds it to the queue.
+Speech recognition, voice activity detection and speaker identification all run
+on your Mac through CoreML. The app has no account, no API key, no telemetry,
+no analytics and no crash reports.
 
-**Transcribe.** Live transcription decodes a 15-second context every 1.5
-seconds and applies LocalAgreement-2. Committed text never changes later. Each
-decode also reads 1.5 seconds of committed audio in front of the active region,
-thus the model does not start cold at a commit boundary. When the voice
-detector hears 700 ms of silence, the app decodes the audio up to that pause
-and closes the utterance.
+**The app makes one network request, and no other.** At the first start, it
+gets the model weights from Hugging Face over HTTPS. After that the app works
+with no network at all. It does not update itself, thus it asks no server
+whether a newer version exists. To move to a newer version, get it from the
+[releases page](https://github.com/jamesulip/notero/releases) yourself.
 
-Whole-file transcription finds the speech with Silero VAD. It packs the speech
-into windows that are shorter than the 30-second limit of Whisper and that end
-in silence, and it decodes each window one time. If the model refuses a window,
-the app decodes the window again, then makes it wider, and finally splits it.
-The app scans and decodes the file in 5-minute batches, thus the transcript
-starts to appear early on a long recording.
+No request carries audio, a transcript or a note. Your recordings and your
+notes stay in `~/Library/Application Support/Transcriber/`. The app adds no
+encryption of its own, thus FileVault is the only protection.
+[SECURITY.md](SECURITY.md) gives the full security position.
 
-**Identify the speakers.** Speaker identification runs after transcription. The
-app numbers the speakers by first appearance, thus the person who opened the
-meeting is Speaker 1. A rename changes one row, because a segment holds the
-label from the speaker model and never the name that you gave the speaker. A rename therefore stays
-correct after you transcribe the recording again. You can merge two speakers,
-and you can move one turn to a different speaker.
+## Documentation
 
-There are three modes. **Accurate** is the default and examines each turn a
-second time. **Fast** does one pass only and is much quicker on a long
-recording, but it can merge similar voices. **Off** skips the stage.
-
-**Take notes.** A meeting has a summary and five lists: key points, decisions,
-action items, questions and follow-ups. Each item keeps the timestamp and the
-segment that it came from. You can therefore compare a decision to the words
-that the speaker said. Press ⌘B to bookmark the moment during a recording or
-during playback.
-
-**Edit the transcript.** Double-click a turn to edit it line by line. The app
-keeps the raw model output below your edit, and the search index and the
-exports read the edited text. You can restore a line, delete it, or move it to
-a different speaker. Press ⌘Z to undo all edits to one turn in one step. A menu
-in the info bar shows the earlier revisions.
-
-**Find it again.** Search reads the transcripts, the notes, the action items
-and the bookmark labels, and it ignores case and diacritics. When you open a
-result, the app opens the recording and moves to that moment.
-
-**Export.** TXT gives the speaker labels and the notes. Markdown gives minutes:
-attendees, summary, action items with checkboxes, then the transcript. SRT and
-VTT give cues in order that do not overlap. JSON contains the complete meeting.
-You can also export selected speakers only, or one time range only.
-
-### Keyboard
-
-| Keys | Function |
+| Document | Contents |
 | --- | --- |
-| ⌘R, ⇧⌘M, ⌘N | New recording, meeting or note |
-| ⌘. | Stop the recording |
-| ⌘O, ⌘E | Import, export |
-| ⌘F | Find in this transcript |
-| ⇧⌘F | Search all recordings |
-| ⌘B | Bookmark this moment |
-| ⌃⌘K, D, A, Q, U | Add the selection as a key point, decision, action, question or follow-up |
-| Space | Play or pause. ⌥Space does this from any view. |
-| ⌥←, ⌥→ | Go back or forward 5 seconds |
-| ⌘[, ⌘] | Previous turn, next turn |
-| ⌥↑, ⌥↓ | Faster playback, slower playback |
-| ⌥⌘T | Show the time of day |
-| ⇧⌘K | Model benchmark |
+| [docs/USAGE.md](docs/USAGE.md) | What each part of the app does, and the keyboard |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The four layers, the pipelines and the algorithms |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Build, tests, CI, scripts and the workflow |
+| [docs/MODELS.md](docs/MODELS.md) | The three tiers, the model IDs and the naming trap |
+| [docs/CLI.md](docs/CLI.md) | The `transcribe` command-line tool |
+| [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | RTF, WER and memory, with their conditions |
+| [docs/FINDINGS.md](docs/FINDINGS.md) | Engineering findings and the failures behind the design |
+| [docs/RELEASE.md](docs/RELEASE.md) | How to build and publish a release |
+| [docs/LEGACY-SERVER.md](docs/LEGACY-SERVER.md) | The Python server, which the app replaced |
 
-## Memory on a 16 GB Mac
+[CHANGELOG.md](CHANGELOG.md) lists what each version contains. Four files in
+`docs/` keep the words that they had on the date at the top:
+[FINDINGS.md](docs/FINDINGS.md), [PLAN.md](docs/PLAN.md),
+[ENVIRONMENT.md](docs/ENVIRONMENT.md) and
+[APP-UPDATE-PLAN.md](docs/APP-UPDATE-PLAN.md). The last three are design
+history and not current documentation.
 
-The models set the memory budget. large-v3-turbo holds approximately 1.6 GB,
-and the two speaker models hold approximately 200 MB more. The app therefore
-keeps one instance of each model and shares it between the live path and the
-background queue. It releases the speaker models as soon as no job needs them.
-The queue also refuses to start work while a recording runs. A background
-decode competes for the Neural Engine and makes a live hop 3 seconds long
-instead of 0.9 seconds.
+**Read [docs/FINDINGS.md](docs/FINDINGS.md) before you trust a number on this
+page.** Eleven findings changed the design. In one of them, a single refused
+decode window deleted 44% of a transcript and reported no error. In another,
+the speaker model merged two different voices that shared a 10-second chunk.
 
-The app never reads a complete audio file into memory. It maps the 16 kHz
-working copy and reads it in slices. Two hours of audio in a `[Float]` array
-holds 460 MB. On a Mac that already holds the model, that difference makes
-the Mac swap memory to disk. The app deletes the working copy after transcription and speaker
-identification are complete. If you run either stage again, the app builds the
-working copy again from the archive.
+## Status
 
-## Models
+Version 1.0.0 is the first public release. Every feature in the list above is
+complete and tested. [CHANGELOG.md](CHANGELOG.md) gives what it contains, and
+the private builds that came before it.
 
-The app shows three tiers instead of model names. **Fast** is the quantized
-turbo model. **Balanced** is large-v3-turbo. It is the default, and it keeps
-live transcription at real-time speed. **Accurate** is the full large-v3 model.
-It costs approximately 5 times more to decode, thus use it to transcribe a
-recording again and not for the live path. Press ⇧⌘K to measure all three tiers
-on your own audio. The benchmark recommends the slowest tier that stays at
-real-time speed.
+Version 1.0.0 does **not** contain a local LLM, automatic summaries, automatic
+extraction of action items and decisions, topic detection, semantic search,
+speaker voice profiles, or any cloud function. The data model already has the
+shape that each of these functions needs, thus none of them needs a rebuild of
+the app.
 
-The `_turbo` suffix of WhisperKit marks a compute variant. It is not the
-large-v3-turbo model of OpenAI. OpenAI publishes that model under its September
-2024 date stamp. Finding 1 in FINDINGS.md explains the difference. Read it
-before you change a model id.
-
-## Tagalog and Taglish
-
-The default language is `tl`, and the app forces it. The app does not translate
-the transcript and does not rewrite it. It writes code-switched English inside
-Tagalog as the speaker said it. Automatic detection is available, but the app
-marks it as a risk. On a Taglish test clip, the decoder reported Indonesian and
-started to translate. The decoder listens to the voice. It does not read the
-script.
-
-## Updates
-
-The app can update itself. **Notero ▸ Check for Updates…** asks GitHub
-which releases exist. Settings ▸ Updates has a switch for a check once a day at
-launch. **The switch is off until you turn it on.** Everything else in this app
-happens on your Mac, thus the one request that leaves it is your decision. The
-request carries no identifier and nothing about this Mac. No recording, no
-transcript and no note goes anywhere.
-
-Each release is signed with an Ed25519 key. The app holds the public half. It
-checks the signature of a download, and then that the download is Notero
-at the version that the release gives, before it replaces anything. It installs
-nothing that fails one of those checks. The app then quits, a small script moves
-the new bundle into position, and the app opens again.
-
-The bundle has an ad-hoc signature and not a Developer ID. Thus macOS can ask
-for microphone access again after an update.
-
-[docs/RELEASE.md](docs/RELEASE.md) tells you how to publish a release that the
-app accepts. **The list of releases must be readable without a token**, because
-the app sends none. A private repository is not readable, and the app says so.
-
-## Configuration
-
-**The app has no configuration.** It has no configuration file, no environment
-variables, no accounts and no keys. All adjustable items are in Settings (⌘,),
-and macOS keeps them in user defaults. The app writes the recordings and the
-SwiftData store to `~/Library/Application Support/Transcriber/`.
-
-The command-line tool reads one environment variable:
-
-| Variable | Function |
-| --- | --- |
-| `TRANSCRIBE_DEBUG_SPANS` | Set it to any value to write each speech region and each speaker span to stderr. |
-
-The Python server reads two environment variables. Both defaults work, and
-[`.env.example`](.env.example) records them and is safe to copy:
-
-| Variable | Function |
-| --- | --- |
-| `ASR_MODEL` | The WhisperKit model to load. The default is `openai_whisper-large-v3-v20240930_turbo`. `server/models.py` holds the catalogue. Read finding 1 in [docs/FINDINGS.md](docs/FINDINGS.md) before you change this value. |
-| `ASR_MAX_SESSIONS` | The number of concurrent live sessions. The default is 3. The server refuses a session above the limit with the error `at_capacity`. |
-
-```bash
-cp .env.example .env
-./.venv/bin/uvicorn server.main:app --env-file .env --host 127.0.0.1 --port 8000
-```
-
-## Prior work: the Python server
-
-The first build was a FastAPI orchestrator, a resident Swift WhisperKit
-sidecar, and a browser capture page. That code is still here and still works.
-The native app replaces it.
-
-```
-server/     FastAPI orchestrator. adapters/ holds the ASR backends.
-sidecar/    Swift. A persistent WhisperKit process (asrd).
-client/     The browser capture page
-eval/       The evaluation set and the scorer
-bench/      Latency and RTF measurement
-```
-
-```bash
-cd sidecar && swift build -c release
-cd .. && python3 -m venv .venv
-./.venv/bin/pip install -r requirements.txt
-./.venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000
-```
-
-Then open <http://127.0.0.1:8000> for the capture page. The server listens on
-the loopback interface because it has **no authentication of any kind**. A
-person who can reach the port can open sessions, read the stored transcripts
-and delete the archived audio.
-
-**Do not change the bind address to reach the server from another device.**
-Use an SSH tunnel, or put TLS and a password in front of the server.
-[docs/DEPLOY.md](docs/DEPLOY.md) gives a procedure for each case. The
-microphone does not work over plain HTTP.
-
-To run the tests of the server:
-
-```bash
-./.venv/bin/pip install -r requirements-dev.txt
-./.venv/bin/python -m pytest -q
-```
-
-There are 75 tests.
-
-`eval/` compares transcripts to the references in `eval/refs/`, and `bench/`
-measures latency and RTF. Both read audio from `eval/audio/`, which is not in
-git. Run `eval/make-synthetic.sh` first to make the synthetic Taglish test clip
-that the default paths point to. The script does not need ffmpeg. It uses the
-`say` and `afconvert` commands that macOS supplies.
-
-[docs/PLAN.md](docs/PLAN.md) is the build plan, and
-[docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) records the Mac that gave the
-numbers. Both files are design history and not current documentation.
-
-## Not in version 1
-
-The app does not contain a local LLM, automatic summaries, automatic extraction
-of action items and decisions, topic detection, semantic search, speaker voice
-profiles, or any cloud function.
-
-The data model already has the shape that each of these functions needs. Note
-rows have types and source timestamps, transcripts have revisions, and the
-speaker roster is separate from the segments. None of these functions needs a
-rebuild of the app.
-
-## Third-party software
-
-The app has two direct Swift package dependencies and one transitive
-dependency. `app/Package.resolved` pins all three, and the assembled
-`Notero.app` contains all three.
-
-- [WhisperKit](https://github.com/argmaxinc/WhisperKit) — MIT, Argmax Inc.
-- [FluidAudio](https://github.com/FluidInference/FluidAudio) — Apache-2.0,
-  FluidInference. It supplies Silero VAD, pyannote segmentation and WeSpeaker
-  embedding as CoreML models.
-- [swift-argument-parser](https://github.com/apple/swift-argument-parser) —
-  Apache-2.0, Apple. A transitive dependency.
-
-This repository does **not** contain the model weights. The app downloads them
-at the first start from Hugging Face. The sources are
-`argmaxinc/whisperkit-coreml` and the CoreML conversions of Silero VAD and
-pyannote by FluidAudio. Each model has its own upstream licence, and some
-licences control access with an agreement. Read each model card on Hugging Face
-before you distribute a bundle that contains these weights.
-
-## How to contribute
+## Contributing
 
 [CONTRIBUTING.md](CONTRIBUTING.md) gives the layer rules, the checks to run
 before a pull request, and the changes that are usually refused. Report a
@@ -384,10 +171,12 @@ public issue.
 
 **Do not attach a real meeting recording or a real transcript to an issue.**
 
-## Licence
+## License
 
 Notero is MIT licensed. [LICENSE](LICENSE) gives the terms.
 
 The licence covers the code in this repository. It does not cover the model
-weights, which the app downloads at the first start and which each carry the
-licence of their own publisher. Read the Third-party software section above.
+weights. This repository contains no weights. The app downloads them at the
+first start, and each one carries the licence of its own publisher. Read
+[docs/MODELS.md](docs/MODELS.md) before you distribute a bundle that contains
+these weights.

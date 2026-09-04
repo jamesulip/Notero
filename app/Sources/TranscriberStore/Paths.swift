@@ -14,10 +14,10 @@ import Foundation
 public enum Paths {
 
     /// The directory is named `Transcriber` and not `Notero`, although the app
-    /// is now Notero. It holds the recordings and the store that version 1.0
-    /// wrote. To rename it here is to point the app at an empty directory and
-    /// to hide every recording that a user already made. Rename it only
-    /// together with a migration that moves the old directory first.
+    /// is now Notero. It holds the recordings and the store that the private
+    /// builds wrote. To rename it here is to point the app at an empty
+    /// directory and to hide every recording that a user already made. Rename
+    /// it only together with a migration that moves the old directory first.
     public static var support: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory,
                                             in: .userDomainMask)[0]

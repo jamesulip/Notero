@@ -1,16 +1,18 @@
 # Changelog
 
-## 1.1.0 (not yet released)
+## 1.0.0 — 2026-09-04
+
+The first release that anyone outside can download. Everything below is in it.
 
 ### The name
 
-- The app is now **Notero**. It was Transcriber up to version 1.0. The bundle,
-  the window and the menu carry the new name, and the bundle identifier is now
-  `local.notero`. macOS asks for microphone access one more time after the
-  change, because it grants that access per bundle identifier.
+- The app is **Notero**. It was Transcriber through the private builds. The
+  bundle, the window and the menu carry the new name, and the bundle identifier
+  is now `local.notero`. macOS asks for microphone access one more time after
+  the change, because it grants that access per bundle identifier.
 - The Swift modules and `~/Library/Application Support/Transcriber/` keep the
-  old name. The directory holds the recordings of version 1.0, thus a rename
-  there hides them from the app.
+  old name. The directory holds the recordings that the private builds wrote,
+  thus a rename there hides them from the app.
 
 ### Live transcription
 
@@ -122,29 +124,15 @@
   progress bar and a percentage instead of a spinner.
 - If you stop a recording under ten seconds, the app asks Keep or Discard.
 
-### Updates
+### Releases
 
-- The app can update itself. **Notero ▸ Check for Updates…** asks GitHub
-  which releases exist. Settings ▸ Updates holds a switch for a check once a
-  day at launch. The switch is off until you turn it on, because the request is
-  the one thing this app does that leaves the Mac. The request carries no
-  identifier, and it sends no recording, transcript or note.
-- Each release is signed with an Ed25519 key, and the public half is compiled
-  into the app. Before it replaces anything, the app checks the SHA-256 digest
-  of the download against the signature file, the signature against the key,
-  and the bundle in the download against the bundle identifier and the version
-  that the release gives. A download that fails one of those checks is thrown
-  away, and the message says which check refused.
-- The install quits the app, moves the new bundle into position with a small
-  script, and opens the app again. The old bundle stays on disk until the new
-  one is in position, thus a failure puts the old one back. The script writes
-  what it did to `~/Library/Logs/Transcriber/update.log`.
-- The app refuses to install while a recording runs, and when it is in a folder
-  that it cannot write. It never asks for an administrator password.
-- `app/scripts/release.sh` builds, packages, signs and publishes a release.
-  `app/scripts/relkey.swift` makes the signing key and the signatures. Both
-  compile `Sources/TranscriberCore/Update.swift`, thus the format that the tool
-  writes and the format that the app reads are one piece of code.
+- **The app does not update itself.** It downloads no code, checks no
+  signature and replaces no bundle. It therefore makes one network request
+  only: the model download at the first start.
+- **Notero ▸ Releases on GitHub…** opens the releases page in your browser.
+  Settings ▸ About holds the same link, with the version of this copy. To move
+  to a newer version, get the zip from that page and replace the app.
+- `app/scripts/release.sh` builds, packages and publishes a release.
   [docs/RELEASE.md](docs/RELEASE.md) gives the procedure.
 
 ### Tools and the build
@@ -161,8 +149,20 @@
   AppState is now several files, one for each concern. You can select several
   sidebar rows and delete them together. A failed recording goes under Needs
   Attention.
+- README.md now shows the app. `app/scripts/make-demo-meetings.sh` builds the
+  three synthetic Taglish meetings behind those screenshots, thus no real
+  meeting goes into this repository. Its comments give the `CFFIXED_USER_HOME`
+  route to a demo library that leaves your own recordings alone.
 
-## 1.0.1 — 2026-09-03
+## Before this repository was public
+
+The builds below are private. They have no tag and no download: this
+repository became public on 2026-09-04, and 1.0.0 above is the first release
+on the releases page. The numbers are the numbers that each bundle carried at
+the time, thus the 1.0 here is not the 1.0.0 above. They stay in this file as
+the record of how the app reached its shape.
+
+### 1.0.1 — 2026-09-03 (private build)
 
 - When the app starts, it resolves each recording that a quit left in the
   preparing, recording or transcribing state. If the transcript exists, the app
@@ -179,6 +179,6 @@
   and the free space on the volume. Audio cache progress is in whole percent.
 - The plan for 1.1 is in `docs/APP-UPDATE-PLAN.md`.
 
-## 1.0 — 2026-09-02
+### 1.0 — 2026-09-02 (private build)
 
-- The first native macOS release.
+- The first native macOS build.

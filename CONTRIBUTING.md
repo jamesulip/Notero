@@ -4,6 +4,10 @@ Thank you for your interest. This is a small, local-first project with one
 maintainer. A change must continue to work on a different Mac that has no
 microphone, no model weights and no network.
 
+This file gives the rules. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) gives the
+build, the tests, the CI job and the scripts.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) gives the design.
+
 ## Requirements
 
 For the native app, which most contributions touch:
@@ -42,11 +46,11 @@ deliberate, and you must keep this property. Refer to "The four layers".
 Run each command that applies to your change:
 
 ```bash
-cd app && swift build && swift test    # 248 tests, and 0 warnings
+cd app && swift build && swift test    # 227 tests, and 0 warnings
 ./.venv/bin/python -m pytest           # 75 tests
 ```
 
-The 248 tests are 226 XCTest tests and 22 swift-testing tests. Keep
+The 227 tests are 205 XCTest tests and 22 swift-testing tests. Keep
 `swift build` at **zero warnings**. There is no linter and no formatter for
 either language. Write code in the style of the code around it.
 `.editorconfig` gives the indentation.
@@ -79,13 +83,15 @@ Write a new conformance instead of a call to a concrete engine.
 
 ## Changes that are usually refused
 
-- **A change of model id by name match.** Read finding 1 in
-  `docs/FINDINGS.md` first. The `_turbo` suffix of WhisperKit marks a compute
-  variant and not the large-v3-turbo model of OpenAI. This mistake silently
-  changes the model that gave the accuracy numbers.
-- **Translation or correction of transcript text.** The app forces Tagalog and
-  writes code-switched English as the speaker said it. This is a product
-  decision and not an oversight.
+- **A change of model id by name match.** Read
+  [docs/MODELS.md](docs/MODELS.md) and finding 1 in `docs/FINDINGS.md` first.
+  The `_turbo` suffix of WhisperKit marks a compute variant and not the
+  large-v3-turbo model of OpenAI. This mistake silently changes the model that
+  gave the accuracy numbers.
+- **Translation or correction of transcript text.** The app forces the language
+  that the user selected, and it writes code-switched English as the speaker
+  said it. Tagalog is the default. This is a product decision and not an
+  oversight.
 - **A read of a complete audio file into memory.** The app maps the 16 kHz
   working copy and reads it in slices, because two hours in a `[Float]` array
   holds 460 MB. Use `PCMSource`.
@@ -115,7 +121,9 @@ Simplified Technical English keeps the instructions unambiguous for them. These
 files use it:
 
 - `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`
-- `docs/DEPLOY.md`
+- `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT.md`, `docs/BENCHMARKS.md`,
+  `docs/MODELS.md`, `docs/CLI.md`, `docs/RELEASE.md`,
+  `docs/LEGACY-SERVER.md`, `docs/DEPLOY.md`
 - The comments in `.env.example`
 
 The most important rules are:

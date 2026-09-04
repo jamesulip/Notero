@@ -34,7 +34,6 @@ final class AppState {
     let live: LiveSession
     let player = AudioPlayer()
     let writer: TranscriptWriter
-    let updater: Updater
 
     /// Sidebar selection. Nil is the empty state.
     var route: Route?
@@ -185,7 +184,6 @@ final class AppState {
         self.queue = TranscriptionQueue(engines: engines)
         self.live = LiveSession(engines: engines, supportDirectory: Paths.support)
         self.writer = TranscriptWriter(modelContainer: container)
-        self.updater = Updater(settings: settings)
         live.config = settings.sessionConfig
         live.inputGainDb = settings.inputGainDb
         live.isRoomMode = settings.roomMode

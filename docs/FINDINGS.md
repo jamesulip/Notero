@@ -1,5 +1,16 @@
 # Findings
 
+> **Engineering findings, and not product guarantees. Read this note first.**
+> Each entry is a measurement or a failure that the maintainer recorded on one
+> Mac, on the test material that [BENCHMARKS.md](BENCHMARKS.md) describes. The
+> entries keep the words that they had on the day of writing, thus some of them
+> describe a problem that the app has since fixed. Read the entry to the end
+> before you use a number from it, and read the
+> [caveat](#caveat-the-audio-was-synthetic) at the bottom of this file.
+>
+> [BENCHMARKS.md](BENCHMARKS.md) gives the current measurements with their
+> conditions. The [README](../README.md) describes the product.
+
 Measurements and failure modes recorded while building the Python server
 (phases 1–5) and the native app (phase 6). Several of these exist because a
 plausible-looking change quietly lost transcript data; this is the file to read

@@ -58,8 +58,8 @@ DerivedData/
 # compiled from app/scripts/click.swift on demand
 app/scripts/click
 
-# the release signing key. It lives at ~/.config/transcriber/release-key, but
-# TRANSCRIBER_RELEASE_KEY can point anywhere, so refuse it here as well.
+# no key belongs in this repository. The app signs nothing and verifies
+# nothing, but a stray key must still never be committed.
 release-key
 *.pem
 
