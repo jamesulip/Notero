@@ -20,11 +20,12 @@ of the usual attack surface therefore does not exist:
 - **There are no accounts, API keys, tokens or secrets.** No part of this
   repository authenticates against any service. There is no credential to lose.
 - **The native app sends no telemetry, no crash reports and no analytics.** It
-  makes two kinds of network call. It downloads the model weights from Hugging
-  Face at the first start. It asks GitHub which releases exist, if you ask it
-  to, or once a day if you turn on automatic checks in Settings ▸ Updates. The
-  automatic check is off until you turn it on. Neither call carries an
-  identifier, and neither sends audio or text.
+  makes one kind of network call: it downloads the model weights from Hugging
+  Face at the first start. After that it works with no network at all. The call
+  carries no identifier, and it sends no audio and no text.
+- **The app does not update itself.** It downloads no code, checks no server
+  for a version, and replaces no bundle. Settings ▸ About holds a link to the
+  releases page, and the user installs a new version by hand.
 - **All inference is local.** Whisper, voice activity detection and speaker
   identification all run on your Mac through CoreML.
 
@@ -42,18 +43,14 @@ third-party code that runs on your Mac. If you point the app or
 `transcribe --models DIR` at a different weights directory, you also trust the
 person who made that directory.
 
-**The updater.** The app can replace its own bundle. Each release is signed
-with an Ed25519 key, and the public half is compiled into the app. The app
-refuses a download when the SHA-256 digest disagrees with the signature file,
-when the signature is not from that key, or when the bundle in the download is
-not Notero at the version that the release gives. The app holds no token,
-thus a person who takes control of the release page still cannot make a
-download that the app accepts. The private key is the one secret in this
-project. `docs/RELEASE.md` tells you where it is and how to protect it.
+**A downloaded release.** The app installs nothing by itself, thus a person
+who takes control of the release page cannot reach an installed copy. That
+person can still put a bad build in front of a new user. **Check the release
+page before you download a build**, and prefer a build that you made yourself
+from source. `docs/DEVELOPMENT.md` gives the build.
 
-The app installs into its own position on disk. It does not ask for an
-administrator password, and it does not write outside its own bundle and
-`~/Library/Application Support/Transcriber/Updates/`.
+The app does not ask for an administrator password, and it writes nothing
+outside its own bundle and `~/Library/Application Support/Transcriber/`.
 
 **The legacy Python server** in `server/` is the exposed component, and it has
 no authentication of any kind. The native app replaces it, and the repository

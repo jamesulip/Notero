@@ -12,7 +12,7 @@ struct SettingsView: View {
     @State private var pane: Pane? = .general
 
     enum Pane: String, CaseIterable, Identifiable {
-        case general, audio, models, storage, updates
+        case general, audio, models, storage, about
         var id: String { rawValue }
         var label: String {
             switch self {
@@ -20,7 +20,7 @@ struct SettingsView: View {
             case .audio: return "Audio"
             case .models: return "Models"
             case .storage: return "Storage"
-            case .updates: return "Updates"
+            case .about: return "About"
             }
         }
         var symbol: String {
@@ -29,7 +29,7 @@ struct SettingsView: View {
             case .audio: return "mic"
             case .models: return "cpu"
             case .storage: return "internaldrive"
-            case .updates: return "arrow.down.circle"
+            case .about: return "info.circle"
             }
         }
     }
@@ -48,7 +48,7 @@ struct SettingsView: View {
             case .audio: AudioSettings()
             case .models: ModelSettings()
             case .storage: StorageSettings()
-            case .updates: UpdateSettings()
+            case .about: AboutSettings()
             }
         }
         .navigationTitle((pane ?? .general).label)
@@ -413,92 +413,49 @@ enum AudioCacheLocation {
     }
 }
 
-// MARK: - Updates
+// MARK: - About
 
-/// The only pane that describes something leaving the Mac, so it says so
-/// plainly rather than putting one switch on the page and nothing else.
-struct UpdateSettings: View {
-    @Environment(AppState.self) private var state
-
-    private var updater: Updater { state.updater }
+/// Version, licence and where a newer build is published.
+///
+/// **The app does not update itself.** It downloads no code and replaces no
+/// bundle, so this pane is a link and a version number rather than a check
+/// with a progress bar behind it.
+struct AboutSettings: View {
 
     var body: some View {
-        @Bindable var settings = state.settings
-
         Form {
             Section("This copy") {
-                LabeledContent("Version", value: updater.versionText)
-                LabeledContent("Last checked") {
-                    Text(updater.lastChecked
-                            .map { $0.formatted(date: .abbreviated, time: .shortened) }
-                            ?? "Never")
-                        .foregroundStyle(.secondary)
-                }
-                HStack {
-                    Button("Check for Updates…") { updater.checkNow(present: false) }
-                        .disabled(updater.isBusy)
-                    if updater.isBusy { ProgressView().controlSize(.small) }
-                    if updater.hasDetails {
-                        Button("Show Details…") { updater.showDetails() }
-                    }
-                }
-                if let status = updater.statusLine {
-                    Text(status)
-                        .font(.caption)
-                        .foregroundStyle(updater.didFail ? AnyShapeStyle(.orange)
-                                                         : AnyShapeStyle(.secondary))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                LabeledContent("Version", value: About.versionText)
+                LabeledContent("Bundle", value: Bundle.main.bundleIdentifier ?? "—")
             }
 
-            Section {
-                Toggle("Check for updates automatically", isOn: $settings.automaticUpdateChecks)
-                Text("Once a day at launch, the app asks GitHub which releases exist. "
-                     + "The request carries no identifier and nothing about this Mac, "
-                     + "and no recording, transcript or note is ever sent anywhere. "
-                     + "Turn this off and the button above still works.")
+            Section("A newer version") {
+                Text("Notero does not update itself. It downloads no code and "
+                     + "replaces nothing on this Mac by itself. To move to a newer "
+                     + "version, get it from the releases page and replace the app.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if settings.skippedUpdate != nil {
-                    Button("Stop skipping version \(settings.skippedUpdate ?? "")") {
-                        settings.skippedUpdate = nil
-                    }
+                Button("Open Releases Page") { About.openReleasesPage() }
                     .buttonStyle(.link)
-                }
-            } header: {
-                Text("Automatic checks")
-            }
-
-            Section("How an update is checked") {
-                Text(Self.checkingSummary)
-                    .font(.caption)
-                    .foregroundStyle(UpdateSource.canInstall ? AnyShapeStyle(.secondary)
-                                                             : AnyShapeStyle(.orange))
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("Because the app is signed ad hoc rather than with a Developer ID, "
-                     + "macOS may ask for microphone access again after an update.")
+                Text("Because the app is signed ad hoc rather than with a Developer "
+                     + "ID, macOS asks for microphone access again after you replace "
+                     + "the app.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Button("Open Releases Page") { updater.openReleasesPage() }
-                    .buttonStyle(.link)
+            }
+
+            Section("Privacy") {
+                Text("Every model runs on this Mac. The app has no account, no API "
+                     + "key and no telemetry. The one request it makes is the model "
+                     + "download at the first start. No recording, transcript or "
+                     + "note goes anywhere.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
     }
-
-    /// Built once, outside the view builder: as a ternary between two long
-    /// concatenations inside `Text`, the type checker gave up on the whole Form.
-    private static let checkingSummary: String = {
-        guard UpdateSource.canInstall else {
-            return "This build carries no update key, so it cannot check that a download "
-                 + "is genuine and will not install one. It can still tell you a newer "
-                 + "release exists."
-        }
-        return "Each release is signed with the maintainer's key. The app checks that "
-             + "signature, then that the download really is Notero at the version "
-             + "the release promised, before it replaces anything. A download that fails "
-             + "any of those checks is thrown away."
-    }()
 }

@@ -48,8 +48,6 @@ struct TranscriberApp: App {
                     // several seconds between hitting record and the recording
                     // starting.
                     state.warmUpEngines()
-                    // Off unless the user asked for it, and at most once a day.
-                    state.updater.checkOnLaunch()
                     if let startupFailure {
                         state.alert = AppState.AppAlert(
                             title: "Storage unavailable",

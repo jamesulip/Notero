@@ -14,10 +14,11 @@ struct AppCommands: Commands {
     let state: AppState
 
     var body: some Commands {
-        // Under "About Transcriber", which is where every Mac app puts it.
+        // Under "About Notero", which is where every Mac app puts it. The
+        // app does not update itself, so this opens the page instead of
+        // offering a check it cannot act on.
         CommandGroup(after: .appInfo) {
-            Button("Check for Updates…") { state.updater.checkNow() }
-                .disabled(state.updater.isBusy)
+            Button("Releases on GitHub…") { About.openReleasesPage() }
         }
 
         CommandGroup(replacing: .newItem) {

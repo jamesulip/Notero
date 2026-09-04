@@ -74,12 +74,6 @@ struct ContentView: View {
                                                 message: error.localizedDescription)
             }
         }
-        .sheet(isPresented: Binding(
-            get: { state.updater.isPresented },
-            set: { state.updater.isPresented = $0 }
-        )) {
-            UpdateSheet()
-        }
         .sheet(isPresented: $state.isExporting) {
             if let recording = state.selectedRecording {
                 ExportSheet(recording: recording)

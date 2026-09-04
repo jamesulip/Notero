@@ -26,9 +26,6 @@ final class AppSettings {
         static let inspectorShown = "ui.inspectorShown"
         static let clockTimestamps = "ui.clockTimestamps"
         static let hasSeenWelcome = "ui.hasSeenWelcome"
-        static let automaticUpdateChecks = "updates.automatic"
-        static let lastUpdateCheck = "updates.lastCheck"
-        static let skippedUpdate = "updates.skipped"
     }
 
     private let defaults: UserDefaults
@@ -56,12 +53,6 @@ final class AppSettings {
         inspectorShown = defaults.dictionary(forKey: Key.inspectorShown) as? [String: Bool] ?? [:]
         clockTimestamps = defaults.object(forKey: Key.clockTimestamps) as? Bool ?? false
         hasSeenWelcome = defaults.object(forKey: Key.hasSeenWelcome) as? Bool ?? false
-        // Off until asked for. Every other thing this app does happens on this
-        // Mac; a background request to GitHub is the one exception, so it is
-        // the user who turns it on. The Check Now button always works.
-        automaticUpdateChecks = defaults.object(forKey: Key.automaticUpdateChecks) as? Bool ?? false
-        lastUpdateCheck = defaults.object(forKey: Key.lastUpdateCheck) as? Date
-        skippedUpdate = defaults.string(forKey: Key.skippedUpdate)
     }
 
     // MARK: - Interface
@@ -85,24 +76,6 @@ final class AppSettings {
 
     func setInspectorShown(_ shown: Bool, for kind: RecordingKind) {
         inspectorShown[kind.rawValue] = shown
-    }
-
-    // MARK: - Updates
-
-    /// Ask GitHub once a day whether there is a new release. See `Updater`.
-    var automaticUpdateChecks: Bool {
-        didSet { defaults.set(automaticUpdateChecks, forKey: Key.automaticUpdateChecks) }
-    }
-
-    /// When the last check finished, successfully or not. Nil until the first.
-    var lastUpdateCheck: Date? {
-        didSet { defaults.set(lastUpdateCheck, forKey: Key.lastUpdateCheck) }
-    }
-
-    /// A version the user answered "Skip" to. Not offered again; a newer one
-    /// still is, because this holds one version and not a flag.
-    var skippedUpdate: String? {
-        didSet { defaults.set(skippedUpdate, forKey: Key.skippedUpdate) }
     }
 
     // MARK: - Transcription
