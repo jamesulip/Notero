@@ -22,8 +22,6 @@ data/
 *.m4a
 *.mp3
 *.mp4
-# the README demo is synthetic audio and belongs in the repository
-!docs/images/demo.mp4
 *.mov
 *.aiff
 *.caf

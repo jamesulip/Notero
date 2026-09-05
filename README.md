@@ -29,31 +29,6 @@ No recording, no transcript and no note goes off your Mac.
 [docs/USAGE.md](docs/USAGE.md) explains each of these, and gives the keyboard
 shortcuts.
 
-## Demo
-
-https://github.com/user-attachments/assets/c610eec5-d82f-4531-ac9b-85d831116b44
-
-[**Watch the demo**](docs/images/demo.mp4) — under two minutes, with sound.
-The player above is the same clip, hosted by GitHub. The link opens the file in
-this repository.
-
-The video shows one recording from the start to the transcript:
-
-1. A recording starts. The meter shows the level of the audio.
-2. A clip plays through the speakers. The system tap gets that clip directly,
-   and the microphone gets the same sound across the room. One recording holds
-   the two in different channels.
-3. The recording stops. The app transcribes each channel independently, then
-   puts the two transcripts in time order.
-4. Each line shows if the person is in the room or on the call.
-
-**The demo plays a synthetic clip, and it is not a real meeting.** The clip
-comes from the macOS `say` command, the same as the screenshots below. Read the
-note under the screenshots: those voices say Tagalog words incorrectly, thus
-the transcript in the video has more errors than real speech gives. The sidebar
-in the video shows the test recordings of the maintainer, with the automatic
-names that the app gives.
-
 ## What It Looks Like
 
 | | |
