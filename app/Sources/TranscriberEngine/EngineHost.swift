@@ -79,14 +79,6 @@ public actor EngineHost {
 
     public var vadBackendName: String { get async { await vad.backend.rawValue } }
 
-    public func pushVAD(_ samples: [Float]) async throws -> VoiceActivityReading {
-        try await vad.push(samples)
-    }
-
-    public func clearVADSpeechCounter() async {
-        await vad.clearSpeechCounter()
-    }
-
     public func resetVAD() async {
         await vad.reset()
     }

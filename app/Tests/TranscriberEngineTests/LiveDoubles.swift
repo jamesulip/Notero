@@ -77,7 +77,6 @@ actor OracleRecognizer: SpeechRecognizing {
     }
 
     var loadedModel: String? { "oracle" }
-    var isLoaded: Bool { true }
     func load(model: String, progress: ProgressReport?) async throws {}
     func unload() {}
 

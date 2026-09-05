@@ -5,8 +5,6 @@ public struct VadState: Equatable, Sendable {
     public var speechMs: Int = 0
     public var trailingSilenceMs: Int = 0
     public var frames: Int = 0
-
-    public var hasSpeech: Bool { speechMs > 0 }
 }
 
 /// Energy-based voice activity detection.

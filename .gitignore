@@ -46,7 +46,7 @@ models/
 
 # built app bundles — assembled by app/build-app.sh, not source
 *.app/
-Transcriber*.zip
+Notero*.zip
 
 # editor state regenerated on open
 .swiftpm/

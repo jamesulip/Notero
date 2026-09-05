@@ -62,7 +62,7 @@ catalogue and the storage layout.
 cd app && swift test
 ```
 
-There are 227 tests: 205 XCTest tests and 22 swift-testing tests. **They need
+There are 265 tests: 243 XCTest tests and 22 swift-testing tests. **They need
 no model weights, no microphone and no network.** This property is deliberate,
 and you must keep it. The four-layer split in
 [ARCHITECTURE.md](ARCHITECTURE.md) is what makes it possible.
@@ -109,6 +109,26 @@ assembly smoke test only. The signature is ad hoc, and the zip drops the
 executable bit, thus the artifact does not start on another Mac.
 
 ## Scripts
+
+### `app/scripts/record-probe.sh` — check what the app can record
+
+```bash
+scripts/record-probe.sh --devices                     # list the input devices
+scripts/record-probe.sh --record --source both --seconds 20 --out /tmp/x.m4a
+scripts/record-probe.sh --channels --seconds 15       # raw channels of the tap
+```
+
+The script puts the `transcribe` tool in a signed app bundle and starts it
+through LaunchServices. The bundle is necessary. macOS gives no system audio
+permission to a command line tool, because the prompt needs a bundle identifier
+to attach the answer to and a foreground application to appear in front of. A
+tool that you start in a terminal has neither, and macOS refuses the request
+without a prompt and without an error. The capture then starts, reports
+success and delivers no samples.
+
+Output goes to `/tmp/notero-record-probe.log`, because LaunchServices discards
+stderr. To ask for the permission again, use
+`tccutil reset AudioCapture local.notero`.
 
 ### `app/scripts/snap.sh` — screenshot the running app
 

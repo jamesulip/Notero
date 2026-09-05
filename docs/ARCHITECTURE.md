@@ -59,7 +59,9 @@ The SwiftData schema and the queries. The model objects are `StoredRecording`,
 
 ### `TranscriberEngine`
 
-The audio and the models. `AudioCapture` owns the microphone.
+The audio and the models. `AudioCapture` owns the capture. The capture is
+the microphone, the audio of this Mac through `SystemAudioTap`, or both.
+`AudioDevices` lists the microphones.
 `AudioCache` builds the 16 kHz working copy. `WhisperEngine`, `VADEngine` and
 `SpeakerEngine` wrap WhisperKit and FluidAudio. `LiveDecoder` and `LiveSession`
 run the live path. `OfflinePipeline` runs the whole-file path.
@@ -76,11 +78,12 @@ address of the releases page, which is the only address in the app target.
 
 ### `TranscriberCLI`
 
-`transcribe` is one file, `main.swift`. It is not a second implementation. It
-calls `OfflinePipeline`, `LiveDecoder`, `SpeakerEngine` and `Exporter` exactly
-as the app does. It therefore verifies the real path on real audio with no
-window, no microphone and no person. That is what makes it usable from CI and
-from the evaluation harness in `eval/`. [CLI.md](CLI.md) gives its options.
+`transcribe` is two files, `main.swift` and `Record.swift`. It is not a second
+implementation. It calls `OfflinePipeline`, `LiveDecoder`, `SpeakerEngine` and
+`Exporter` exactly as the app does. It therefore verifies the real path on real
+audio with no window, no microphone and no person. That is what makes it usable
+from CI and from the evaluation harness in `eval/`. [CLI.md](CLI.md) gives its
+options.
 
 ## The engine protocols
 
@@ -107,6 +110,14 @@ The app writes two files from one audio tap:
 Both files come from the same tap, thus their samples stay aligned. An imported
 MP3, WAV, M4A, MP4 or MOV file goes into the library, and `AudioCache` builds
 the same 16 kHz working copy from it.
+
+A recording can hold two lanes. The room lane comes from the microphone. The
+remote lane comes from the audio of this Mac, through a Core Audio process tap
+in `SystemAudioTap`. The archive keeps the two lanes in different channels of
+one file: channel 1 is the room and channel 2 is the call. The live decoder
+reads the sum of the two lanes. The whole-file pass decodes each lane on its
+own and identifies the speakers in each lane on its own. `LaneTranscript` then
+puts the two transcripts in time order.
 
 ## Live transcription
 

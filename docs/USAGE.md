@@ -12,6 +12,32 @@ audio tap. The first file is a 64 kbps AAC archive at the hardware sample rate.
 The second file is a 16 kHz mono working copy for the models. Both files come
 from the same tap, thus their samples stay aligned.
 
+**Select the input.** Go to **Settings › Audio › Record**. There are three
+inputs:
+
+| Input | What it records |
+| --- | --- |
+| Microphone | The persons in the room. |
+| This Mac's audio | The persons on a call, before the speaker. |
+| Both | The two above, in different channels of one file. |
+
+A meeting with remote persons needs both. The microphone cannot hear the
+persons on the call, except as the sound of a speaker in a room. The audio of
+this Mac cannot hear the room.
+
+With both inputs, the app transcribes each channel independently and then puts
+the lines in time order. Each line shows if the person is in the room or on the
+call.
+
+**Permission.** The audio of this Mac needs a permission that is different from
+the microphone permission. Go to **Settings › Audio › Permissions** to give it.
+If you refuse this permission, macOS gives no error and records no audio from
+the call.
+
+**Select the microphone.** Go to **Settings › Audio › Record › Microphone**.
+The default is the input device of macOS. If you select a device, the app uses
+that device only, and it tells you if the device is not connected.
+
 **Import.** Drop an MP3, WAV, M4A, MP4 or MOV file on the window, or on the
 Dock icon. The app copies the file into the library and adds it to the queue.
 

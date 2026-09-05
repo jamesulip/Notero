@@ -29,10 +29,12 @@ public actor TranscriptWriter {
     }
 
     public func attachAudio(fileName: String, sampleRate: Int, durationMs: Int,
-                            waveform: [Float]?, for id: UUID) throws {
+                            waveform: [Float]?, lanes: [CaptureLane] = [.room],
+                            for id: UUID) throws {
         guard let recording = try find(id), !fileName.isEmpty else { return }
         recording.audioFileName = fileName
         if sampleRate > 0 { recording.audioSampleRate = sampleRate }
+        if !lanes.isEmpty { recording.lanes = lanes }
         recording.durationMs = durationMs
         if let waveform { recording.waveform = waveform }
         recording.updatedAt = Date()

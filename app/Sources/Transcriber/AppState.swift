@@ -190,7 +190,7 @@ final class AppState {
         // Before any view reads the store: the live session and the queue did
         // not survive the last quit, so anything they still claim to be working
         // on is stranded.
-        try? RecordingStore.recoverInterrupted(in: container.mainContext)
+        _ = try? RecordingStore.recoverInterrupted(in: container.mainContext)
         startPump()
     }
 

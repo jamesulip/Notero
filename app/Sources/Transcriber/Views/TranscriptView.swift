@@ -683,8 +683,8 @@ struct TranscriptBlockRow: View {
               let row = (recording.transcript?.orderedSegments ?? [])
                   .first(where: { $0.id == first.id })
         else { return }
-        try? RecordingStore.addItem(kind, text: block.text, source: row,
-                                    to: recording, in: context)
+        _ = try? RecordingStore.addItem(kind, text: block.text, source: row,
+                                        to: recording, in: context)
         RecordingStore.reindex(recording)
         try? context.save()
         if recording.kind == .recording { recording.kind = .meeting }

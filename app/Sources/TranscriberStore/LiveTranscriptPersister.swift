@@ -64,9 +64,6 @@ public final class LiveTranscriptPersister {
         scheduleFlush()
     }
 
-    /// Whether anything is queued or being written.
-    public var isIdle: Bool { pending.isEmpty && flushTask == nil }
-
     /// Waits until everything queued so far is on disk.
     public func drain() async {
         while let task = flushTask {

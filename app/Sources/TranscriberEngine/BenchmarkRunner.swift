@@ -114,7 +114,8 @@ public enum MachineInfo {
         sysctlbyname("hw.model", nil, &size, nil, 0)
         var bytes = [CChar](repeating: 0, count: max(1, size))
         sysctlbyname("hw.model", &bytes, &size, nil, 0)
-        let model = String(cString: bytes)
+        let model = String(decoding: bytes.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) },
+                           as: UTF8.self)
         let cores = ProcessInfo.processInfo.processorCount
         let os = ProcessInfo.processInfo.operatingSystemVersion
         return "\(model) · \(cores) cores · macOS \(os.majorVersion).\(os.minorVersion)"

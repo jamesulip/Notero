@@ -22,6 +22,10 @@ final class AppSettings {
         static let keepWorkingCopy = "storage.keepWorkingCopy"
         static let inputGainDb = "recording.inputGainDb"
         static let roomMode = "recording.roomMode"
+        static let captureSource = "recording.captureSource"
+        /// Nil means "follow the system default input", which is a different
+        /// thing from "the device that is default today".
+        static let microphoneUID = "recording.microphoneUID"
         static let benchmark = "benchmark.lastReport"
         static let inspectorShown = "ui.inspectorShown"
         static let clockTimestamps = "ui.clockTimestamps"
@@ -47,6 +51,9 @@ final class AppSettings {
         keepWorkingCopy = defaults.object(forKey: Key.keepWorkingCopy) as? Bool ?? false
         overrides = defaults.dictionary(forKey: Key.overrides) as? [String: String] ?? [:]
         roomMode = defaults.object(forKey: Key.roomMode) as? Bool ?? false
+        captureSource = CaptureSource(rawValue: defaults.string(forKey: Key.captureSource) ?? "")
+            ?? .default
+        microphoneUID = defaults.string(forKey: Key.microphoneUID)
         gainDb = InputGain.clampDb(
             defaults.object(forKey: Key.inputGainDb) as? Float ?? InputGain.defaultDb
         )
@@ -93,6 +100,16 @@ final class AppSettings {
     /// High-pass the audio before transcription. For a microphone picking up
     /// a room rather than a person; wrong for close-mic dictation.
     var roomMode: Bool { didSet { defaults.set(roomMode, forKey: Key.roomMode) } }
+
+    /// Which lanes a recording captures.
+    var captureSource: CaptureSource {
+        didSet { defaults.set(captureSource.rawValue, forKey: Key.captureSource) }
+    }
+
+    /// The chosen microphone by UID, or nil to follow the system default.
+    var microphoneUID: String? {
+        didSet { defaults.set(microphoneUID, forKey: Key.microphoneUID) }
+    }
 
     /// Microphone boost in decibels. Clamped on the way in as well as in the
     /// slider, because a stale or hand-edited default must not be able to put

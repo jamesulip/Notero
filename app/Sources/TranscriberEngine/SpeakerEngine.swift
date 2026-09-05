@@ -15,7 +15,6 @@ public actor SpeakerEngine: SpeakerDiarizing {
 
     private let modelsDirectory: URL
     private var manager: DiarizerManager?
-    private var loadFailure: String?
 
     /// How much audio to hand the diarizer at a time.
     ///
@@ -54,10 +53,8 @@ public actor SpeakerEngine: SpeakerDiarizing {
             let manager = DiarizerManager(config: config)
             manager.initialize(models: consume models)
             self.manager = manager
-            loadFailure = nil
             progress?("Speaker models ready", 1)
         } catch {
-            loadFailure = error.localizedDescription
             throw EngineError.backendUnavailable(
                 "Speaker identification is unavailable: \(error.localizedDescription)")
         }

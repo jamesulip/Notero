@@ -5,7 +5,6 @@ import Foundation
 ///     Application Support/Transcriber/
 ///     ├── Transcriber.store          SwiftData
 ///     ├── Recordings/YYYY/MM/<uuid>.m4a
-///     ├── Exports/
 ///     └── Models/                    CoreML weights, gigabytes, downloaded
 ///
 /// Audio is filed by year and month rather than in one flat directory: a year
@@ -28,10 +27,6 @@ public enum Paths {
 
     public static var recordings: URL {
         ensure(support.appendingPathComponent("Recordings", isDirectory: true))
-    }
-
-    public static var exports: URL {
-        ensure(support.appendingPathComponent("Exports", isDirectory: true))
     }
 
     public static var models: URL {

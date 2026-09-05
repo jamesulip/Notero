@@ -119,11 +119,4 @@ public struct SessionStats: Sendable, Equatable, Codable {
     public var meanRtf: Double {
         totalAudioMs > 0 ? Double(totalInferMs) / Double(totalAudioMs) : 0
     }
-
-    /// Share of hops that produced nothing usable.
-    public var lossRate: Double {
-        let attempted = hops + droppedHops + failedHops
-        guard attempted > 0 else { return 0 }
-        return Double(droppedHops + emptyResults + failedHops) / Double(attempted)
-    }
 }

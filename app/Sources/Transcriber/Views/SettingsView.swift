@@ -143,8 +143,29 @@ struct AudioSettings: View {
         @Bindable var settings = state.settings
 
         Form {
-            Section("Microphone") {
-                MicrophonePermissionRow()
+            Section("Record") {
+                Picker("Audio from", selection: $settings.captureSource) {
+                    ForEach(CaptureSource.allCases, id: \.self) { source in
+                        Text(source.label).tag(source)
+                    }
+                }
+                Text(settings.captureSource.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if settings.captureSource.usesMicrophone {
+                    InputDevicePicker(selection: $settings.microphoneUID)
+                }
+            }
+
+            Section("Permissions") {
+                if settings.captureSource.usesMicrophone {
+                    MicrophonePermissionRow()
+                }
+                if settings.captureSource.usesSystemAudio {
+                    SystemAudioPermissionRow()
+                }
             }
 
             Section("Input") {

@@ -28,9 +28,14 @@ transcribe --audio FILE [--reference FILE] [--models DIR]
            [--language tl] [--fast-diarize | --no-diarize] [--room-mode]
            [--format txt|markdown|srt|vtt|json] [--out FILE] [--json FILE]
            [--live [--realtime] [--hop MS] [--pre-roll MS] [--context MS] [--adaptive-hop]]
+transcribe --audio FILE --lane room|remote
+transcribe --record [--source microphone|systemAudio|both] [--device UID]
+           [--seconds N] [--out FILE.m4a] [--gui]
+transcribe --devices
+transcribe --channels [--seconds N]
 ```
 
-`--help` prints this line. An unknown option stops the tool with exit code 2.
+`--help` prints these lines. An unknown option stops the tool with exit code 2.
 
 ## Examples
 
@@ -84,6 +89,15 @@ Replay a file through the live path at wall-clock speed:
 | `--pre-roll MS` | With `--live`, set the pre-roll. The default is 1500. |
 | `--context MS` | With `--live`, set the context length. The default is 15000. |
 | `--adaptive-hop` | With `--live`, shorten the hop while decodes are fast. |
+| `--lane room\|remote` | Read one channel of a two-lane recording. Channel 1 is `room` and channel 2 is `remote`. |
+| `--record` | Capture audio for `--seconds` and report the peak level of each lane. Refer to "Capture check". |
+| `--source microphone\|systemAudio\|both` | With `--record`, the lanes to capture. The default is `microphone`. |
+| `--device UID` | With `--record`, the microphone to use. `--devices` gives the UID. The default is the default input of macOS. |
+| `--seconds N` | With `--record` or `--channels`, the capture time in seconds. The default is 10. |
+| `--gui` | With `--record`, make the tool a foreground application, thus macOS can show the permission prompt. |
+| `--devices` | List each audio device with its channel counts and its UID, then stop. |
+| `--channels` | Capture the raw channels of the combined device and report the peak level of each channel. |
+| `--log FILE` | Write a copy of the stderr output to this file. |
 
 The default speaker mode is `accurate`. Use `--fast-diarize` or `--no-diarize`
 to change it.
@@ -173,6 +187,27 @@ This runs `tl` and `auto` over `eval/manifest.json`, scores each run with
 
 **Do not build while a `--realtime` run is in progress.** The build competes
 for the machine and changes the drop count.
+
+## Capture check
+
+`--record` captures audio with the same `AudioCapture` that the app uses. It
+reports the peak level of each lane each second. Use it to check that this Mac
+permits a system audio tap, and that a two-lane recording puts the room in
+channel 1 and the call in channel 2. The archive that `--out` writes can go
+back into `--audio`, and `--lane` reads one channel of it.
+
+**macOS gives the system audio permission only to an app bundle.** A tool that
+you start in a terminal gets no prompt and no error, and the capture delivers
+no samples. Use `app/scripts/record-probe.sh`. It puts the tool in a signed
+bundle and starts it through LaunchServices.
+[DEVELOPMENT.md](DEVELOPMENT.md) describes the script.
+
+`--devices` lists each audio device. `--channels` shows the peak level of each
+raw channel of the combined device, before the lane mapping. Use it if the
+room and the call come out in the wrong channels.
+
+`--record` exits with `0` when it heard audio, with `3` when no lane heard
+anything, and with `1` for a failure.
 
 ## Debugging
 

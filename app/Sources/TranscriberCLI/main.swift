@@ -41,6 +41,18 @@ struct Options {
     var preRollMs = SessionConfig().preRollMs
     var contextMs = SessionConfig().contextMs
     var adaptiveHop = false
+    // Capture smoke test.
+    var record = false
+    var captureSource: CaptureSource = .microphone
+    var deviceUID: String?
+    var seconds = 10.0
+    var gui = false
+    var listDevices = false
+    var channelScan = false
+    /// Which lane of a two-lane recording to read, for measuring one against
+    /// the other.
+    var lane: CaptureLane?
+    var logFile: URL?
 }
 
 func parse() -> Options {
@@ -69,6 +81,17 @@ func parse() -> Options {
         case "--live": options.live = true
         case "--realtime": options.realtime = true
         case "--adaptive-hop": options.adaptiveHop = true
+        case "--record": options.record = true
+        case "--source":
+            options.captureSource = value().flatMap(CaptureSource.init(rawValue:))
+                ?? options.captureSource
+        case "--device": options.deviceUID = value()
+        case "--gui": options.gui = true
+        case "--devices": options.listDevices = true
+        case "--channels": options.channelScan = true
+        case "--lane": options.lane = value().flatMap(CaptureLane.init(rawValue:))
+        case "--log": options.logFile = value().map { URL(fileURLWithPath: $0) }
+        case "--seconds": options.seconds = value().flatMap(Double.init) ?? options.seconds
         case "--hop": options.hopMs = value().flatMap(Int.init) ?? options.hopMs
         case "--pre-roll": options.preRollMs = value().flatMap(Int.init) ?? options.preRollMs
         case "--context": options.contextMs = value().flatMap(Int.init) ?? options.contextMs
@@ -79,6 +102,10 @@ func parse() -> Options {
                        [--language tl] [--fast-diarize | --no-diarize] [--room-mode]
                        [--format txt|markdown|srt|vtt|json] [--out FILE] [--json FILE]
                        [--live [--realtime] [--hop MS] [--pre-roll MS] [--context MS] [--adaptive-hop]]
+            transcribe --record [--source microphone|systemAudio|both] [--device UID]
+                       [--seconds N] [--out FILE.m4a] [--gui]
+            transcribe --audio FILE --lane room|remote   # one channel of a two-lane file
+            transcribe --devices
             """)
             exit(0)
         default:
@@ -89,8 +116,15 @@ func parse() -> Options {
     return options
 }
 
+/// A second copy of the log on disk, for runs with no terminal attached.
+/// `open` launches through LaunchServices, which is the whole point of the GUI
+/// probe -- and which throws stderr away.
+nonisolated(unsafe) var logFileHandle: FileHandle?
+
 func log(_ message: String) {
-    FileHandle.standardError.write(Data((message + "\n").utf8))
+    let line = Data((message + "\n").utf8)
+    FileHandle.standardError.write(line)
+    logFileHandle?.write(line)
 }
 
 /// One run, machine-readable. What `eval/compare_language.py` reads.
@@ -114,6 +148,36 @@ struct RunReport: Codable {
 }
 
 let options = parse()
+
+if let logURL = options.logFile {
+    FileManager.default.createFile(atPath: logURL.path, contents: nil)
+    logFileHandle = try? FileHandle(forWritingTo: logURL)
+}
+
+if options.listDevices {
+    let defaultInput = AudioDevices.defaultInput()?.uid
+    let defaultOutput = AudioDevices.defaultOutput()?.uid
+    for device in AudioDevices.all() {
+        var marks: [String] = []
+        if device.canRecord { marks.append("in:\(device.inputChannels)") }
+        if device.canPlay { marks.append("out:\(device.outputChannels)") }
+        if device.uid == defaultInput { marks.append("default input") }
+        if device.uid == defaultOutput { marks.append("default output") }
+        print("\(device.name)  [\(marks.joined(separator: ", "))]\n    \(device.uid)")
+    }
+    exit(0)
+}
+
+if options.channelScan {
+    runChannelScan(seconds: options.seconds)
+}
+
+// Before the --audio requirement: this captures rather than reads.
+if options.record {
+    runRecord(source: options.captureSource, deviceUID: options.deviceUID,
+              seconds: options.seconds, out: options.output, gui: options.gui)
+}
+
 guard let audioURL = options.audio else {
     log("error: --audio is required (see --help)")
     exit(2)
@@ -131,9 +195,14 @@ let scratch = FileManager.default.temporaryDirectory
     .appendingPathComponent("transcriber-cli-\(UUID().uuidString).wav")
 defer { try? FileManager.default.removeItem(at: scratch) }
 
-log("preparing 16 kHz working copy…")
+log("preparing 16 kHz working copy…"
+    + (options.lane.map { " (\($0.rawValue) lane only)" } ?? ""))
 do {
-    _ = try await AudioCache.build(from: audioURL, to: scratch)
+    // A two-lane recording holds the room and the call in separate channels.
+    // Reading one of them is how the two get measured against each other:
+    // the same speech, once through a microphone and once before the speaker.
+    _ = try await AudioCache.build(from: audioURL, to: scratch,
+                                   channel: options.lane.map(ArchiveChannels.channel(for:)))
 } catch {
     log("error: could not read \(audioURL.path): \(error.localizedDescription)")
     exit(1)

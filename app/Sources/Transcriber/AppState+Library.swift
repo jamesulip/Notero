@@ -114,7 +114,8 @@ extension AppState {
             work: work,
             discardCacheWhenDone: !settings.keepWorkingCopy,
             roomMode: settings.roomMode,
-            expectedSpeakers: recording.expectedSpeakers
+            expectedSpeakers: recording.expectedSpeakers,
+            lanes: recording.lanes
         )
         progress[recording.id] = JobProgress(status: .pending, fraction: 0)
         queuedJobs[recording.id] = job

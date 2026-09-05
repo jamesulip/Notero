@@ -30,6 +30,15 @@ public final class StoredRecording {
     /// 16 kHz; this is the archival rate and it is not the same number.
     public var audioSampleRate: Int = 48_000
 
+    /// Which lane each channel of the audio holds, in channel order, as raw
+    /// values joined by commas.
+    ///
+    /// A string rather than an array because it is read on every transcription
+    /// and is never queried on, and because the default has to keep every
+    /// recording made before two-lane capture existed meaning exactly what it
+    /// meant then: one channel, the room.
+    public var lanesRaw: String = CaptureLane.room.rawValue
+
     public var statusRaw: String = TranscriptionStatus.pending.rawValue
     /// 0...1 within the current stage. Stage comes from `status`.
     public var progress: Double = 0
@@ -85,6 +94,21 @@ public final class StoredRecording {
         get { RecordingKind(rawValue: kindRaw) ?? .recording }
         set { kindRaw = newValue.rawValue }
     }
+
+    /// The lanes of this recording's audio, one per channel.
+    public var lanes: [CaptureLane] {
+        get {
+            let parsed = lanesRaw.split(separator: ",").compactMap {
+                CaptureLane(rawValue: String($0))
+            }
+            return parsed.isEmpty ? [.room] : parsed
+        }
+        set { lanesRaw = newValue.map(\.rawValue).joined(separator: ",") }
+    }
+
+    /// Whether the room and the call were kept apart, which is what makes a
+    /// transcript able to say which of the two a line came from.
+    public var hasSeparateLanes: Bool { lanes.count > 1 }
 
     public var status: TranscriptionStatus {
         get { TranscriptionStatus(rawValue: statusRaw) ?? .pending }

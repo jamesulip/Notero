@@ -40,8 +40,13 @@ public enum WaveformAnalyzer {
     }
 
     /// Live meter envelope: appends one bucket per call, dropping the oldest.
+    ///
+    /// One bucket is 100 ms, so the default holds a minute of history. The view
+    /// draws the newest bars that fit its width at a fixed bar pitch and lets
+    /// the rest scroll off, so the buffer has to be longer than the widest
+    /// window rather than sized to any particular one.
     public static func appending(_ peak: Float, to envelope: [Float],
-                                 limit: Int = 240) -> [Float] {
+                                 limit: Int = 600) -> [Float] {
         var out = envelope
         out.append(min(1, max(0, peak)))
         if out.count > limit { out.removeFirst(out.count - limit) }

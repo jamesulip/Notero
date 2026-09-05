@@ -61,7 +61,6 @@ public typealias ProgressReport = @Sendable (String, Double?) -> Void
 
 public protocol SpeechRecognizing: Sendable {
     var loadedModel: String? { get async }
-    var isLoaded: Bool { get async }
 
     func load(model: String, progress: ProgressReport?) async throws
     func unload() async

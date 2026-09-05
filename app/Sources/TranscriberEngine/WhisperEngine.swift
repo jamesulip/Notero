@@ -21,7 +21,6 @@ public actor WhisperEngine: SpeechRecognizing {
     }
 
     public var loadedModel: String? { currentModel }
-    public var isLoaded: Bool { pipeline != nil }
 
     // MARK: - Lifecycle
 

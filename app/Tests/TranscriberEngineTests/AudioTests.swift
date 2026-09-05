@@ -44,8 +44,8 @@ final class AudioFileTests: XCTestCase {
     func testArchiveWriterProducesAPlayableAacFile() throws {
         let url = scratch.appendingPathComponent("archive.m4a")
         let buffer = try tone(seconds: 1)
-        let writer = try ArchiveWriter(url: url, format: buffer.format)
-        for _ in 0..<3 { writer.write(buffer) }
+        let writer = try ArchiveWriter(url: url, sampleRate: buffer.format.sampleRate, lanes: [.room])
+        for _ in 0..<3 { writer.write([.room: buffer]) }
         writer.finish()
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
@@ -70,8 +70,8 @@ final class AudioFileTests: XCTestCase {
         // another queue, so anything not copied is a race with the next tap.
         let url = scratch.appendingPathComponent("reused.m4a")
         let buffer = try tone(seconds: 0.5)
-        let writer = try ArchiveWriter(url: url, format: buffer.format)
-        writer.write(buffer)
+        let writer = try ArchiveWriter(url: url, sampleRate: buffer.format.sampleRate, lanes: [.room])
+        writer.write([.room: buffer])
         // Scribble over the buffer exactly as the audio thread would.
         let channel = buffer.floatChannelData![0]
         for index in 0..<Int(buffer.frameLength) { channel[index] = 0 }
@@ -150,8 +150,8 @@ final class AudioFileTests: XCTestCase {
     func testAacIsDecodedIntoA16kWorkingCopy() async throws {
         let source = scratch.appendingPathComponent("source.m4a")
         let buffer = try tone(seconds: 1)
-        let writer = try ArchiveWriter(url: source, format: buffer.format)
-        for _ in 0..<2 { writer.write(buffer) }
+        let writer = try ArchiveWriter(url: source, sampleRate: buffer.format.sampleRate, lanes: [.room])
+        for _ in 0..<2 { writer.write([.room: buffer]) }
         writer.finish()
 
         let destination = scratch.appendingPathComponent("work.wav")
@@ -173,10 +173,10 @@ final class AudioFileTests: XCTestCase {
     func testProgressIsReportedInPercentStepsRatherThanPerBuffer() async throws {
         let source = scratch.appendingPathComponent("progress.m4a")
         let buffer = try tone(seconds: 1)
-        let writer = try ArchiveWriter(url: source, format: buffer.format)
+        let writer = try ArchiveWriter(url: source, sampleRate: buffer.format.sampleRate, lanes: [.room])
         // Long enough that an unthrottled build would report well past the cap:
         // AAC yields roughly two sample buffers per second of audio.
-        for _ in 0..<150 { writer.write(buffer) }
+        for _ in 0..<150 { writer.write([.room: buffer]) }
         writer.finish()
 
         let reports = Reports()

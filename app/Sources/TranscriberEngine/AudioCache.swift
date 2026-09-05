@@ -30,11 +30,34 @@ public enum AudioCache {
         try? FileManager.default.removeItem(at: url(for: id, under: support))
     }
 
+    /// The working copy for one lane of a recording.
+    public static func url(for id: UUID, lane: CaptureLane, under support: URL) -> URL {
+        directory(under: support)
+            .appendingPathComponent("\(id.uuidString)-\(lane.rawValue).wav")
+    }
+
+    /// The lane copy that belongs beside an existing working copy.
+    ///
+    /// Derived from the path the job already carries rather than rebuilt from
+    /// the support directory, so a job pointed at a different location -- the
+    /// command line tool, a test -- keeps its lanes with it.
+    public static func url(besides cacheURL: URL, lane: CaptureLane) -> URL {
+        let base = cacheURL.deletingPathExtension().lastPathComponent
+        return cacheURL.deletingLastPathComponent()
+            .appendingPathComponent("\(base)-\(lane.rawValue).wav")
+    }
+
     /// Decodes any AVFoundation-readable file to the 16 kHz mono working copy.
     ///
     /// Streamed through `AVAssetReader` rather than loaded: a 90-minute MOV
     /// stays a few megabytes of buffers no matter how large the source is.
+    ///
+    /// - Parameter channel: which channel of a multi-channel source to take,
+    ///   or nil to mix everything down. A two-lane recording is one stereo
+    ///   file whose channels are the room and the call, and mixing them here
+    ///   would throw away the separation the recording was made to keep.
     public static func build(from source: URL, to destination: URL,
+                             channel: Int? = nil,
                              progress: (@Sendable (Double) -> Void)? = nil) async throws -> Int {
         let asset = AVURLAsset(url: source)
         guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
@@ -43,11 +66,21 @@ public enum AudioCache {
         let duration = try await asset.load(.duration)
         let totalSeconds = max(0.001, CMTimeGetSeconds(duration))
 
+        // Asking for one channel makes AVFoundation mix them; asking for the
+        // source's own count keeps them apart so one can be picked out below.
+        let sourceChannels = channel == nil
+            ? 1
+            : Int(try await track.load(.formatDescriptions).first
+                .flatMap { CMAudioFormatDescriptionGetStreamBasicDescription($0)?
+                    .pointee.mChannelsPerFrame }
+                .map(Int.init) ?? 1)
+        let wanted = channel.flatMap { $0 < sourceChannels ? $0 : nil }
+
         let reader = try AVAssetReader(asset: asset)
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVSampleRateKey: Audio.sampleRate,
-            AVNumberOfChannelsKey: 1,
+            AVNumberOfChannelsKey: wanted == nil ? 1 : sourceChannels,
             AVLinearPCMBitDepthKey: 16,
             AVLinearPCMIsFloatKey: false,
             AVLinearPCMIsBigEndianKey: false,
@@ -79,7 +112,12 @@ public enum AudioCache {
                                                totalLengthOut: &length,
                                                dataPointerOut: &pointer) == kCMBlockBufferNoErr,
                    let pointer, length > 0 {
-                    writer.write(Data(bytes: pointer, count: length))
+                    if let wanted, sourceChannels > 1 {
+                        writer.write(Self.channel(wanted, of: pointer, bytes: length,
+                                                  channels: sourceChannels))
+                    } else {
+                        writer.write(Data(bytes: pointer, count: length))
+                    }
                 }
             }
             let at = CMSampleBufferGetPresentationTimeStamp(sample)
@@ -95,6 +133,22 @@ public enum AudioCache {
             throw EngineError.audioUnreadable(reader.error?.localizedDescription ?? "decode failed")
         }
         return writer.durationMs
+    }
+
+    /// One channel out of interleaved 16-bit PCM.
+    private static func channel(_ index: Int, of pointer: UnsafeMutablePointer<Int8>,
+                                bytes: Int, channels: Int) -> Data {
+        let frames = bytes / (MemoryLayout<Int16>.size * channels)
+        var out = Data(count: frames * MemoryLayout<Int16>.size)
+        pointer.withMemoryRebound(to: Int16.self, capacity: frames * channels) { samples in
+            out.withUnsafeMutableBytes { raw in
+                let target = raw.bindMemory(to: Int16.self)
+                for frame in 0..<frames {
+                    target[frame] = samples[frame * channels + index]
+                }
+            }
+        }
+        return out
     }
 }
 

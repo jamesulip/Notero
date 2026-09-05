@@ -1,16 +1,23 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import Foundation
 import TranscriberCore
 
 /// One chunk of captured audio, ready for inference.
 public struct CapturedAudio: Sendable {
-    /// 16 kHz mono Int16, little-endian.
+    /// 16 kHz mono Int16, little-endian: every lane summed. What a
+    /// single-transcript session decodes and what the working copy holds.
     public let pcm: Data
-    /// Peak amplitude of this chunk, 0...1. Drives the level meter.
+    /// Peak amplitude of this chunk, 0...1, across every lane. Drives the
+    /// level meter, whose job is to warn about clipping.
     public let peak: Float
+    /// The same audio kept apart, one entry per captured lane. A one-lane
+    /// recording has a single entry equal to `pcm`.
+    public let lanes: [CaptureLane: Data]
+    /// Per-lane peaks, so a two-lane recording can show two meters.
+    public let peaks: [CaptureLane: Float]
 }
 
-/// Microphone capture with two outputs from one tap.
+/// Capture with two outputs from one tap, from one to two lanes.
 ///
 /// The archive keeps the hardware's own rate as AAC, because that is the copy
 /// the user still has in a year. Inference gets 16 kHz mono, because that is
@@ -24,25 +31,32 @@ public struct CapturedAudio: Sendable {
 /// proper anti-aliasing; decimating by taking every Nth sample would fold
 /// everything above 8 kHz back into the speech band, which is exactly where the
 /// consonant detail Whisper needs lives.
+///
+/// A two-lane recording keeps the room and the call in separate channels of
+/// one stereo archive rather than mixing them. Mixing is irreversible, and the
+/// thing it destroys is the only clean copy of the remote voices: in a room
+/// with speakers the microphone hears them again a fraction of a second later,
+/// and summing the two produces comb filtering and doubled words. Kept apart,
+/// that is a problem that can still be solved next year.
 public final class AudioCapture: @unchecked Sendable {
 
-    private let engine = AVAudioEngine()
-    private let inferenceFormat: AVAudioFormat
+    public let source: CaptureSource
+    public let lanes: [CaptureLane]
 
     /// Everything below the lock is written by `start`/`stop` on the caller's
-    /// thread and read by `handle` on the tap's thread. `removeTap` does not
-    /// wait for an in-flight tap block, so `stop()` releasing these references
-    /// while `handle` is still retaining them is an unsynchronized refcount
-    /// race -- an over-release crash, not a wrong result.
+    /// thread and read by the capture callback on the audio thread. Neither
+    /// `removeTap` nor `AudioDeviceStop` waits for an in-flight callback, so
+    /// `stop()` releasing these while the callback still retains them is an
+    /// unsynchronized refcount race -- an over-release crash, not a wrong
+    /// result.
     private let stateLock = NSLock()
-    private var toArchive: AVAudioConverter?
-    private var toInference: AVAudioConverter?
+    private var input: (any LaneCapturing)?
+    private var chains: [CaptureLane: LaneChain] = [:]
     private var archive: ArchiveWriter?
     private var onAudio: (@Sendable (CapturedAudio) -> Void)?
     private var _isMuted = false
     private var _gain: Float = 1
     private var _roomMode = false
-    private var highPass: HighPassFilter?
 
     public private(set) var isRunning = false
     public private(set) var archiveFormat: AVAudioFormat?
@@ -56,9 +70,12 @@ public final class AudioCapture: @unchecked Sendable {
 
     /// Input gain in decibels, applied to both the archive and the inference
     /// copy so the file on disk matches what was transcribed and what the meter
-    /// showed. Settable mid-recording: the tap reads it per buffer, so the
-    /// slider takes effect within one 4096-frame block rather than at the next
-    /// session.
+    /// showed. Settable mid-recording: the callback reads it per buffer, so the
+    /// slider takes effect within one block rather than at the next session.
+    ///
+    /// The room lane only. What comes off the system tap left an application's
+    /// mixer at the level that application chose, and there is no microphone
+    /// placement to compensate for.
     public var gainDb: Float {
         get { InputGain.db(fromLinear: stateLock.withLock { _gain }) }
         set {
@@ -74,19 +91,29 @@ public final class AudioCapture: @unchecked Sendable {
     /// should still contain everything the microphone heard. Re-transcribing
     /// later re-applies this from the setting rather than inheriting it, so a
     /// meeting recorded in the wrong mode is recoverable.
+    ///
+    /// Also the room lane only: a fan under a table is not on the call.
     public var isRoomMode: Bool {
         get { stateLock.withLock { _roomMode } }
         set { stateLock.withLock { _roomMode = newValue } }
     }
 
-    public init?() {
-        guard let format = AVAudioFormat(
-            commonFormat: .pcmFormatInt16,
-            sampleRate: Double(Audio.sampleRate),
-            channels: 1,
-            interleaved: true
-        ) else { return nil }
-        inferenceFormat = format
+    /// - Parameters:
+    ///   - source: which lanes to record.
+    ///   - microphoneUID: which microphone, or nil to follow the system
+    ///     default. A UID rather than a device id, because ids are reassigned
+    ///     across reboots and a saved preference outlives one.
+    public init?(source: CaptureSource = .default, microphoneUID: String? = nil) {
+        self.source = source
+        self.lanes = source.lanes
+        self.microphoneUID = microphoneUID
+    }
+
+    private let microphoneUID: String?
+
+    /// What the capture actually opened. Empty before `start`.
+    public var diagnostics: String {
+        stateLock.withLock { input }?.diagnostics ?? ""
     }
 
     public var archiveSampleRate: Int {
@@ -103,43 +130,53 @@ public final class AudioCapture: @unchecked Sendable {
         guard !isRunning else { return }
         self.onAudio = onAudio
 
-        let input = engine.inputNode
-        let hardware = input.inputFormat(forBus: 0)
-        guard hardware.sampleRate > 0 else { throw CaptureError.noInputDevice }
+        let input: any LaneCapturing = switch source {
+        case .microphone: MicrophoneInput(deviceUID: microphoneUID)
+        case .systemAudio: TapInput(withMicrophone: false, microphoneUID: nil)
+        case .both: TapInput(withMicrophone: true, microphoneUID: microphoneUID)
+        }
+        try input.prepare()
+        let rate = input.sampleRate
+        guard rate > 0 else { throw CaptureError.noInputDevice }
 
-        // Mono at the hardware rate: a meeting mic is not stereo in any way
-        // worth 2x the bytes, and Whisper would downmix it anyway.
-        guard let archiveFormat = AVAudioFormat(
-            standardFormatWithSampleRate: hardware.sampleRate, channels: 1
-        ) else { throw CaptureError.unsupportedFormat(hardware.sampleRate) }
+        // Mono per lane at the capture rate: a meeting microphone is not
+        // stereo in any way worth 2x the bytes, and Whisper would downmix it
+        // anyway. Two lanes make a stereo file, but each channel is one lane
+        // rather than one half of a stereo image.
+        guard let archiveFormat = AVAudioFormat(standardFormatWithSampleRate: rate,
+                                                channels: AVAudioChannelCount(lanes.count))
+        else { throw CaptureError.unsupportedFormat(rate) }
         self.archiveFormat = archiveFormat
 
-        guard let toArchive = AVAudioConverter(from: hardware, to: archiveFormat),
-              let toInference = AVAudioConverter(from: archiveFormat, to: inferenceFormat)
-        else { throw CaptureError.unsupportedFormat(hardware.sampleRate) }
-        let writer = try archiveURL.map { try ArchiveWriter(url: $0, format: archiveFormat) }
-        // Built here, where the hardware rate is finally known, and freshly:
-        // delay-line state left over from the previous session decays into the
-        // start of this one as an audible thump.
-        let filter = HighPassFilter(cornerHz: HighPassFilter.roomCornerHz,
-                                    sampleRate: hardware.sampleRate)
+        var chains: [CaptureLane: LaneChain] = [:]
+        for lane in lanes {
+            // Built here, where the capture rate is finally known, and freshly:
+            // delay-line state left over from the previous session decays into
+            // the start of this one as an audible thump.
+            guard let chain = LaneChain(lane: lane, sampleRate: rate) else {
+                throw CaptureError.unsupportedFormat(rate)
+            }
+            chains[lane] = chain
+        }
+        let writer = try archiveURL.map {
+            try ArchiveWriter(url: $0, sampleRate: rate, lanes: lanes)
+        }
         stateLock.withLock {
-            self.highPass = filter
-            self.toArchive = toArchive
-            self.toInference = toInference
+            self.input = input
+            self.chains = chains
             self.archive = writer
         }
 
-        input.installTap(onBus: 0, bufferSize: 4096, format: hardware) { [weak self] buffer, _ in
-            self?.handle(buffer)
-        }
-        engine.prepare()
+        input.onGap = { [weak self] frames in self?.fillGap(frames) }
         do {
-            try engine.start()
+            try input.start { [weak self] frames in self?.handle(frames) }
         } catch {
-            input.removeTap(onBus: 0)
             let closing = stateLock.withLock { () -> ArchiveWriter? in
-                defer { archive = nil }
+                defer {
+                    archive = nil
+                    self.input = nil
+                    self.chains = [:]
+                }
                 return archive
             }
             closing?.finish()
@@ -154,15 +191,13 @@ public final class AudioCapture: @unchecked Sendable {
         guard isRunning else {
             return (stateLock.withLock { archive?.frameCount ?? 0 }, archiveSampleRate)
         }
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        stateLock.withLock { input }?.stop()
         let closing = stateLock.withLock { () -> ArchiveWriter? in
             defer {
                 archive = nil
-                toArchive = nil
-                toInference = nil
+                input = nil
+                chains = [:]
                 onAudio = nil
-                highPass = nil
             }
             return archive
         }
@@ -173,83 +208,218 @@ public final class AudioCapture: @unchecked Sendable {
         return (frames, rate)
     }
 
-    // MARK: - Tap
+    // MARK: - The chain
 
-    private func handle(_ buffer: AVAudioPCMBuffer) {
+    private func handle(_ frames: [CaptureLane: AVAudioPCMBuffer]) {
         // Snapshot under the lock, then work from locals: a concurrent stop()
         // can release everything here mid-callback otherwise.
         stateLock.lock()
-        let toArchive = self.toArchive
-        let toInference = self.toInference
+        let chains = self.chains
         let onAudio = self.onAudio
         let archive = self.archive
         let muted = _isMuted
         let gain = _gain
         let roomMode = _roomMode
-        let highPass = self.highPass
         stateLock.unlock()
-        guard let toArchive, let toInference, let onAudio else { return }
+        guard let onAudio, !chains.isEmpty else { return }
 
-        guard let mono = Self.convert(buffer, with: toArchive, ratioHint: 1) else { return }
-        if muted {
-            Self.silence(mono)
-        } else if let channel = mono.floatChannelData?[0] {
-            // Gain goes on before the archive write, not after, so the file kept
-            // on disk is the audio that was actually transcribed. Boosting only
-            // the inference copy would leave the user with an archive quieter
-            // than the meter they watched while recording it.
-            InputGain.apply(gain, to: channel, count: Int(mono.frameLength))
-        }
+        var peaks: [CaptureLane: Float] = [:]
+        var pcm: [CaptureLane: Data] = [:]
 
-        // Measured here rather than after the resample, and before the filter:
-        // the meter's job is to warn about clipping, which happens at this
-        // point in the chain. Reading it post-filter would hide rumble that is
-        // eating the headroom and leave the user raising gain into a clip.
-        var peak: Float = 0
-        if let channel = mono.floatChannelData?[0] {
-            for index in 0..<Int(mono.frameLength) {
+        for lane in lanes {
+            guard let buffer = frames[lane], chains[lane] != nil,
+                  let channel = buffer.floatChannelData?[0] else { continue }
+            let count = Int(buffer.frameLength)
+
+            if muted {
+                for index in 0..<count { channel[index] = 0 }
+            } else if lane == .room {
+                // Gain goes on before the archive write, not after, so the file
+                // kept on disk is the audio that was actually transcribed.
+                // Boosting only the inference copy would leave the user with an
+                // archive quieter than the meter they watched while recording.
+                InputGain.apply(gain, to: channel, count: count)
+            }
+
+            // Measured here rather than after the resample, and before the
+            // filter: the meter's job is to warn about clipping, which happens
+            // at this point in the chain. Reading it post-filter would hide
+            // rumble that is eating the headroom and leave the user raising
+            // gain into a clip.
+            var peak: Float = 0
+            for index in 0..<count {
                 let sample = abs(channel[index])
                 if sample > peak { peak = sample }
             }
+            peaks[lane] = peak
         }
 
-        archive?.write(mono)
+        // Written before any filtering, and as one call, so the channels of a
+        // two-lane archive stay frame-for-frame together.
+        archive?.write(frames)
 
-        // After the archive write, so only the model sees the filtering. Safe
-        // to mutate in place here: `write` deep-copies before it returns.
-        if roomMode, let highPass, let channel = mono.floatChannelData?[0] {
-            let frames = Int(mono.frameLength)
-            highPass.process(channel, count: frames)
-            // The filter is not level-preserving: it overshoots on transients,
-            // so a buffer that was in range before can leave it above ±1 and
-            // wrap when it becomes Int16.
-            InputGain.clamp(channel, count: frames)
+        for lane in lanes {
+            guard let buffer = frames[lane], let chain = chains[lane] else { continue }
+            // Safe to filter in place here: `write` deep-copies before it
+            // returns, so the archive already has the unfiltered audio.
+            if roomMode, lane == .room, let channel = buffer.floatChannelData?[0] {
+                chain.applyRoomMode(channel, count: Int(buffer.frameLength))
+            }
+            if let narrow = chain.toInference(buffer) { pcm[lane] = narrow }
         }
 
-        guard let narrow = Self.convert(
-            mono, with: toInference,
-            ratioHint: inferenceFormat.sampleRate / mono.format.sampleRate
-        ), narrow.frameLength > 0, let channel = narrow.int16ChannelData?[0] else { return }
-
-        let count = Int(narrow.frameLength)
-        let data = Data(bytes: channel, count: count * MemoryLayout<Int16>.size)
-        onAudio(CapturedAudio(pcm: data, peak: peak))
+        guard !pcm.isEmpty else { return }
+        onAudio(CapturedAudio(pcm: Self.mix(pcm, order: lanes),
+                              peak: peaks.values.max() ?? 0,
+                              lanes: pcm, peaks: peaks))
     }
 
-    private static func convert(_ buffer: AVAudioPCMBuffer,
-                                with converter: AVAudioConverter,
-                                ratioHint: Double) -> AVAudioPCMBuffer? {
-        let ratio = converter.outputFormat.sampleRate / buffer.format.sampleRate
-        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
-        guard let out = AVAudioPCMBuffer(pcmFormat: converter.outputFormat,
-                                         frameCapacity: capacity) else { return nil }
+    /// Silence for a gap in a lane, so later timestamps stay where they were.
+    ///
+    /// The output device changing mid-recording tears the tap down and builds
+    /// it again, and the audio during that is simply not there. Dropping those
+    /// frames would pull every subsequent word earlier by the length of the
+    /// gap; writing them as silence keeps the recording on wall-clock and
+    /// leaves an audible, visible hole where the truth is.
+    private func fillGap(_ frames: Int) {
+        stateLock.lock()
+        let chains = self.chains
+        let onAudio = self.onAudio
+        let archive = self.archive
+        stateLock.unlock()
+        guard let onAudio, frames > 0 else { return }
 
-        // The converter asks repeatedly until it has enough input; feeding the
-        // same buffer twice would duplicate audio and shift the whole timeline.
-        // A class box rather than a captured var: the block is @Sendable.
+        var buffers: [CaptureLane: AVAudioPCMBuffer] = [:]
+        for lane in lanes {
+            guard let chain = chains[lane],
+                  let buffer = AVAudioPCMBuffer(pcmFormat: chain.monoFormat,
+                                                frameCapacity: AVAudioFrameCount(frames))
+            else { continue }
+            buffer.frameLength = AVAudioFrameCount(frames)
+            if let channel = buffer.floatChannelData?[0] {
+                for index in 0..<frames { channel[index] = 0 }
+            }
+            buffers[lane] = buffer
+        }
+        archive?.write(buffers)
+
+        var pcm: [CaptureLane: Data] = [:]
+        for (lane, buffer) in buffers {
+            if let narrow = chains[lane]?.toInference(buffer) { pcm[lane] = narrow }
+        }
+        guard !pcm.isEmpty else { return }
+        onAudio(CapturedAudio(pcm: Self.mix(pcm, order: lanes), peak: 0,
+                              lanes: pcm, peaks: [:]))
+    }
+
+    /// Sums the lanes for the single-transcript path.
+    ///
+    /// Summed rather than averaged: the lanes hold different people, so they
+    /// are rarely loud at the same moment, and averaging would drop every
+    /// voice by 6 dB to guard against an overlap that mostly does not happen.
+    /// Clamped, for the overlap that does.
+    static func mix(_ lanes: [CaptureLane: Data], order: [CaptureLane]) -> Data {
+        let present = order.compactMap { lanes[$0] }
+        guard present.count > 1 else { return present.first ?? Data() }
+        let count = present.map(\.count).min() ?? 0
+        var out = Data(count: count)
+        out.withUnsafeMutableBytes { destination in
+            let target = destination.bindMemory(to: Int16.self)
+            for (index, _) in target.enumerated() { target[index] = 0 }
+            for lane in present {
+                lane.withUnsafeBytes { source in
+                    let samples = source.bindMemory(to: Int16.self)
+                    for index in 0..<target.count {
+                        let sum = Int32(target[index]) + Int32(samples[index])
+                        target[index] = Int16(clamping: sum)
+                    }
+                }
+            }
+        }
+        return out
+    }
+
+    public enum CaptureError: LocalizedError {
+        case noInputDevice
+        case unsupportedFormat(Double)
+        /// The chosen microphone is not attached any more.
+        case deviceGone(String)
+        case cannotUseDevice(OSStatus)
+
+        public var errorDescription: String? {
+            switch self {
+            case .noInputDevice:
+                return "No microphone is available. Check System Settings › Sound › Input."
+            case .unsupportedFormat(let rate):
+                return "Cannot resample this input (\(Int(rate)) Hz) to 16 kHz."
+            case .deviceGone:
+                return "The microphone chosen in Settings is not connected. "
+                     + "Choose another one, or reconnect it."
+            case .cannotUseDevice(let status):
+                return "That microphone could not be opened (Core Audio error \(status))."
+            }
+        }
+    }
+}
+
+// MARK: - Per-lane processing
+
+/// Everything between a mono buffer at the capture rate and the bytes the
+/// model is given. One per lane, because the filter carries state and two
+/// lanes sharing one would bleed each other's history.
+final class LaneChain {
+    let lane: CaptureLane
+    let monoFormat: AVAudioFormat
+    private let inferenceFormat: AVAudioFormat
+    private let converter: AVAudioConverter
+    private let highPass: HighPassFilter
+
+    init?(lane: CaptureLane, sampleRate: Double) {
+        guard let mono = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
+              let narrow = AVAudioFormat(commonFormat: .pcmFormatInt16,
+                                         sampleRate: Double(Audio.sampleRate),
+                                         channels: 1, interleaved: true),
+              let converter = AVAudioConverter(from: mono, to: narrow)
+        else { return nil }
+        self.lane = lane
+        self.monoFormat = mono
+        self.inferenceFormat = narrow
+        self.converter = converter
+        self.highPass = HighPassFilter(cornerHz: HighPassFilter.roomCornerHz,
+                                       sampleRate: sampleRate)
+    }
+
+    func applyRoomMode(_ channel: UnsafeMutablePointer<Float>, count: Int) {
+        highPass.process(channel, count: count)
+        // The filter is not level-preserving: it overshoots on transients, so
+        // a buffer that was in range before can leave it above ±1 and wrap
+        // when it becomes Int16.
+        InputGain.clamp(channel, count: count)
+    }
+
+    func toInference(_ buffer: AVAudioPCMBuffer) -> Data? {
+        let ratio = inferenceFormat.sampleRate / buffer.format.sampleRate
+        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
+        guard let out = AVAudioPCMBuffer(pcmFormat: inferenceFormat,
+                                         frameCapacity: capacity),
+              converter.convertOnce(buffer, into: out),
+              let channel = out.int16ChannelData?[0] else { return nil }
+        return Data(bytes: channel, count: Int(out.frameLength) * MemoryLayout<Int16>.size)
+    }
+}
+
+extension AVAudioConverter {
+    /// Converts one buffer into `out`, handing the input block that buffer
+    /// exactly once. Returns false when the conversion failed or produced
+    /// nothing.
+    ///
+    /// The converter asks repeatedly until it has enough input; feeding the
+    /// same buffer twice would duplicate audio and shift the whole timeline.
+    /// A class box rather than a captured var: the block is `@Sendable`.
+    func convertOnce(_ buffer: AVAudioPCMBuffer, into out: AVAudioPCMBuffer) -> Bool {
         let supplied = Flag()
         var error: NSError?
-        converter.convert(to: out, error: &error) { _, status in
+        convert(to: out, error: &error) { _, status in
             if supplied.value {
                 status.pointee = .noDataNow
                 return nil
@@ -258,98 +428,10 @@ public final class AudioCapture: @unchecked Sendable {
             status.pointee = .haveData
             return buffer
         }
-        guard error == nil, out.frameLength > 0 else { return nil }
-        return out
-    }
-
-    private static func silence(_ buffer: AVAudioPCMBuffer) {
-        guard let channel = buffer.floatChannelData?[0] else { return }
-        for index in 0..<Int(buffer.frameLength) { channel[index] = 0 }
+        return error == nil && out.frameLength > 0
     }
 
     private final class Flag: @unchecked Sendable {
         var value = false
-    }
-
-    public enum CaptureError: LocalizedError {
-        case noInputDevice
-        case unsupportedFormat(Double)
-
-        public var errorDescription: String? {
-            switch self {
-            case .noInputDevice:
-                return "No microphone is available. Check System Settings › Sound › Input."
-            case .unsupportedFormat(let rate):
-                return "Cannot resample this input (\(Int(rate)) Hz) to 16 kHz."
-            }
-        }
-    }
-}
-
-/// Writes the archival AAC file off the audio thread.
-///
-/// `AVAudioFile.write` encodes and hits the disk. Doing that inside the tap
-/// callback is a real-time violation: a stalled write shows up as dropped
-/// microphone frames, and dropped frames are unrecoverable.
-final class ArchiveWriter: @unchecked Sendable {
-    private var file: AVAudioFile?
-    private let queue = DispatchQueue(label: "transcriber.archive", qos: .utility)
-    private let lock = NSLock()
-    private var frames: AVAudioFramePosition = 0
-
-    init(url: URL, format: AVAudioFormat) throws {
-        // 64 kbps mono AAC: transparent for speech, and about 28 MB an hour
-        // against the 345 MB that raw 48 kHz float would cost.
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: format.sampleRate,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderBitRateKey: 64_000,
-        ]
-        try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true
-        )
-        file = try AVAudioFile(forWriting: url, settings: settings,
-                               commonFormat: .pcmFormatFloat32, interleaved: false)
-    }
-
-    var frameCount: AVAudioFramePosition {
-        lock.withLock { frames }
-    }
-
-    func write(_ buffer: AVAudioPCMBuffer) {
-        guard let copy = buffer.deepCopy() else { return }
-        lock.withLock { frames += AVAudioFramePosition(copy.frameLength) }
-        queue.async { [weak self] in
-            guard let self else { return }
-            try? self.file?.write(from: copy)
-        }
-    }
-
-    /// Closes the file, and does mean *closes*.
-    ///
-    /// An MPEG-4 container is only finalized -- the sample tables flushed and
-    /// the `moov` atom written -- when `AVAudioFile` is deallocated. Merely
-    /// stopping writes leaves bytes on disk that every decoder refuses to open,
-    /// so the reference is dropped here rather than left to whenever the owner
-    /// happens to release the writer.
-    func finish() {
-        queue.sync { file = nil }
-    }
-}
-
-extension AVAudioPCMBuffer {
-    /// The tap reuses its buffer, so anything handed to another thread has to
-    /// own its bytes.
-    func deepCopy() -> AVAudioPCMBuffer? {
-        guard let copy = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameLength),
-              let source = floatChannelData, let destination = copy.floatChannelData
-        else { return nil }
-        let count = Int(frameLength)
-        for channel in 0..<Int(format.channelCount) {
-            destination[channel].update(from: source[channel], count: count)
-        }
-        copy.frameLength = frameLength
-        return copy
     }
 }

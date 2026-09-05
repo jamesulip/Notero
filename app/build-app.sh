@@ -43,6 +43,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>NSSupportsAutomaticTermination</key><false/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Notero records audio from your microphone to transcribe it on this Mac. Audio never leaves the machine.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Notero records what this Mac plays, so the people on a call are transcribed as clearly as the people in the room. Audio never leaves the machine.</string>
     <!-- Declared so dropping media onto the Dock icon works, not only onto the window. -->
     <key>CFBundleDocumentTypes</key>
     <array>
@@ -81,9 +83,24 @@ cat > "$ENTITLEMENTS" <<'ENT'
 </plist>
 ENT
 
-# Ad-hoc signature. Enough for the microphone prompt on this machine; a real
-# Developer ID would be needed to run it anywhere else.
-codesign --force --deep --sign - --entitlements "$ENTITLEMENTS" "$APP" 2>&1 \
+# A real signing identity when the machine has one, ad-hoc when it does not.
+#
+# This is not only about distribution. TCC keys its permissions to the code
+# signature, and an ad-hoc signature has nothing stable in it but the hash of
+# the binary -- so every rebuild is a different app as far as macOS is
+# concerned, and the system audio permission has to be granted again. Measured:
+# ad-hoc lost the grant on each rebuild, and signing with the Apple Development
+# identity kept it, because the requirement becomes the bundle id plus the team
+# rather than the hash.
+IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
+    | sed -n 's/.*"\(Apple Development: .*\)"/\1/p' | head -1)
+if [ -n "$IDENTITY" ]; then
+    echo "signing as $IDENTITY"
+else
+    IDENTITY="-"
+    echo "signing ad-hoc; system audio permission will be asked for again after every build"
+fi
+codesign --force --deep --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$APP" 2>&1 \
     | { grep -v "replacing existing signature" || true; }
 
 echo "built $APP ($VERSION, build $BUILD)"

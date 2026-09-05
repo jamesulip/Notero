@@ -31,12 +31,16 @@ public struct TranscriptionJob: Sendable, Identifiable, Equatable {
     /// How many people the user says were in the room. A target for speaker
     /// clustering, never a cap. Nil when nobody said.
     public var expectedSpeakers: Int?
+    /// One per channel of the source audio. Two lanes are decoded separately
+    /// and merged, which is what lets the transcript say who was in the room
+    /// and who was on the call.
+    public var lanes: [CaptureLane]
 
     public init(id: UUID, title: String, sourceURL: URL?, cacheURL: URL,
                 modelId: String, language: String, prompt: String? = nil,
                 diarizationMode: DiarizationMode = .accurate, work: Work = .full,
                 discardCacheWhenDone: Bool = true, roomMode: Bool = false,
-                expectedSpeakers: Int? = nil) {
+                expectedSpeakers: Int? = nil, lanes: [CaptureLane] = [.room]) {
         self.id = id
         self.title = title
         self.sourceURL = sourceURL
@@ -49,9 +53,13 @@ public struct TranscriptionJob: Sendable, Identifiable, Equatable {
         self.discardCacheWhenDone = discardCacheWhenDone
         self.roomMode = roomMode
         self.expectedSpeakers = expectedSpeakers
+        self.lanes = lanes.isEmpty ? [.room] : lanes
     }
 
     public var diarize: Bool { diarizationMode.performsDiarization }
+
+    /// Whether this job decodes each lane on its own.
+    public var hasSeparateLanes: Bool { lanes.count > 1 }
 }
 
 /// Wall-clock measurements for one whole-file job. Stored with the transcript
@@ -227,6 +235,12 @@ public actor TranscriptionQueue {
 
             if job.work == .diarizeOnly {
                 try await diarizeOnly(job, source: source)
+                return
+            }
+
+            if job.hasSeparateLanes {
+                try await runLanes(job, started: started, durationMs: durationMs,
+                                   waveform: waveform, metrics: metrics)
                 return
             }
 
@@ -449,6 +463,177 @@ public actor TranscriptionQueue {
         }
         await engines.releaseDiarizer()
         if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
+    }
+
+    // MARK: - Two lanes
+
+    /// A recording whose channels are the room and the call, decoded a lane at
+    /// a time and merged.
+    ///
+    /// Two passes over a meeting rather than one, which is the cost. What it
+    /// buys is speaker attribution that cannot be wrong at the boundary that
+    /// matters most -- who was in the room and who was on the call -- and
+    /// overlapping speech that survives as two clean lines instead of one
+    /// garbled one.
+    ///
+    /// No partial transcripts here, deliberately. Emitting them per lane would
+    /// show the whole room side, then jump back to the beginning and show the
+    /// whole call side, and the user would watch a transcript apparently
+    /// rewrite its own history until the merge landed.
+    private func runLanes(_ job: TranscriptionJob, started: Date, durationMs: Int,
+                          waveform: [Float], metrics initial: TranscriptionMetrics) async throws {
+        var metrics = initial
+        metrics.sourceDurationMs = durationMs
+
+        try await engines.loadModel(job.modelId) { _, fraction in
+            if let fraction {
+                self.emit(.stage(id: job.id, status: .preparing, progress: fraction))
+            }
+        }
+        metrics.prepareMs = Int(Date().timeIntervalSince(started) * 1000)
+        emit(.stage(id: job.id, status: .transcribing, progress: 0))
+        try? await engines.prepareVAD(progress: nil)
+
+        let vad = await engines.voiceActivity
+        let asr = await engines.recognizer
+        let count = Double(job.lanes.count)
+        var decodedLanes: [LaneTranscript.Lane] = []
+        var roster: [SpeakerLabel] = []
+        var language: String?
+        var didDiarize = false
+        var dropped = 0
+        var windows = 0
+
+        for (index, lane) in job.lanes.enumerated() {
+            try Task.checkCancellation()
+            let source = try await workingCopy(for: job, lane: lane, channel: index)
+            let heard: any PCMSource = job.roomMode && lane == .room
+                ? HighPassPCM(source) : source
+
+            let decoded = try await OfflinePipeline.transcribeFile(
+                source: heard, using: vad, asr: asr,
+                language: job.language, prompt: job.prompt,
+                progress: { fraction in
+                    // Each lane owns its share of the bar, so it fills once
+                    // rather than twice.
+                    self.emit(.stage(id: job.id, status: .transcribing,
+                                     progress: (Double(index) + fraction) / count))
+                }
+            )
+            windows += decoded.windowCount
+            dropped += decoded.decode.droppedWindows
+            metrics.vadMs += decoded.vadMs
+            metrics.decodeMs += decoded.decodeMs
+            metrics.speechWindowMs += decoded.speechWindowMs
+            metrics.retriedWindows += decoded.decode.retriedWindows
+            language = language ?? decoded.decode.detectedLanguage
+
+            // Diarization runs inside a lane, never across two. The room lane
+            // is where six people at a table have to be told apart; the call
+            // lane is its own room with its own speakers, and clustering the
+            // two together would ask the model to decide whether a voice over
+            // a codec is the same person as a voice across a table.
+            var spans: [SpeakerSpan] = []
+            if job.diarize {
+                emit(.stage(id: job.id, status: .diarizing,
+                            progress: Double(index) / count))
+                do {
+                    try await engines.prepareDiarizer(progress: nil)
+                    let raw = try await engines.diarize(
+                        source, speechRegions: decoded.regions, mode: job.diarizationMode,
+                        expectedSpeakers: lane == .room ? job.expectedSpeakers : nil
+                    ) { fraction in
+                        self.emit(.stage(id: job.id, status: .diarizing,
+                                         progress: (Double(index) + fraction) / count))
+                    }
+                    let normalized = SegmentMerger.normalize(raw)
+                    // One speaker in a lane needs no name of its own. The lane
+                    // already says everything that is known about them, and
+                    // qualifying anyway produces "Room" beside a bare `room`
+                    // for whatever the diarizer had no opinion about.
+                    if normalized.roster.count > 1 {
+                        spans = LaneTranscript.qualify(normalized.spans, as: lane)
+                        roster += LaneTranscript.qualify(normalized.roster, as: lane)
+                    }
+                    didDiarize = true
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    // The lane still has a transcript, and it still knows it
+                    // is the room or the call. Only the people within it stay
+                    // unseparated.
+                    emit(.warning(id: job.id, message:
+                        "Speakers within the \(lane.speakerLabel.lowercased()) audio could "
+                        + "not be told apart: \(error.localizedDescription) The transcript is "
+                        + "complete and still says which side each line came from."))
+                }
+            }
+
+            decodedLanes.append(.init(
+                lane: lane,
+                segments: SegmentMerger.segments(from: decoded.decode.tokens, spans: spans)
+            ))
+            if job.discardCacheWhenDone {
+                try? FileManager.default.removeItem(
+                    at: AudioCache.url(besides: job.cacheURL, lane: lane)
+                )
+            }
+        }
+        await engines.releaseDiarizer()
+
+        if windows == 0, durationMs > 0 {
+            emit(.warning(id: job.id, message:
+                "No speech was detected anywhere in this audio, so the transcript "
+                + "is empty. If the recording is not silent, try transcribing again."))
+        }
+        if dropped > 0 {
+            emit(.warning(id: job.id, message:
+                "\(dropped) window\(dropped == 1 ? "" : "s") of speech could not be "
+                + "decoded and are missing from this transcript."))
+        }
+
+        emit(.stage(id: job.id, status: .finalizing, progress: 0.5))
+        let finalizeStarted = Date()
+        let merged = LaneTranscript.merge(decodedLanes)
+        // Built from what the segments reference rather than from what the
+        // diarizer returned. A lane keeps its catch-all entry only if some
+        // segment in it went unattributed, and a diarized speaker appears only
+        // if a segment was actually given to them.
+        let finalRoster = LaneTranscript.roster(for: merged.segments,
+                                                lanes: job.lanes, diarized: roster)
+        metrics.finalizeMs = Int(Date().timeIntervalSince(finalizeStarted) * 1000)
+        metrics.totalMs = Int(Date().timeIntervalSince(started) * 1000)
+
+        emit(.transcribed(id: job.id, payload: TranscriptionPayload(
+            segments: merged.segments,
+            roster: finalRoster,
+            durationMs: durationMs,
+            processMs: metrics.totalMs,
+            modelId: job.modelId,
+            language: language ?? job.language,
+            didDiarize: didDiarize,
+            waveform: waveform,
+            metrics: metrics
+        )))
+        emit(.stage(id: job.id, status: .completed, progress: 1))
+        if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
+    }
+
+    /// One lane's 16 kHz working copy, taken from its own channel of the
+    /// archive rather than from a mixdown of both.
+    private func workingCopy(for job: TranscriptionJob, lane: CaptureLane,
+                             channel: Int) async throws -> MappedPCM {
+        let url = AudioCache.url(besides: job.cacheURL, lane: lane)
+        if let mapped = try? MappedPCM(contentsOf: url), mapped.sampleCount > 0 {
+            return mapped
+        }
+        guard let sourceURL = job.sourceURL else {
+            throw EngineError.audioUnreadable("the audio file for this recording is missing")
+        }
+        _ = try await AudioCache.build(from: sourceURL, to: url, channel: channel) { fraction in
+            self.emit(.stage(id: job.id, status: .preparing, progress: fraction))
+        }
+        return try MappedPCM(contentsOf: url)
     }
 
     /// The 16 kHz working copy, rebuilt from the original if it has been

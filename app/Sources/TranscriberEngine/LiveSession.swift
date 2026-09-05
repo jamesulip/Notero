@@ -15,6 +15,8 @@ public struct LiveSessionResult: Sendable {
     public var stats: SessionStats
     public var modelId: String
     public var language: String
+    /// One per channel of the archive, in channel order.
+    public var lanes: [CaptureLane]
 }
 
 /// The live path: capture -> working copy -> `LiveDecoder` -> commit -> UI.
@@ -81,6 +83,9 @@ public final class LiveSession {
     public private(set) var partial = ""
     public private(set) var elapsedMs = 0
     public private(set) var level: Float = 0
+    /// Per-lane levels, so a two-lane recording can show which side is
+    /// talking. Empty for a one-lane session, where `level` says it all.
+    public private(set) var laneLevels: [CaptureLane: Float] = [:]
     public private(set) var meter: [Float] = []
     public private(set) var stats = SessionStats()
     public private(set) var vadBackend = "energy"
@@ -88,6 +93,14 @@ public final class LiveSession {
 
     public var config = SessionConfig()
     public var isMuted = false { didSet { capture?.isMuted = isMuted } }
+
+    /// Which lanes to record. Read at `start`; changing it mid-session does
+    /// nothing, because the archive's channel count is fixed when the file is
+    /// created.
+    public var captureSource: CaptureSource = .default
+
+    /// Which microphone, by UID, or nil to follow the system default.
+    public var microphoneUID: String?
 
     /// Whether to decode while recording. Off, the session only captures --
     /// archive and working copy -- and the whole-file pass runs at stop. That
@@ -134,11 +147,20 @@ public final class LiveSession {
     private var audioSink: AsyncStream<CapturedAudio>.Continuation?
     private var ingestTask: Task<Void, Never>?
 
+    /// The lanes this session is recording, fixed at `start`.
+    private var lanes: [CaptureLane] = [CaptureLane.room]
+
     private var archiveFileName: String?
     private var modelId = ModelCatalogue.defaultModel
     private var ingestedBytes = 0
     private var nextIndex = 0
     private var meterCountdown = 0
+    private var meterPeak: Float = 0
+
+    /// Milliseconds of audio per meter bar. One bar per 100 ms; faster and the
+    /// view redraws more often than anyone can see, and the array churns for
+    /// nothing.
+    private static let meterIntervalMs = 100
 
     public init(engines: EngineHost, supportDirectory: URL) {
         self.engines = engines
@@ -184,22 +206,37 @@ public final class LiveSession {
         guard case .ready = state else {
             throw EngineError.backendUnavailable(state.label)
         }
-        guard await requestMicrophone() else {
+        if captureSource.usesMicrophone, await !requestMicrophone() {
             state = .failed("Microphone access denied. Enable it in System Settings › "
                           + "Privacy & Security › Microphone.")
             throw EngineError.backendUnavailable("microphone access denied")
+        }
+        if captureSource.usesSystemAudio {
+            // Asked before the capture starts rather than left to fail during
+            // it. A refused system tap does not error and does not record
+            // silence -- Core Audio reports success and never delivers a
+            // sample -- so a session started without this permission looks
+            // exactly like a call where nobody spoke.
+            let access = await SystemAudioAccess.request()
+            guard access.mightWork else {
+                state = .failed(SystemAudioTap.TapError.notPermitted.localizedDescription)
+                throw EngineError.backendUnavailable("system audio access denied")
+            }
         }
 
         recordingId = id
         self.archiveFileName = archiveFileName
         segments = []
         partial = ""
+        lanes = captureSource.lanes
+        laneLevels = [:]
         stats = SessionStats()
         elapsedMs = 0
         meter = []
         nextIndex = 0
         ingestedBytes = 0
         meterCountdown = 0
+        meterPeak = 0
         await engines.resetVAD()
 
         if decodeLive {
@@ -220,7 +257,8 @@ public final class LiveSession {
         let cache = try WavWriter(url: cacheURL)
         self.cache = cache
 
-        guard let capture = AudioCapture() else {
+        guard let capture = AudioCapture(source: captureSource,
+                                         microphoneUID: microphoneUID) else {
             // Close the writer opened above, or its file keeps a zero-length
             // RIFF header until something else happens to overwrite it.
             cache.close()
@@ -318,7 +356,8 @@ public final class LiveSession {
             waveform: waveform,
             stats: stats,
             modelId: modelId,
-            language: config.language
+            language: config.language,
+            lanes: lanes
         )
         recordingId = nil
         state = .ready
@@ -336,16 +375,24 @@ public final class LiveSession {
         // chunks already yielded by the audio tap are still part of the file.
         guard state.isRecording || state == .finishing else { return }
         level = chunk.peak
+        if lanes.count > 1 { laneLevels = chunk.peaks }
         cache?.writeAsync(chunk.pcm)
         ingestedBytes += chunk.pcm.count
         elapsedMs = Audio.bytesToMs(ingestedBytes)
 
-        // One meter bar per ~100 ms, or the view redraws faster than anyone can
-        // see and the array churns for nothing.
+        // The loudest chunk of the interval, not whichever chunk happened to
+        // land on it. The tap delivers ~85 ms at a time against a 100 ms bar,
+        // so taking the arriving peak dropped one chunk in two -- and with it
+        // any clip that fell in the discarded half.
+        meterPeak = max(meterPeak, chunk.peak)
         meterCountdown += Audio.bytesToMs(chunk.pcm.count)
-        if meterCountdown >= 100 {
-            meterCountdown = 0
-            meter = WaveformAnalyzer.appending(chunk.peak, to: meter)
+        if meterCountdown >= Self.meterIntervalMs {
+            // Carrying the remainder rather than zeroing it. Zeroing threw away
+            // 85 of every 185 ms, which stretched the bars to one per 170 ms
+            // and put the meter's history on a different clock from the audio.
+            meterCountdown %= Self.meterIntervalMs
+            meter = WaveformAnalyzer.appending(meterPeak, to: meter)
+            meterPeak = 0
         }
 
         guard let decoder else { return }

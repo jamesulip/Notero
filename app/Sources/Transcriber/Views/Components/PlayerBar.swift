@@ -15,6 +15,7 @@ struct PlayerBar: View {
                 samples: recording.waveform ?? [],
                 progress: fraction,
                 bookmarks: bookmarkFractions,
+                showsPlayhead: true,
                 onScrub: { value in
                     state.seek(to: Int(value * Double(max(1, duration))), in: recording)
                 }

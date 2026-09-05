@@ -23,7 +23,6 @@ actor FakeRecognizer: SpeechRecognizing {
     }
 
     var loadedModel: String? { "fake" }
-    var isLoaded: Bool { true }
     func load(model: String, progress: ProgressReport?) async throws {}
     func unload() {}
 

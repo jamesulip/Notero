@@ -47,6 +47,16 @@ extension AppState {
         live.inputGainDb = settings.inputGainDb
         live.isRoomMode = settings.roomMode
         live.decodeLive = settings.liveTranscription
+        live.captureSource = settings.captureSource
+        live.microphoneUID = settings.microphoneUID
+
+        // The tap is global -- it has to be, or it stops delivering whenever
+        // this app is the only thing playing -- so anything Notero plays goes
+        // into the recording. Stopping playback is cheaper than the
+        // alternative, and nobody wants last week's meeting inside this one.
+        if settings.captureSource.usesSystemAudio, player.isPlaying {
+            player.pause()
+        }
         await queue.setLiveActive(true)
         await engines.beginLive()
         await live.prepare(model: settings.liveModelId)
@@ -109,10 +119,10 @@ extension AppState {
             // through the same call the whole-file job uses; with no open
             // revision it stores a fresh one, as before.
             if let persister {
-                try? await persister.complete(segments: result.segments,
-                                              processMs: result.stats.totalInferMs)
+                _ = try? await persister.complete(segments: result.segments,
+                                                  processMs: result.stats.totalInferMs)
             } else {
-                try? await writer.storeTranscript(
+                _ = try? await writer.storeTranscript(
                     segments: result.segments, roster: [], modelId: result.modelId,
                     language: result.language, processMs: result.stats.totalInferMs,
                     didDiarize: false, for: result.recordingId
@@ -124,10 +134,17 @@ extension AppState {
             sampleRate: result.archiveSampleRate,
             durationMs: result.durationMs,
             waveform: result.waveform.isEmpty ? nil : result.waveform,
+            lanes: result.lanes,
             for: result.recordingId
         )
 
-        if !decodedLive {
+        // A two-lane recording always gets the whole-file pass, even when the
+        // live decoder already produced a transcript. Live decoding runs on
+        // the two lanes summed -- one stream, because that is what a live
+        // transcript can afford -- so what it produced has no idea which side
+        // of the meeting each line came from. Only the whole-file pass reads
+        // the channels apart, and it is the better transcript in any case.
+        if !decodedLive || result.lanes.count > 1 {
             // Capture-only session: the whole-file pass is the transcript.
             // The working copy it needs is the one the session just wrote.
             if let stored = recording(result.recordingId) {

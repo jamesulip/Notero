@@ -1,5 +1,69 @@
 # Changelog
 
+## Unreleased
+
+### The audio input
+
+- The app records the audio of this Mac, and not only the microphone. In a
+  meeting with remote persons, the microphone hears those persons through a
+  speaker and a room. The new input hears them before the speaker. Select
+  **Notero › Settings › Audio › Record** to set the input to the microphone,
+  to the audio of this Mac, or to both.
+- With both inputs, the app keeps the two in different channels of one file.
+  Channel 1 holds the room. Channel 2 holds the call. A mix of the two cannot
+  be separated again, and the microphone copy of a remote voice is the worse
+  copy.
+- The app transcribes each channel independently and then puts the two
+  transcripts in time order. Each line shows if the person is in the room or on
+  the call. This is speaker information that no calculation can get wrong,
+  because it comes from the source of the samples. If two persons speak at the
+  same time, you get two correct lines and not one mixed line.
+- The app identifies the speakers in each channel independently. The persons in
+  the room get the names Room 1, Room 2, and more. The persons on the call get
+  the names Remote 1, Remote 2, and more.
+- You can select the microphone. Select **Notero › Settings › Audio › Record ›
+  Microphone**. Before this change the app always used the default input of
+  macOS, thus a headset that you connected in a meeting moved the recording to
+  the headset microphone. The app shows a warning if the microphone that you
+  selected is not connected.
+- To record the audio of this Mac, macOS must give permission. This permission
+  is not the microphone permission. **Notero › Settings › Audio ›
+  Permissions** shows the two permissions and requests them. Do not ignore
+  this: if you refuse this permission, macOS gives no error and no audio. The
+  recording looks the same as a call in which no person spoke.
+- The app stops the playback of a recording when a new recording starts, if the
+  new recording includes the audio of this Mac. If it did not, the recording
+  would contain the playback.
+- The build script signs the app with an Apple Development identity if the Mac
+  has one. macOS connects a permission to the signature of an app. An ad-hoc
+  signature changes with each build, thus macOS asked for the permission again
+  after each build.
+
+### The waveform
+
+- The waveform of a recording shows quiet and loud parts at different heights
+  again. The app divides an envelope by its loudest bucket, thus that bucket is
+  1.0. It then drew the result on the decibel scale of the input meter, which
+  is a second correction of the same problem. A bucket at 1% of the loudest
+  moment became 33% as tall as it. A meeting drew as one solid block. A stored
+  envelope now has its own scale, where that same bucket is 10% as tall.
+- The waveform draws one bar for each 3 points of width and keeps the loudest
+  sample of each group. Before this change it drew all 600 buckets across a
+  view that is rarely 600 points wide. The bars overlapped, thus the shape had
+  no gaps in it and did not read as bars.
+- The player shows a line at the position of the playhead. It also shows a flat
+  line to drag along while the app calculates the envelope of a new recording.
+  Before this change that part of the player was empty.
+- The bars of the input meter keep one width. Before this change the app spread
+  the meter across the full width at all times: the first bar of a recording
+  was as wide as the window, and each bar became more narrow as more audio
+  arrived. The bars now come in at the right side and move to the left.
+- The input meter shows the loudest audio of each 100 ms and not the last block
+  of audio in it. The microphone gives approximately 85 ms of audio at one
+  time, thus the meter discarded one block in two. A short peak in a discarded
+  block did not show. The bars also came at intervals of 170 ms and not 100 ms,
+  which put the history of the meter on a different clock from the recording.
+
 ## 1.0.0 — 2026-09-04
 
 The first release that anyone outside can download. Everything below is in it.
