@@ -22,24 +22,30 @@ release notes come from that section.
 ## To publish a release
 
 1. Write the changes in `CHANGELOG.md`, under a heading with the new version
-   number. The release notes come from that section.
-2. Put the new version number in `app/VERSION`.
-3. Commit all changes. The script refuses to release from a tree that has
-   changes, because the build number comes from the number of commits.
-4. Release:
+   number. This is the full record.
+2. Write a short summary for the release page in a separate file, for example
+   `notes.md`: a few groups with a heading each, and one line for each change.
+   The full CHANGELOG section is too long for the page.
+3. Put the new version number in `app/VERSION`.
+4. Commit all changes. The script refuses to release from a tree that has
+   changes, because the build number comes from the number of commits. Keep
+   `notes.md` outside the repository, or delete it before the commit.
+5. Release:
 
    ```bash
    cd app
-   ./scripts/release.sh --dry-run   # build and package only
-   ./scripts/release.sh             # the same, then tag and publish
+   ./scripts/release.sh --dry-run                 # build and package only
+   ./scripts/release.sh --notes ~/notes.md        # the same, then tag and publish
    ```
 
 The script does this:
 
 - It reads `VERSION` and stops if the tag `v<version>` already exists.
 - It stops if the working tree has changes.
-- It cuts the release notes out of `CHANGELOG.md`, puts the install steps in
-  front of them, and stops if that file has no section for the version.
+- It stops if `CHANGELOG.md` has no section for the version.
+- It writes the release notes: the install steps, then the file from
+  `--notes`, then one line about updating. Without `--notes` it uses the
+  CHANGELOG section, which reads long on the page.
 - It builds `Notero.app` with `build-app.sh`.
 - It makes `dist/Notero-<version>.zip` with `ditto`. Do not use `zip`. The
   executable bit and the code signature must stay correct.

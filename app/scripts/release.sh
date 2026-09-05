@@ -6,25 +6,35 @@
 # downloads and unpacks by hand. This script builds that zip from a clean
 # commit, tags it, and publishes it with the CHANGELOG section as the notes.
 #
-#     scripts/release.sh              build and publish VERSION
-#     scripts/release.sh --dry-run    everything except the publish
+#     scripts/release.sh                 build and publish VERSION
+#     scripts/release.sh --dry-run       everything except the publish
+#     scripts/release.sh --notes FILE    a short summary for the release page
+#                                        in place of the CHANGELOG section
 #
 # See docs/RELEASE.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+die() { printf 'release: %s\n' "$*" >&2; exit 1; }
+
 DRY_RUN=0
-case "${1:-}" in
-    --dry-run) DRY_RUN=1 ;;
-    "") ;;
-    *) echo "usage: scripts/release.sh [--dry-run]" >&2; exit 2 ;;
-esac
+NOTES_FILE=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dry-run) DRY_RUN=1 ;;
+        --notes)
+            shift
+            NOTES_FILE=${1:-}
+            [ -n "$NOTES_FILE" ] && [ -s "$NOTES_FILE" ] || die "--notes needs a file with text in it."
+            ;;
+        *) echo "usage: scripts/release.sh [--dry-run] [--notes FILE]" >&2; exit 2 ;;
+    esac
+    shift
+done
 
 BUILD_DIR=".build/release-tools"
 mkdir -p "$BUILD_DIR"
-
-say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
-die() { printf 'release: %s\n' "$*" >&2; exit 1; }
 
 # --- what is being released ------------------------------------------------
 VERSION=$(tr -d '[:space:]' < VERSION)
@@ -39,10 +49,15 @@ if git rev-parse "$TAG" >/dev/null 2>&1; then
     die "$TAG already exists. Bump VERSION."
 fi
 
-# The release notes are the install steps, then the CHANGELOG section for this
-# version: from its heading to the next one. The install steps go on every
-# release page because the right-click-Open step is the one thing a user has
-# to know that the app cannot tell them itself.
+# The release notes are the install steps, then what is new, then one line
+# about updating. The install steps go on every release page because the
+# right-click-Open step is the one thing a user has to know that the app
+# cannot tell them itself.
+#
+# "What is new" is the file given with --notes, which should be a short
+# grouped summary written for the page. Without --notes it is the CHANGELOG
+# section for this version, which is the full record and reads long on a
+# release page. The CHANGELOG must have the section either way.
 SECTION="$BUILD_DIR/section.md"
 awk -v v="$VERSION" '
     $0 ~ "^## " v "([^0-9.]|$)" { inside = 1; next }
@@ -56,23 +71,18 @@ NOTES="$BUILD_DIR/notes.md"
 cat <<INSTALL
 ## Install
 
-1. Download \`Notero-$VERSION.zip\` below and unpack it.
-2. Move \`Notero.app\` to \`/Applications\`. To update, quit Notero first and
-   replace the old \`Notero.app\`. Your recordings and notes stay where they are.
-3. **Right-click the app and select Open** for the first start. This app has no
-   Developer ID certificate, thus macOS quarantines a bundle that a browser
-   downloaded and a double-click gives an error. A right-click and Open is the
-   only difference.
+1. Download \`Notero-$VERSION.zip\` and unpack it.
+2. Move \`Notero.app\` to \`/Applications\`.
+3. For the first launch, right-click Notero → Open. The app is not Developer ID signed, so macOS may block a normal double-click.
+4. Notero requires macOS 15+ and Apple silicon.
 
-Notero needs macOS 15 or later and a Mac with Apple silicon. At the first
-start it downloads approximately 1.9 GB of model weights from Hugging Face.
-That is the one network request the app makes. After an update, macOS can ask
-for the audio permissions one more time.
+On first launch, Notero downloads approximately 1.9 GB of AI model weights from Hugging Face. This is the app's only network request.
 
----
+## What's New
 
 INSTALL
-cat "$SECTION"
+if [ -n "$NOTES_FILE" ]; then cat "$NOTES_FILE"; else cat "$SECTION"; fi
+printf '\n\nYour existing recordings and notes remain unchanged when updating.\n'
 } > "$NOTES"
 
 # --- build and package -----------------------------------------------------
