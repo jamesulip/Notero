@@ -31,10 +31,11 @@ shortcuts.
 
 ## Demo
 
-[![The Notero window after a two-lane recording. The transcript alternates between a Room line and a Remote line, each with its timestamp and a coloured badge.](docs/images/demo-poster.png)](docs/images/demo.mp4)
+https://github.com/user-attachments/assets/c610eec5-d82f-4531-ac9b-85d831116b44
 
 [**Watch the demo**](docs/images/demo.mp4) — under two minutes, with sound.
-Click the picture to play it.
+The player above is the same clip, hosted by GitHub. The link opens the file in
+this repository.
 
 The video shows one recording from the start to the transcript:
 
