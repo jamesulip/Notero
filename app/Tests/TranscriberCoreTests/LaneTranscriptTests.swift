@@ -40,6 +40,69 @@ final class LaneTranscriptTests: XCTestCase {
         XCTAssertEqual(merged.segments.map(\.speakerId), ["room", "remote"])
     }
 
+    // MARK: - Echo
+
+    func testARoomEchoOfTheCallIsDropped() {
+        // The room listens through speakers, so the microphone hears the
+        // caller too. Measured on a real capture: the same sentence, twice,
+        // under two speakers, on every line.
+        let merged = LaneTranscript.merge([
+            .init(lane: .room, segments: [segment(0, 43_000, 45_000, "All my fellow Filipinos,")]),
+            .init(lane: .remote, segments: [segment(0, 43_000, 48_000,
+                                                    "All my fellow Filipinos, now this is my side.")]),
+        ])
+        XCTAssertEqual(merged.segments.map(\.text), ["All my fellow Filipinos, now this is my side."])
+        XCTAssertEqual(merged.roster.map(\.id), ["remote"])
+    }
+
+    func testAnEchoSpanningTwoCallSegmentsIsDropped() {
+        // The lanes are segmented on their own, so the room's copy can
+        // straddle two remote segments. Its words are still all there.
+        let merged = LaneTranscript.merge([
+            .init(lane: .room, segments: [segment(0, 11_000, 14_000, "Divorce? Yes, divorce. Divorce, divorce.")]),
+            .init(lane: .remote, segments: [
+                segment(0, 4_000, 12_000, "Lagi silang nagkaka ng divorce, divorce din. Divorce? Yes, divorce."),
+                segment(1, 13_000, 15_000, "Divorce, divorce. No. No. No catching?"),
+            ]),
+        ])
+        XCTAssertEqual(merged.segments.count, 2)
+        XCTAssertEqual(merged.segments.map(\.speakerId), ["remote", "remote"])
+    }
+
+    func testMostlyMatchingWordsStillCountAsAnEcho() {
+        // The microphone's copy is the worse one, so a word or two comes back
+        // garbled. Fifteen words of sixteen is still the same sentence.
+        let room = segment(0, 15_000, 22_000,
+                           "No catching. Peng call me, I'm in the way, pushing the car because our car damage.")
+        let remote = [segment(0, 15_000, 16_500, "No catching. Okay."),
+                      segment(1, 17_000, 22_000, "Then call me. I'm in the way. Pushing the car because our car damage.")]
+        XCTAssertTrue(LaneTranscript.isEcho(room, of: remote))
+    }
+
+    func testRoomSpeechWithItsOwnWordsStays() {
+        // Someone in the room talking over the caller is the case two lanes
+        // exist for. Different words, same moment: both lines stay.
+        let room = segment(0, 1_000, 2_000, "as I was saying, the budget is fine")
+        XCTAssertFalse(LaneTranscript.isEcho(room, of: [segment(0, 1_000, 2_000, "sorry, go ahead")]))
+    }
+
+    func testTheSameWordsLaterAreNotAnEcho() {
+        // A person in the room repeating the caller ten seconds later is a
+        // person, not a speaker. The echo arrives within the second.
+        let room = segment(0, 20_000, 22_000, "Listen, look and listen and learn.")
+        XCTAssertFalse(LaneTranscript.isEcho(room, of: [segment(0, 5_000, 7_000, "Listen, look and listen and learn.")]))
+    }
+
+    func testAnEchoIsNotCountedInTheRoster() {
+        let merged = LaneTranscript.merge([
+            .init(lane: .room, segments: [segment(0, 0, 1_000, "hello there"),
+                                          segment(1, 5_000, 6_000, "yes, that is right")]),
+            .init(lane: .remote, segments: [segment(0, 5_000, 6_200, "Yes, that is right.")]),
+        ])
+        XCTAssertEqual(merged.segments.map(\.text), ["hello there", "Yes, that is right."])
+        XCTAssertEqual(merged.roster.first { $0.id == "room" }?.speechMs, 1_000)
+    }
+
     func testRosterCountsSpeechPerLane() {
         let merged = LaneTranscript.merge([
             .init(lane: .room, segments: [segment(0, 0, 1000, "a"), segment(1, 2000, 2500, "b")]),

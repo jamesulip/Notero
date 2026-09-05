@@ -117,7 +117,9 @@ in `SystemAudioTap`. The archive keeps the two lanes in different channels of
 one file: channel 1 is the room and channel 2 is the call. The live decoder
 reads the sum of the two lanes. The whole-file pass decodes each lane on its
 own and identifies the speakers in each lane on its own. `LaneTranscript` then
-puts the two transcripts in time order.
+puts the two transcripts in time order. A room line that repeats a remote line
+at the same moment is the speakers heard by the microphone, and the merge drops
+it. The remote lane holds the clean copy.
 
 The remote lane goes through a soft limiter that starts at 3 dB under full
 scale, because a call application sends its mix with no headroom. If a device changes during a

@@ -29,13 +29,17 @@ public enum LaneTranscript {
     ///
     /// Segments keep their own text and boundaries; only the order, the index
     /// and the speaker change. Ties go to the earlier lane in the list, which
-    /// keeps the result stable rather than dependent on dictionary order.
+    /// keeps the result stable rather than dependent on dictionary order. A
+    /// room segment that is an echo of the call is dropped first; see
+    /// `isEcho`.
     public static func merge(_ lanes: [Lane]) -> (segments: [Segment], roster: [SpeakerLabel]) {
         var tagged: [(order: Int, segment: Segment)] = []
         var speech: [CaptureLane: Int] = [:]
+        let remote = lanes.first { $0.lane == .remote }?.segments ?? []
 
         for (order, lane) in lanes.enumerated() {
             for segment in lane.segments {
+                if lane.lane == .room, isEcho(segment, of: remote) { continue }
                 var copy = segment
                 // Only when the lane has something to say. A segment that
                 // already carries a diarized speaker from within its own lane
@@ -74,6 +78,62 @@ public enum LaneTranscript {
                                 speechMs: ms)
         }
         return (indexed, roster)
+    }
+
+    // MARK: - Echo
+
+    /// How far apart in time a room segment and a remote segment can be and
+    /// still be the same words heard twice. The speakers delay the copy by a
+    /// fraction of a second, but the two lanes are segmented on their own, so
+    /// their boundaries can differ by a second or more.
+    public static let echoToleranceMs = 1500
+
+    /// The share of a room segment's words that must already be in the
+    /// overlapping remote speech for the segment to count as an echo.
+    public static let echoWordShare = 0.7
+
+    /// Whether a room segment repeats what the call lane said at that moment.
+    ///
+    /// The tap hears only what the Mac plays, so the remote lane is the clean
+    /// copy of every remote voice. The microphone hears the room and the
+    /// speakers both, so when the room listens through speakers the room lane
+    /// carries a second, worse copy of each remote sentence a few hundred
+    /// milliseconds later. Left alone, every remote line appears twice under
+    /// two speakers. Measured on a clip played through the built-in speakers,
+    /// the room lane came back as a near-complete duplicate of the remote lane.
+    ///
+    /// Judged on words rather than on audio. The audio answer -- an adaptive
+    /// filter that subtracts the remote lane from the microphone -- is a
+    /// project of its own, and the decoded words already say whether the two
+    /// lanes heard the same thing. A room segment is an echo when it overlaps
+    /// remote speech in time and most of its words are in that speech. Room
+    /// speech with its own words during a remote turn stays. A person in the
+    /// room who repeats the caller word for word in the same second is the
+    /// cost, and is rarer than a room with speakers.
+    public static func isEcho(_ segment: Segment, of remote: [Segment]) -> Bool {
+        let own = words(of: segment.text)
+        guard !own.isEmpty else { return false }
+        var heard: [String: Int] = [:]
+        for candidate in remote
+        where candidate.startMs - echoToleranceMs <= segment.endMs
+            && segment.startMs <= candidate.endMs + echoToleranceMs {
+            for word in words(of: candidate.text) { heard[word, default: 0] += 1 }
+        }
+        guard !heard.isEmpty else { return false }
+        var matched = 0
+        for word in own where (heard[word] ?? 0) > 0 {
+            heard[word]! -= 1
+            matched += 1
+        }
+        return Double(matched) / Double(own.count) >= echoWordShare
+    }
+
+    /// Lower-case words with the punctuation taken off, so "Divorce?" and
+    /// "divorce," are the same word.
+    static func words(of text: String) -> [String] {
+        text.lowercased()
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "'" })
+            .map(String.init)
     }
 
     /// Prefixes a lane's own diarization so two lanes cannot collide.

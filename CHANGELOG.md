@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- When the room listens through speakers, the microphone also hears the persons
+  on the call, and the room lane transcribed each remote sentence a second
+  time. The app now drops a room line that repeats a call line at the same
+  moment, because the call lane already holds the clean copy. A room line with
+  its own words at the same moment stays.
+
 ## 1.0.1 — 2026-09-05
 
 ### The audio input
