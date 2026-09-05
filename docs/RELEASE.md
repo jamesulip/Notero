@@ -38,8 +38,8 @@ The script does this:
 
 - It reads `VERSION` and stops if the tag `v<version>` already exists.
 - It stops if the working tree has changes.
-- It cuts the release notes out of `CHANGELOG.md`, and it stops if that file
-  has no section for the version.
+- It cuts the release notes out of `CHANGELOG.md`, puts the install steps in
+  front of them, and stops if that file has no section for the version.
 - It builds `Notero.app` with `build-app.sh`.
 - It makes `dist/Notero-<version>.zip` with `ditto`. Do not use `zip`. The
   executable bit and the code signature must stay correct.

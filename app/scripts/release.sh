@@ -39,15 +39,41 @@ if git rev-parse "$TAG" >/dev/null 2>&1; then
     die "$TAG already exists. Bump VERSION."
 fi
 
-# The release notes are the CHANGELOG section for this version: from its
-# heading to the next one.
-NOTES="$BUILD_DIR/notes.md"
+# The release notes are the install steps, then the CHANGELOG section for this
+# version: from its heading to the next one. The install steps go on every
+# release page because the right-click-Open step is the one thing a user has
+# to know that the app cannot tell them itself.
+SECTION="$BUILD_DIR/section.md"
 awk -v v="$VERSION" '
     $0 ~ "^## " v "([^0-9.]|$)" { inside = 1; next }
     inside && /^## / { exit }
     inside { print }
-' ../CHANGELOG.md > "$NOTES"
-[ -s "$NOTES" ] || die "CHANGELOG.md has no section for $VERSION."
+' ../CHANGELOG.md > "$SECTION"
+[ -s "$SECTION" ] || die "CHANGELOG.md has no section for $VERSION."
+
+NOTES="$BUILD_DIR/notes.md"
+{
+cat <<INSTALL
+## Install
+
+1. Download \`Notero-$VERSION.zip\` below and unpack it.
+2. Move \`Notero.app\` to \`/Applications\`. To update, quit Notero first and
+   replace the old \`Notero.app\`. Your recordings and notes stay where they are.
+3. **Right-click the app and select Open** for the first start. This app has no
+   Developer ID certificate, thus macOS quarantines a bundle that a browser
+   downloaded and a double-click gives an error. A right-click and Open is the
+   only difference.
+
+Notero needs macOS 15 or later and a Mac with Apple silicon. At the first
+start it downloads approximately 1.9 GB of model weights from Hugging Face.
+That is the one network request the app makes. After an update, macOS can ask
+for the audio permissions one more time.
+
+---
+
+INSTALL
+cat "$SECTION"
+} > "$NOTES"
 
 # --- build and package -----------------------------------------------------
 say "building Notero $VERSION…"
