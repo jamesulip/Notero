@@ -36,7 +36,10 @@ the call.
 
 **Select the microphone.** Go to **Settings › Audio › Record › Microphone**.
 The default is the input device of macOS. If you select a device, the app uses
-that device only, and it tells you if the device is not connected.
+that device only, and it tells you if the device is not connected. If the
+device disconnects during a recording, the recording continues on the default
+input of macOS and shows a message. The recording keeps the message as a
+warning.
 
 **Import.** Drop an MP3, WAV, M4A, MP4 or MOV file on the window, or on the
 Dock icon. The app copies the file into the library and adds it to the queue.

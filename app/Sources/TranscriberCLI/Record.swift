@@ -44,6 +44,7 @@ func runRecord(source: CaptureSource, deviceUID: String?, seconds: Double,
     }
 
     let meter = LaneMeter(lanes: source.lanes)
+    capture.onNotice = { notice in log("  " + notice.message) }
     do {
         try capture.start(archiveURL: out) { chunk in meter.consume(chunk) }
     } catch {

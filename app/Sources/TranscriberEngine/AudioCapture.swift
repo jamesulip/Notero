@@ -57,6 +57,7 @@ public final class AudioCapture: @unchecked Sendable {
     private var _isMuted = false
     private var _gain: Float = 1
     private var _roomMode = false
+    private var _onNotice: (@Sendable (CaptureNotice) -> Void)?
 
     public private(set) var isRunning = false
     public private(set) var archiveFormat: AVAudioFormat?
@@ -75,7 +76,8 @@ public final class AudioCapture: @unchecked Sendable {
     ///
     /// The room lane only. What comes off the system tap left an application's
     /// mixer at the level that application chose, and there is no microphone
-    /// placement to compensate for.
+    /// placement to compensate for; that lane gets a soft limiter instead,
+    /// see `InputGain.softLimit`.
     public var gainDb: Float {
         get { InputGain.db(fromLinear: stateLock.withLock { _gain }) }
         set {
@@ -110,6 +112,15 @@ public final class AudioCapture: @unchecked Sendable {
     }
 
     private let microphoneUID: String?
+
+    /// Called when something changed under the recording that the user has
+    /// to be told about: the microphone was unplugged and replaced, the
+    /// default input moved, or capture could not be restarted. On whatever
+    /// thread the input noticed it.
+    public var onNotice: (@Sendable (CaptureNotice) -> Void)? {
+        get { stateLock.withLock { _onNotice } }
+        set { stateLock.withLock { _onNotice = newValue } }
+    }
 
     /// What the capture actually opened. Empty before `start`.
     public var diagnostics: String {
@@ -168,6 +179,7 @@ public final class AudioCapture: @unchecked Sendable {
         }
 
         input.onGap = { [weak self] frames in self?.fillGap(frames) }
+        input.onNotice = { [weak self] notice in self?.onNotice?(notice) }
         do {
             try input.start { [weak self] frames in self?.handle(frames) }
         } catch {
@@ -239,6 +251,15 @@ public final class AudioCapture: @unchecked Sendable {
                 // Boosting only the inference copy would leave the user with an
                 // archive quieter than the meter they watched while recording.
                 InputGain.apply(gain, to: channel, count: count)
+            } else {
+                // The tap hands over the other application's mix at the level
+                // it chose, and a call application's mix arrives with no
+                // headroom: measured, 0.35% of the remote lane sat at or past
+                // full scale and clipped again in the archive and in the
+                // model's copy. Limited here, before the archive write, so
+                // both copies get the same peaks -- and before the meter
+                // reads it, so the meter shows what is being recorded.
+                InputGain.softLimit(channel, count: count)
             }
 
             // Measured here rather than after the resample, and before the

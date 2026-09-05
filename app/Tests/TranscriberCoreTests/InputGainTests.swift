@@ -76,6 +76,62 @@ struct InputGainTests {
         #expect(abs(samples[1] + 0.4) < 0.0001)
     }
 
+    // MARK: - Soft limiter
+
+    @Test("The limiter leaves everything under the threshold alone")
+    func limiterPassesQuietSamples() {
+        for value: Float in [0, 0.1, -0.3, 0.5, -0.7, InputGain.limiterThreshold] {
+            #expect(InputGain.softLimit(value) == value)
+        }
+    }
+
+    @Test("The threshold is 3 dB under full scale")
+    func limiterThreshold() {
+        #expect(abs(InputGain.limiterThreshold - 0.708) < 0.001)
+    }
+
+    /// The defect this pins: the tap delivered a loudness-maximised mix at
+    /// full scale, and every sample of it clipped again in the archive and in
+    /// the Int16 copy for the model.
+    @Test("Full scale and beyond never come out above full scale")
+    func limiterKeepsPeaksOffTheCeiling() {
+        // Full scale itself, the measured case, gets real headroom back.
+        #expect(InputGain.softLimit(1) < 0.95)
+        #expect(InputGain.softLimit(1) > 0.9)
+        // Far past the ceiling the knee flattens onto 1.0 in Float, which is
+        // the one value that is still safe: it converts to Int16 without a wrap.
+        for value: Float in [0.9, 1, 1.5, 4, 100] {
+            let out = InputGain.softLimit(value)
+            #expect(out <= 1)
+            #expect(out > InputGain.limiterThreshold)
+            #expect(InputGain.softLimit(-value) == -out)
+        }
+    }
+
+    @Test("The limiter keeps the order of levels")
+    func limiterIsMonotonic() {
+        let steps = stride(from: Float(0), through: 1.5, by: 0.05).map(InputGain.softLimit)
+        #expect(zip(steps, steps.dropFirst()).allSatisfy { $0 < $1 })
+    }
+
+    @Test("The knee is continuous at the threshold")
+    func limiterKneeIsContinuous() {
+        let justOver = InputGain.limiterThreshold + 0.0001
+        #expect(abs(InputGain.softLimit(justOver) - justOver) < 0.0001)
+    }
+
+    @Test("The buffer form limits every sample in place")
+    func limiterOverABuffer() {
+        var samples: [Float] = [0.5, 1.2, -1.2, 0]
+        samples.withUnsafeMutableBufferPointer {
+            InputGain.softLimit($0.baseAddress!, count: $0.count)
+        }
+        #expect(samples[0] == 0.5)
+        #expect(samples[1] < 1 && samples[1] > InputGain.limiterThreshold)
+        #expect(samples[2] == -samples[1])
+        #expect(samples[3] == 0)
+    }
+
     // MARK: - Meter scale
 
     @Test("The meter spans silence to full scale")

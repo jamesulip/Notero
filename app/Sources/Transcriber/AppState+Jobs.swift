@@ -91,9 +91,14 @@ extension AppState {
         case .warning(let id, let message):
             // The transcript is usable but incomplete. Keyed to the recording
             // rather than thrown in an alert, and stored so it survives a
-            // relaunch.
-            warnings[id] = message
-            try? await writer.setWarning(message, for: id)
+            // relaunch. Added to what the row already says rather than put in
+            // its place: a microphone that was replaced during the recording
+            // is still true after the transcription that followed it.
+            let combined = [warnings[id], message].compactMap { $0 }
+            let joined = Array(NSOrderedSet(array: combined)).compactMap { $0 as? String }
+                .joined(separator: " ")
+            warnings[id] = joined
+            try? await writer.setWarning(joined, for: id)
 
         case .finished(let id):
             progress[id] = nil

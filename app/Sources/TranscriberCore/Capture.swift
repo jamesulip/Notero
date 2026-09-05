@@ -87,3 +87,40 @@ public enum ArchiveChannels {
         lanes.count == 1 ? lanes.first : lanes.first { self.channel(for: $0) == channel }
     }
 }
+
+/// Something that changed under a recording and that the user has to be told,
+/// because every alternative is a recording that is quietly not what was asked
+/// for: a headset microphone in place of the one on the table, or a room that
+/// goes silent at 0:41 with nothing to say why.
+public enum CaptureNotice: Equatable, Sendable {
+    /// The chosen microphone went away. The recording carried on with the
+    /// default input of macOS instead.
+    case microphoneReplaced(lost: String, now: String)
+    /// The default input moved to another device and the recording followed
+    /// it. That is what following the default means, and it is also how a
+    /// room recording ends up on a headset.
+    case microphoneChanged(now: String)
+    /// The microphone went away and there is no other. The room is silent
+    /// from that moment.
+    case microphoneLost(String)
+    /// A device changed and capture could not be started again.
+    case captureFailed(String)
+
+    /// One or two sentences for the recording screen and for the warning that
+    /// the recording keeps.
+    public var message: String {
+        switch self {
+        case .microphoneReplaced(let lost, let now):
+            return "The microphone “\(lost)” was disconnected. "
+                 + "The recording continued on “\(now)”."
+        case .microphoneChanged(let now):
+            return "The default input changed. The recording continued on “\(now)”."
+        case .microphoneLost(let lost):
+            return "The microphone “\(lost)” was disconnected and no other microphone "
+                 + "is connected. The room is silent from that moment."
+        case .captureFailed(let why):
+            return "The audio input changed and could not be restarted (\(why)). "
+                 + "The recording is silent from that moment."
+        }
+    }
+}

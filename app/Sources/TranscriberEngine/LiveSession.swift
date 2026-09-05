@@ -17,6 +17,9 @@ public struct LiveSessionResult: Sendable {
     public var language: String
     /// One per channel of the archive, in channel order.
     public var lanes: [CaptureLane]
+    /// What changed under the recording, in order: a replaced microphone, a
+    /// moved default input, a capture that could not be restarted.
+    public var notices: [CaptureNotice]
 }
 
 /// The live path: capture -> working copy -> `LiveDecoder` -> commit -> UI.
@@ -87,6 +90,9 @@ public final class LiveSession {
     /// talking. Empty for a one-lane session, where `level` says it all.
     public private(set) var laneLevels: [CaptureLane: Float] = [:]
     public private(set) var meter: [Float] = []
+    /// Device changes during this recording, oldest first. The recording
+    /// screen shows the latest one; Stop keeps them all with the recording.
+    public private(set) var notices: [CaptureNotice] = []
     public private(set) var stats = SessionStats()
     public private(set) var vadBackend = "energy"
     public private(set) var recordingId: UUID?
@@ -230,6 +236,7 @@ public final class LiveSession {
         partial = ""
         lanes = captureSource.lanes
         laneLevels = [:]
+        notices = []
         stats = SessionStats()
         elapsedMs = 0
         meter = []
@@ -268,6 +275,9 @@ public final class LiveSession {
         capture.isMuted = isMuted
         capture.gainDb = inputGainDb
         capture.isRoomMode = isRoomMode
+        capture.onNotice = { [weak self] notice in
+            Task { @MainActor in self?.notices.append(notice) }
+        }
         self.capture = capture
 
         var continuation: AsyncStream<CapturedAudio>.Continuation!
@@ -357,7 +367,8 @@ public final class LiveSession {
             stats: stats,
             modelId: modelId,
             language: config.language,
-            lanes: lanes
+            lanes: lanes,
+            notices: notices
         )
         recordingId = nil
         state = .ready

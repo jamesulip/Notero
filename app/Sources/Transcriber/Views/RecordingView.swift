@@ -106,6 +106,16 @@ struct RecordingView: View {
                 .frame(height: 64)
                 .padding(.horizontal, 40)
 
+            // The microphone changed under this recording. Said here, while
+            // there is still time to plug it back in or stop.
+            if let notice = state.live.notices.last {
+                Label(notice.message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 480)
+            }
+
             InputGainSlider(gainDb: Binding(
                 get: { state.settings.inputGainDb },
                 set: { state.setInputGain($0) }

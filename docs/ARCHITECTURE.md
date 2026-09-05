@@ -119,6 +119,12 @@ reads the sum of the two lanes. The whole-file pass decodes each lane on its
 own and identifies the speakers in each lane on its own. `LaneTranscript` then
 puts the two transcripts in time order.
 
+The remote lane goes through a soft limiter that starts at 3 dB under full
+scale, because a call application sends its mix with no headroom. If a device changes during a
+recording, the capture restarts on the device that is available, converts its
+samples to the rate of the archive, writes the lost time as silence, and
+reports the change to the recording screen.
+
 ## Live transcription
 
 `LiveDecoder` owns everything between a chunk of PCM and a committed token.

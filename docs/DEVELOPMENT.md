@@ -45,11 +45,12 @@ it needs a real one.
 3. It writes the `Info.plist`, which declares the bundle identifier
    `local.notero`, the microphone use description and the document types for
    audio and video.
-4. It signs the bundle ad hoc with the audio-input entitlement.
+4. It signs the bundle with the audio-input entitlement. It uses an Apple
+   Development identity if the Mac has one, and an ad-hoc signature if not.
 
-**The signature is ad hoc and not a Developer ID.** The app therefore runs only
-on the Mac that built it. [RELEASE.md](RELEASE.md) gives the limits that this
-puts on a release.
+**Neither signature is a Developer ID.** The app therefore runs only on the Mac
+that built it. [RELEASE.md](RELEASE.md) gives the limits that this puts on a
+release.
 
 At the first start, the app downloads the model weights. The default speech
 model is approximately 1.6 GB. Voice activity detection and speaker
@@ -62,7 +63,7 @@ catalogue and the storage layout.
 cd app && swift test
 ```
 
-There are 265 tests: 243 XCTest tests and 22 swift-testing tests. **They need
+There are 272 tests: 244 XCTest tests and 28 swift-testing tests. **They need
 no model weights, no microphone and no network.** This property is deliberate,
 and you must keep it. The four-layer split in
 [ARCHITECTURE.md](ARCHITECTURE.md) is what makes it possible.

@@ -171,6 +171,20 @@ extension AppState {
                 try? FileManager.default.removeItem(at: result.cacheURL)
             }
         }
+        // What changed under the recording: a microphone that was unplugged
+        // and replaced, a default input that moved, an input that could not
+        // be restarted. Kept with the recording, because the person reading
+        // the transcript tomorrow has to know why the room goes quiet at 0:41.
+        // After the enqueue above, which clears the row's warning for the job
+        // it starts; the job's own warnings are added to this one, not put in
+        // its place.
+        if !result.notices.isEmpty {
+            let changes = result.notices.map(\.message).joined(separator: " ")
+            let combined = [warnings[result.recordingId], changes]
+                .compactMap { $0 }.joined(separator: " ")
+            warnings[result.recordingId] = combined
+            try? await writer.setWarning(combined, for: result.recordingId)
+        }
         await queue.setLiveActive(false)
 
         if result.durationMs < Self.shortTakeMs {

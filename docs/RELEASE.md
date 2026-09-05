@@ -60,15 +60,17 @@ transcripts and the notes are in
 
 ## Limits
 
-**The app has no Developer ID certificate.** `build-app.sh` signs the bundle ad
-hoc. Thus:
+**The app has no Developer ID certificate.** `build-app.sh` signs the bundle
+with an Apple Development identity if the Mac has one, and ad hoc if not.
+Neither is a Developer ID. Thus:
 
 - **Gatekeeper refuses a bundle that a browser downloaded.** macOS puts a
   quarantine attribute on the file. To open it the first time, the user
   right-clicks the app and selects Open. Say this on the release page.
-- **macOS asks for microphone access again after a replacement.** The
-  permission is connected to the signature, and the signature changes with each
-  build.
+- **macOS asks for the audio permissions again after a replacement of an
+  ad-hoc build.** macOS connects a permission to the signature, and an ad-hoc
+  signature changes with each build. A build signed with an Apple Development
+  identity keeps its permissions across builds.
 
 To remove both limits, sign with a Developer ID certificate and notarize the
 `.zip`. Then add the `codesign` identity and `notarytool` to `build-app.sh`.

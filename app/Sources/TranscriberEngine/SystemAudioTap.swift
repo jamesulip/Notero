@@ -59,7 +59,11 @@ public final class SystemAudioTap: @unchecked Sendable {
     private var aggregate: AudioObjectID = .unknown
     private var procID: AudioDeviceIOProcID?
     private var onAudio: (@Sendable (UnsafePointer<AudioBufferList>, AVAudioFrameCount) -> Void)?
-    private var deviceListener: AudioObjectPropertyListenerBlock?
+    private var listeners: [(selector: AudioObjectPropertySelector,
+                             block: AudioObjectPropertyListenerBlock)] = []
+    /// The microphone adopted at the last build, for the notice when it has
+    /// to change under a recording.
+    private var adoptedMicrophone: (uid: String, name: String)?
     private let keepAlive = OutputKeepAlive()
     private let queue = DispatchQueue(label: "transcriber.system-audio", qos: .userInitiated)
 
@@ -72,6 +76,11 @@ public final class SystemAudioTap: @unchecked Sendable {
     /// write that many samples of silence and keep every later timestamp
     /// pinned to wall-clock, which is the bargain `isMuted` already makes.
     public var onGap: (@Sendable (Int) -> Void)?
+
+    /// Called when the microphone changed under a recording, or when a device
+    /// change could not be recovered from. The gap above says how much was
+    /// lost; this says what the recording is made of from here on.
+    public var onNotice: (@Sendable (CaptureNotice) -> Void)?
 
     /// - Parameters:
     ///   - withMicrophone: adopt a microphone into the same aggregate, so both
@@ -93,7 +102,7 @@ public final class SystemAudioTap: @unchecked Sendable {
     /// would mean discarding whatever came in the meantime.
     public func prepare() throws {
         guard aggregateIsBuilt == false else { return }
-        try build()
+        try build(fallingBackToDefaultMicrophone: false)
     }
 
     private var aggregateIsBuilt: Bool { stateLock.withLock { aggregate != .unknown } }
@@ -115,13 +124,13 @@ public final class SystemAudioTap: @unchecked Sendable {
         guard AudioDeviceStart(device, proc) == noErr else {
             throw TapError.notPermitted
         }
-        installDeviceListener()
+        installDeviceListeners()
         isRunning = true
     }
 
     public func stop() {
         guard isRunning else { return }
-        removeDeviceListener()
+        removeDeviceListeners()
         keepAlive.stop()
         tearDown()
         stateLock.withLock { onAudio = nil }
@@ -129,14 +138,19 @@ public final class SystemAudioTap: @unchecked Sendable {
     }
 
     deinit {
-        removeDeviceListener()
+        removeDeviceListeners()
         keepAlive.stop()
         tearDown()
     }
 
     // MARK: - Construction
 
-    private func build() throws {
+    /// - Parameter fallingBackToDefaultMicrophone: whether a chosen microphone
+    ///   that is not attached is replaced by the default. False at the first
+    ///   build, where the user asked for a device that is not there and should
+    ///   hear so; true on a rebuild, where the recording is already under way
+    ///   and carrying on with another microphone beats stopping.
+    private func build(fallingBackToDefaultMicrophone fallBack: Bool) throws {
         // A global tap, deliberately, including this process.
         //
         // The obvious thing is to exclude ourselves: Notero plays recordings
@@ -181,11 +195,18 @@ public final class SystemAudioTap: @unchecked Sendable {
         // silence is supposed to look like.
         var microphone: (uid: String, channels: Int)?
         if wantsMicrophone {
+            if let microphoneUID, !fallBack, AudioDevices.objectID(uid: microphoneUID) == nil {
+                AudioHardwareDestroyProcessTap(tapID)
+                throw AudioCapture.CaptureError.deviceGone(microphoneUID)
+            }
             let device = try microphoneUID.flatMap { AudioDevices.objectID(uid: $0) }
                 ?? CoreAudioObject.defaultInputDevice()
             let uid = try CoreAudioObject.uid(of: device)
             let channels = (try? CoreAudioObject.inputChannelCount(of: device)) ?? 0
             if channels > 0 { microphone = (uid, channels) }
+        }
+        let adopted = microphone.map { mic in
+            (uid: mic.uid, name: AudioDevices.device(uid: mic.uid)?.name ?? mic.uid)
         }
 
         // Order matters twice over: the first entry is the clock, and the
@@ -241,6 +262,7 @@ public final class SystemAudioTap: @unchecked Sendable {
                 self.tap = tapID
                 self.aggregate = aggregateID
                 self.procID = proc
+                self.adoptedMicrophone = adopted
             }
         } catch {
             AudioHardwareDestroyAggregateDevice(aggregateID)
@@ -307,43 +329,100 @@ public final class SystemAudioTap: @unchecked Sendable {
         onAudio(list, frames)
     }
 
-    // MARK: - Output device changes
+    // MARK: - Device changes
 
-    private func installDeviceListener() {
-        var address = CoreAudioObject.address(kAudioHardwarePropertyDefaultOutputDevice)
-        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            self?.rebuildForNewOutputDevice()
+    /// The output device always, because the tap is built around it. The
+    /// microphone only when one was adopted: the device list, for a
+    /// microphone that is unplugged, and the default input when this capture
+    /// follows the default.
+    private func installDeviceListeners() {
+        listen(kAudioHardwarePropertyDefaultOutputDevice) { [weak self] in
+            self?.rebuild(because: .outputChanged)
         }
-        deviceListener = listener
-        AudioObjectAddPropertyListenerBlock(CoreAudioObject.system, &address, queue, listener)
+        guard wantsMicrophone else { return }
+        listen(kAudioHardwarePropertyDevices) { [weak self] in
+            self?.microphoneListChanged()
+        }
+        if microphoneUID == nil {
+            listen(kAudioHardwarePropertyDefaultInputDevice) { [weak self] in
+                self?.defaultInputChanged()
+            }
+        }
     }
 
-    private func removeDeviceListener() {
-        guard let listener = deviceListener else { return }
-        var address = CoreAudioObject.address(kAudioHardwarePropertyDefaultOutputDevice)
-        AudioObjectRemovePropertyListenerBlock(CoreAudioObject.system, &address, queue, listener)
-        deviceListener = nil
+    private func listen(_ selector: AudioObjectPropertySelector,
+                        _ onChange: @escaping @Sendable () -> Void) {
+        var address = CoreAudioObject.address(selector)
+        let block: AudioObjectPropertyListenerBlock = { _, _ in onChange() }
+        listeners.append((selector, block))
+        AudioObjectAddPropertyListenerBlock(CoreAudioObject.system, &address, queue, block)
     }
 
-    private func rebuildForNewOutputDevice() {
+    private func removeDeviceListeners() {
+        for listener in listeners {
+            var address = CoreAudioObject.address(listener.selector)
+            AudioObjectRemovePropertyListenerBlock(CoreAudioObject.system, &address,
+                                                   queue, listener.block)
+        }
+        listeners = []
+    }
+
+    /// The list of devices changed. One change matters here: the adopted
+    /// microphone is gone, and the recording has to carry on with another.
+    private func microphoneListChanged() {
+        guard isRunning, let adopted = stateLock.withLock({ adoptedMicrophone }),
+              AudioDevices.objectID(uid: adopted.uid) == nil else { return }
+        rebuild(because: .microphoneLost(adopted.name))
+    }
+
+    /// The default input moved, and this capture follows the default.
+    private func defaultInputChanged() {
+        guard isRunning, microphoneUID == nil,
+              let device = try? CoreAudioObject.defaultInputDevice(),
+              let uid = try? CoreAudioObject.uid(of: device),
+              uid != stateLock.withLock({ adoptedMicrophone?.uid }) else { return }
+        rebuild(because: .defaultInputMoved)
+    }
+
+    private enum RebuildReason {
+        case outputChanged
+        case microphoneLost(String)
+        case defaultInputMoved
+    }
+
+    /// Tears the aggregate down and builds it again around whatever devices
+    /// are there now, then accounts for the audio lost in between.
+    private func rebuild(because reason: RebuildReason) {
         guard isRunning else { return }
         let rate = layout?.sampleRate ?? Double(Audio.sampleRate)
         let started = Date()
         tearDown()
         do {
-            try build()
+            try build(fallingBackToDefaultMicrophone: true)
             let (device, proc) = stateLock.withLock { (aggregate, procID) }
             guard AudioDeviceStart(device, proc) == noErr else {
                 throw TapError.notPermitted
             }
         } catch {
-            // Nothing to fall back to. A combined recording carries on with
-            // the microphone lane, and the caller sees the gap keep growing
-            // rather than a claim that all is well.
+            // Nothing to fall back to. The recording is silent from here, and
+            // the user is told rather than left to find out from the file.
             isRunning = false
+            onNotice?(.captureFailed(error.localizedDescription))
+            return
         }
         let lost = Int(Date().timeIntervalSince(started) * rate)
         if lost > 0 { onGap?(lost) }
+
+        let now = stateLock.withLock { adoptedMicrophone?.name }
+        switch reason {
+        case .outputChanged:
+            break
+        case .microphoneLost(let lost):
+            onNotice?(now.map { .microphoneReplaced(lost: lost, now: $0) }
+                      ?? .microphoneLost(lost))
+        case .defaultInputMoved:
+            if let now { onNotice?(.microphoneChanged(now: now)) }
+        }
     }
 
     public enum TapError: LocalizedError {
@@ -416,7 +495,6 @@ enum AudioBufferListReader {
     }
 }
 
-
 /// Renders silence to the default output for as long as a tap is running.
 ///
 /// Not a workaround for a bug -- it is how the hardware works. An output
@@ -426,9 +504,8 @@ enum AudioBufferListReader {
 /// room yielded 4.2 seconds of audio, and the missing 4.8 were simply the
 /// stretches when the Mac had nothing to say.
 ///
-/// Silence from this process is not recorded by the tap that needs it: the tap
-/// is created excluding this process, for the separate reason that Notero
-/// plays recordings back.
+/// The tap is global, so the silence rendered here reaches it too. That is
+/// what keeps the aggregate running, and silence is what it records.
 ///
 /// The cost is that the speakers stay powered for the length of a meeting,
 /// which in a meeting they were going to be anyway.

@@ -79,6 +79,47 @@ public enum InputGain {
         }
     }
 
+    // MARK: - Limiting
+
+    /// Where the soft limiter starts to bend: 3 dB under full scale, which is
+    /// about 0.708 as an amplitude.
+    public static let limiterThresholdDb: Float = -3
+    public static let limiterThreshold: Float = pow(10, limiterThresholdDb / 20)
+
+    /// One sample through the soft limiter: unchanged up to the threshold,
+    /// then bent along a tanh knee that flattens toward full scale. A sample
+    /// at full scale comes out about 0.6 dB under it, and nothing comes out
+    /// above it, however far past the ceiling the input was.
+    ///
+    /// For the lane that arrives with no headroom. A process tap hands over
+    /// the system mix at the level the other application chose, and a call
+    /// application's mix is loudness-maximised: measured on a real capture,
+    /// 0.35% of the remote lane's samples sat at or past full scale, and each
+    /// one clipped again in the AAC archive and in the Int16 copy the model
+    /// reads. A gain slider is the wrong tool -- there is no microphone
+    /// placement to compensate for -- and a hard clamp keeps the distortion.
+    ///
+    /// Memoryless on purpose. A limiter with attack and release has state to
+    /// carry between buffers, constants to tune and a sound of its own; this
+    /// one only has to keep the peaks off the ceiling, and a source that
+    /// stays under the threshold passes through untouched. The knee is
+    /// continuous in value and in slope at the threshold, so nothing marks
+    /// the point where it starts.
+    public static func softLimit(_ sample: Float) -> Float {
+        let magnitude = abs(sample)
+        guard magnitude > limiterThreshold else { return sample }
+        let knee = 1 - limiterThreshold
+        let limited = limiterThreshold + knee * tanh((magnitude - limiterThreshold) / knee)
+        return sample < 0 ? -limited : limited
+    }
+
+    /// `softLimit` over one buffer, in place.
+    public static func softLimit(_ samples: UnsafeMutablePointer<Float>, count: Int) {
+        for index in 0..<count {
+            samples[index] = softLimit(samples[index])
+        }
+    }
+
     /// Clamps to ±1 without scaling.
     ///
     /// Needed after filtering, which is not level-preserving the way gain is.

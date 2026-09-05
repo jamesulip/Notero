@@ -127,6 +127,19 @@ final class LaneCaptureTests: XCTestCase {
         XCTAssertFalse(CaptureSource.systemAudio.usesMicrophone)
     }
 
+    // MARK: - Notices
+
+    func testEachNoticeNamesTheDevicesInvolved() {
+        // The message is what the user reads on the recording screen and on
+        // the row afterwards, so it has to say which device went where.
+        let replaced = CaptureNotice.microphoneReplaced(lost: "Yeti", now: "MacBook Pro Microphone")
+        XCTAssertTrue(replaced.message.contains("Yeti"))
+        XCTAssertTrue(replaced.message.contains("MacBook Pro Microphone"))
+        XCTAssertTrue(CaptureNotice.microphoneChanged(now: "AirPods").message.contains("AirPods"))
+        XCTAssertTrue(CaptureNotice.microphoneLost("Yeti").message.contains("silent"))
+        XCTAssertTrue(CaptureNotice.captureFailed("no device").message.contains("no device"))
+    }
+
     // MARK: - Helpers
 
     private func constant(_ value: Float, seconds: Double) -> AVAudioPCMBuffer {

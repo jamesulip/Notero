@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 — 2026-09-05
 
 ### The audio input
 
@@ -38,6 +38,18 @@
   has one. macOS connects a permission to the signature of an app. An ad-hoc
   signature changes with each build, thus macOS asked for the permission again
   after each build.
+- The app puts the audio of this Mac through a soft limiter that starts at
+  3 dB under full scale. A call application sends its mix with no headroom, and
+  that audio clipped in the archive and in the copy that the model reads. The
+  limiter changes only the samples above the threshold. It does not limit the
+  microphone: the gain slider and the meter control that lane.
+- If the microphone that you selected disconnects during a recording, the
+  recording continues on the default input of macOS. If the default input
+  changes during a recording, the recording follows it. In both cases the
+  recording screen shows a message, and the recording keeps the message as a
+  warning. The lost time becomes silence, thus the timestamps after it stay
+  correct. Before this change, the recording continued with no audio and no
+  message.
 
 ### The waveform
 
