@@ -151,6 +151,16 @@ Three rules govern the schedule:
   still silent when the decode returns. The agreed prefix commits as usual. The
   remainder commits from the final hypothesis at that confirmed boundary. If a
   person started to speak again during the decode, nothing commits unagreed.
+- **A confirmed pause is silence in every hypothesis.** The decoder records
+  each pause that the voice detector confirms at 700 ms or longer. The decoder
+  drops a word that the model places inside one, with 250 ms of slack at each
+  edge, from a hop as well as from a final decode. Finding 12 in
+  [FINDINGS.md](FINDINGS.md) gives the failure this stops: a phrase read out of
+  a pause by a hop, kept when speech resumed before the final decode returned,
+  and committed when the next two hops agreed on it.
+
+Live text is off by default. `AppSettings.liveTranscription` is false unless
+the user turns it on, and the app then loads no model at the start.
 
 `SessionConfig` holds the measured defaults:
 
@@ -240,6 +250,26 @@ person who opened the meeting is Speaker 1.
 
 A job can carry `expectedSpeakers`, which is the number of people that the user
 says were in the room. It is a target for the clustering and never a cap.
+
+## How the app reads a transcript
+
+`TranscriptReader` in `TranscriberStore` reads the rows of one transcript as
+value types: one fetch with a predicate on the transcript and a sort descriptor
+on `startMs`, on a `@ModelActor` with its own context. `StoredTranscript.
+orderedSegments` runs the same fetch on the context of the row. Before this,
+each reader walked the `segments` relationship, which returned a fault for
+each row and fired every fault in the sort. A 4000-row transcript took 278 ms
+on disk that way, on the main thread, and the transcript view did it again on
+each redraw. The fetch takes 50 ms, and the view runs it off the main thread.
+
+The view reads again only when the rows change. `StoredRecording.updatedAt`
+moves on each write from the user interface. `AppState.transcriptTicks` moves
+on each write from a job: a batch of partial rows, the final rows, the speaker
+labels. The view does not count the rows.
+
+A new `TranscriptReader` for each read, on purpose. A context keeps the values
+it has loaded, and a fetch does not refresh them, thus a long-lived reader
+would return an edit that the main context saved a moment ago in its old form.
 
 ## Transcript revisions
 

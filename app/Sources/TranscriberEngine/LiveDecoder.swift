@@ -79,6 +79,20 @@ public final class LiveDecoder {
     /// as a detached task so a reading can never be misattributed.
     private var clearSpeechPending = false
 
+    /// Pauses the VAD has confirmed, on the session timeline, each at least
+    /// `silenceBoundaryMs` long. A word the model places inside one was read
+    /// out of silence -- Whisper's habit is to say the last phrase again -- and
+    /// is dropped from every hypothesis, not only from the final decode. The
+    /// final already drops its own tail past the pause; this catches the copy
+    /// a *hop* produced, which survived when speech resumed before the final
+    /// returned and the next two hops then agreed on it (FINDINGS §11).
+    /// Pruned to what a window can still contain.
+    private var silences: [Range<Int>] = []
+    /// One VAD frame of slack when deciding whether a reading extends the
+    /// pause already recorded or starts a new one: the frame count and the
+    /// sample count round differently at a batch edge.
+    private static let silenceStartSlackMs = 300
+
     public init(config: SessionConfig, recognizer: any SpeechRecognizing,
                 vad: any VoiceActivityDetecting) {
         self.config = config
@@ -170,6 +184,7 @@ public final class LiveDecoder {
         guard let reading = try? await vad.push(samples) else { return }
         let previous = lastReading
         lastReading = reading
+        noteSilence(reading, heardThrough: fedThroughMs)
         guard !finishing else { return }
 
         // Re-arm when the silence counter reset, not when it reads zero: one
@@ -182,6 +197,33 @@ public final class LiveDecoder {
             speechEndMs = fedThroughMs - reading.trailingSilenceMs
             armFinalization()
         }
+    }
+
+    /// Records or extends a confirmed pause. Only pauses long enough to end an
+    /// utterance count; shorter gaps are breath, and the model's word timings
+    /// drift by more than their width.
+    private func noteSilence(_ reading: VoiceActivityReading, heardThrough endMs: Int) {
+        guard reading.trailingSilenceMs >= config.silenceBoundaryMs else { return }
+        let startMs = endMs - reading.trailingSilenceMs
+        if let last = silences.last, abs(last.lowerBound - startMs) <= Self.silenceStartSlackMs {
+            silences[silences.count - 1] = Swift.min(last.lowerBound, startMs)..<Swift.max(last.upperBound, endMs)
+        } else {
+            silences.append(startMs..<endMs)
+        }
+        // Nothing before the commit can be committed again, so a pause that
+        // ended before it has nothing left to protect.
+        let floor = commit.committedEndMs
+        silences.removeAll { $0.upperBound <= floor }
+    }
+
+    /// Whether a word that starts here was read out of a confirmed pause. The
+    /// slack either side is the same drift the padding filter allows: a word
+    /// that starts just inside a pause may be the last word of the utterance
+    /// with its onset late, and one just before its end may be the first word
+    /// after it with its onset early.
+    private func startsInConfirmedSilence(_ startMs: Int) -> Bool {
+        let slack = OfflinePipeline.paddingToleranceMs
+        return silences.contains { startMs >= $0.lowerBound + slack && startMs < $0.upperBound - slack }
     }
 
     private func armFinalization() {
@@ -285,7 +327,8 @@ public final class LiveDecoder {
             absolute.reserveCapacity(output.tokens.count)
             for token in output.tokens {
                 let start = windowStartMs + token.startMs
-                guard start < audioEndMs, start < silentFromMs else {
+                guard start < audioEndMs, start < silentFromMs,
+                      !startsInConfirmedSilence(start) else {
                     stats.hallucinationsDropped += 1
                     continue
                 }

@@ -13,8 +13,12 @@ No recording, no transcript and no note goes off your Mac.
 
 ## Features
 
-- Record from the microphone, or import an MP3, WAV, M4A, MP4 or MOV file.
-- Live transcription while you record, and whole-file transcription after.
+- Drop an MP3, WAV, M4A, AIFF, MP4 or MOV file on the window or on the Dock
+  icon, or record from the microphone.
+- Whole-file transcription after a recording or an import. Live text during a
+  recording is optional, and off by default.
+- Two modes. Simple shows the transcript, the notes and two buttons. Advanced
+  shows every control.
 - 15 languages and automatic detection. Tagalog and Taglish are the default.
 - Speaker identification, with manual merge and reassignment.
 - Meeting notes: a summary and five lists, which are key points, decisions,

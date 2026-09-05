@@ -10,6 +10,7 @@ import TranscriberStore
 /// question asked of a transcript that reads oddly, and re-transcribing to find
 /// out is an expensive way to answer it.
 struct RecordingInfoBar: View {
+    @Environment(AppState.self) private var state
     let recording: StoredRecording
     /// The revision on show in the transcript. Nil is the latest.
     @Binding var revision: Int?
@@ -32,11 +33,19 @@ struct RecordingInfoBar: View {
     private var reloadKey: String {
         [recording.id.uuidString,
          shown?.id.uuidString ?? "-",
-         // Rows arrive in batches while a job runs; the word count follows them.
-         String(shown?.segments?.count ?? 0),
+         // Rows arrive in batches while a job runs; the word count follows
+         // them. The tick moves with each batch, and it costs no query.
+         String(state.transcriptTicks[recording.id] ?? 0),
+         String(recording.updatedAt.timeIntervalSinceReferenceDate),
          recording.statusRaw,
-         String(recording.durationMs)].joined(separator: "|")
+         String(recording.durationMs),
+         state.settings.interfaceMode.rawValue].joined(separator: "|")
     }
+
+    /// The model, the decode cost and the revisions are for the Advanced
+    /// mode. In Simple mode the bar gives the date, the length, the language
+    /// and the word count.
+    private var technical: Bool { state.settings.isAdvanced }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -61,7 +70,17 @@ struct RecordingInfoBar: View {
         .lineLimit(1)
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
-        .task(id: reloadKey) { facts = RecordingFacts(recording, transcript: shown) }
+        .task(id: reloadKey) {
+            // The word count reads every row. One query off the main actor,
+            // not a walk of the relationship on it.
+            var segments: [Segment] = []
+            if let id = shown?.id {
+                segments = (try? await state.makeReader().segments(ofTranscript: id)) ?? []
+            }
+            guard !Task.isCancelled else { return }
+            facts = RecordingFacts(recording, transcript: shown, segments: segments,
+                                   technical: technical)
+        }
     }
 
     /// One candidate width for the bar. Every text is `fixedSize` so a row
@@ -77,7 +96,7 @@ struct RecordingInfoBar: View {
                     .help("\(item.label): \(item.value)\(item.help.isEmpty ? "" : "\n\n\(item.help)")")
             }
 
-            if let revisions = recording.transcripts, revisions.count > 1 {
+            if technical, let revisions = recording.transcripts, revisions.count > 1 {
                 if !items.isEmpty { Text("·").foregroundStyle(.quaternary) }
                 revisionMenu(revisions.sorted { $0.revision > $1.revision })
             }
@@ -89,7 +108,7 @@ struct RecordingInfoBar: View {
                     Image(systemName: "info.circle")
                 }
                 .buttonStyle(.borderless)
-                .help("Everything recorded about this transcript")
+                .help("All the facts about this transcript")
                 .popover(isPresented: $showAll, arrowEdge: .bottom) {
                     RecordingFactsTable(facts: facts)
                 }
@@ -124,7 +143,7 @@ struct RecordingInfoBar: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .help("Read an earlier transcript of this recording. Edits and notes stay "
-            + "with the revision they were made on.")
+            + "on the revision where you made them.")
     }
 }
 
@@ -184,9 +203,11 @@ struct RecordingFacts {
 
     init() {}
 
-    init(_ recording: StoredRecording, transcript: StoredTranscript? = nil) {
-        let transcript = transcript ?? recording.transcript
-        let segments = transcript?.orderedSegments ?? []
+    /// `segments` are the rows of `transcript`, read by the caller. With
+    /// `technical` false the model, the decode cost, the segment count, the
+    /// revision and the audio file stay out.
+    init(_ recording: StoredRecording, transcript: StoredTranscript?, segments: [Segment],
+         technical: Bool = true) {
 
         items.append(Item(
             label: "Recorded",
@@ -204,19 +225,21 @@ struct RecordingFacts {
             if !transcript.isComplete {
                 items.append(Item(
                     label: "Transcript",
-                    value: recording.status.isBusy ? "Arriving" : "Partial",
+                    value: recording.status.isBusy ? "In progress" : "Partial",
                     help: recording.status.isBusy
-                        ? "Segments are added as each window is decoded."
-                        : "Transcription did not finish. What was decoded is shown; "
-                          + "transcribe again for the rest.",
+                        ? "The app adds lines as it decodes each window."
+                        : "The transcription did not finish. The app shows the lines it "
+                          + "has. Transcribe again to get the rest.",
                     inSummary: true))
             }
             let model = ModelCatalogue.option(transcript.modelId)
-            items.append(Item(
-                label: "Model",
-                value: model?.label ?? transcript.modelId,
-                help: model?.detail ?? "Not one of the catalogued models.",
-                inSummary: true))
+            if technical {
+                items.append(Item(
+                    label: "Model",
+                    value: model?.label ?? transcript.modelId,
+                    help: model?.detail ?? "Not one of the catalogued models.",
+                    inSummary: true))
+            }
 
             let language = LanguageCatalogue.option(transcript.language)
             items.append(Item(
@@ -235,35 +258,36 @@ struct RecordingFacts {
                     value: "\(words.formatted()) words",
                     inSummary: true))
             }
-            items.append(Item(
-                label: "Segments",
-                value: segments.count.formatted()))
-
-            if transcript.processMs > 0 {
+            if technical {
                 items.append(Item(
-                    label: "Processing",
-                    value: processing(transcript.processMs, audioMs: recording.durationMs),
-                    help: "Time the model spent on this recording. A live session "
-                        + "decodes while it records, so this overlaps the recording "
-                        + "itself rather than following it."))
-            }
+                    label: "Segments",
+                    value: segments.count.formatted()))
 
-            if let json = transcript.performanceJSON,
-               let data = json.data(using: .utf8),
-               let metrics = try? JSONDecoder().decode(TranscriptionMetrics.self, from: data) {
-                items.append(contentsOf: performanceItems(metrics))
+                if transcript.processMs > 0 {
+                    items.append(Item(
+                        label: "Processing",
+                        value: processing(transcript.processMs, audioMs: recording.durationMs),
+                        help: "The time the model spent on this recording. A live session "
+                            + "decodes while it records, thus this time overlaps the recording."))
+                }
+
+                if let json = transcript.performanceJSON,
+                   let data = json.data(using: .utf8),
+                   let metrics = try? JSONDecoder().decode(TranscriptionMetrics.self, from: data) {
+                    items.append(contentsOf: performanceItems(metrics))
+                }
             }
 
             items.append(Item(
                 label: "Transcribed",
                 value: transcript.createdAt.formatted(date: .abbreviated, time: .shortened)))
 
-            if transcript.revision > 1 {
+            if technical, transcript.revision > 1 {
                 items.append(Item(
                     label: "Revision",
                     value: "\(transcript.revision)",
-                    help: "Earlier revisions are kept. Re-transcribing adds one "
-                        + "rather than overwriting what you may have annotated."))
+                    help: "The app keeps the earlier revisions. A new transcription adds "
+                        + "a revision and does not overwrite your notes."))
             }
 
             let speakers = recording.speakers ?? []
@@ -282,7 +306,7 @@ struct RecordingFacts {
                 inSummary: true))
         }
 
-        if let audio = recording.audioFileName {
+        if technical, let audio = recording.audioFileName {
             items.append(Item(
                 label: "Audio",
                 value: audioDescription(recording, fileName: audio),

@@ -42,8 +42,8 @@ struct BenchmarkView: View {
                     ContentUnavailableView {
                         Label("No measurements yet", systemImage: "speedometer")
                     } description: {
-                        Text("Pick a clip of Tagalog or Taglish speech — a few minutes is "
-                             + "plenty — and each tier will be timed on this machine.")
+                        Text("Select a clip of Tagalog or Taglish speech. A few minutes is "
+                             + "enough. The app then times each tier on this Mac.")
                     }
                 }
             }
@@ -60,9 +60,9 @@ struct BenchmarkView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Model Benchmark").font(.title2.weight(.semibold))
-            Text("Published Whisper numbers are English, on other hardware. Neither half "
-                 + "transfers. What matters here is narrower: on this Mac, with this "
-                 + "audio, which tier still decodes faster than the audio arrives.")
+            Text("The published Whisper numbers are for English, on other hardware. "
+                 + "Neither part applies here. The question here is smaller: on this Mac, "
+                 + "with this audio, which tier decodes faster than the audio arrives?")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -76,7 +76,7 @@ struct BenchmarkView: View {
                     .toggleStyle(.button)
                 }
                 Spacer()
-                Button("Choose Audio…") { picking = true }
+                Button("Choose a Clip…") { picking = true }
                     // Blocked, not merely warned about: the benchmark bypasses
                     // the queue, so nothing else would stop it competing with a
                     // live recording for the Neural Engine and mismeasuring both.
@@ -87,8 +87,8 @@ struct BenchmarkView: View {
                 Text(clipName).font(.caption).foregroundStyle(.secondary)
             }
             if state.isRecording {
-                Label("A recording is in progress. Benchmarking now would compete with it "
-                      + "for the Neural Engine and mismeasure both.",
+                Label("A recording is in progress. A benchmark now would compete with it "
+                      + "for the Neural Engine, and both measurements would be wrong.",
                       systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(.orange)
@@ -145,16 +145,16 @@ struct BenchmarkView: View {
                 }
             }
 
-            Text("RTF is processing time over audio duration; lower is better. Below 1.0 "
-                 + "is faster than real time, and roughly below 0.6 is fast enough to keep "
-                 + "up with live audio once VAD and the commit policy take their share.")
+            Text("RTF is the processing time divided by the audio duration. Lower is better. "
+                 + "Below 1.0 is faster than real time. Below about 0.6 is fast enough for "
+                 + "live audio, after the voice detection and the commit policy take their share.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let recommended = report.recommendedTier {
                 HStack {
-                    Label("Best quality that keeps up: \(recommended.label)",
+                    Label("The best quality that keeps up: \(recommended.label)",
                           systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.green)
                     Spacer()
@@ -168,7 +168,7 @@ struct BenchmarkView: View {
             if let fastest = report.fastestTier,
                fastest != report.recommendedTier {
                 HStack {
-                    Label("Fastest measured: \(fastest.label)",
+                    Label("The fastest tier: \(fastest.label)",
                           systemImage: "bolt.fill")
                         .foregroundStyle(.blue)
                     Spacer()
@@ -183,7 +183,7 @@ struct BenchmarkView: View {
     private func start(_ url: URL) {
         guard running == nil else { return }
         clipName = url.lastPathComponent
-        stage = "Preparing audio…"
+        stage = "Audio preparation…"
         fraction = 0
 
         running = Task {
@@ -195,7 +195,7 @@ struct BenchmarkView: View {
 
                 _ = try await AudioCache.build(from: url, to: cacheURL) { value in
                     Task { @MainActor in
-                        stage = "Preparing audio…"
+                        stage = "Audio preparation…"
                         fraction = value
                     }
                 }
@@ -216,7 +216,7 @@ struct BenchmarkView: View {
             } catch is CancellationError {
                 // Nothing to report; the user asked it to stop.
             } catch {
-                state.alert = AppState.AppAlert(title: "Benchmark failed",
+                state.alert = AppState.AppAlert(title: "The benchmark failed",
                                                 message: error.localizedDescription)
             }
             try? FileManager.default.removeItem(at: cacheURL)

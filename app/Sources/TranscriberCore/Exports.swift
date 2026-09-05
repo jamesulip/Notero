@@ -24,12 +24,12 @@ public enum ExportFormat: String, CaseIterable, Identifiable, Sendable {
 
     public var detail: String {
         switch self {
-        case .txt: return "Speaker-labelled transcript and the meeting notes."
-        case .markdown: return "Minutes with headings, attendees, checkable action items "
-            + "and the transcript — pastes cleanly into email, chat and wikis."
+        case .txt: return "The transcript with speaker labels, and the meeting notes."
+        case .markdown: return "Minutes with headings, attendees, action items with "
+            + "checkboxes, and the transcript. It pastes into email, chat and wikis."
         case .srt: return "Subtitle cues for video editors."
         case .vtt: return "Subtitle cues for web players."
-        case .json: return "Everything: segments, speakers, bookmarks, notes."
+        case .json: return "Everything: the segments, the speakers, the bookmarks and the notes."
         }
     }
 }

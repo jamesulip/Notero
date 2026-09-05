@@ -3,9 +3,15 @@ import TranscriberCore
 import TranscriberStore
 
 /// The live screen. Everything on it is transient except the committed text.
+///
+/// Simple mode shows the clock, the meter, the three buttons and the text.
+/// Advanced mode adds the gain slider, room mode, the model and the decode
+/// statistics.
 struct RecordingView: View {
     @Environment(AppState.self) private var state
     let recording: StoredRecording
+
+    private var advanced: Bool { state.settings.isAdvanced }
 
     /// The model is still loading. Capture has not started, so there is no
     /// elapsed time, no level and nothing to mute yet -- but there is very
@@ -23,13 +29,15 @@ struct RecordingView: View {
     private var modelSummary: String {
         let id = state.settings.liveModelId
         let model = ModelCatalogue.option(id)
-        let language = state.settings.language == "auto"
-            ? "Auto-detect"
-            : (LanguageCatalogue.option(state.settings.language)?.label
-               ?? state.settings.language)
-        return [model?.label ?? id, model?.sizeLabel, language]
+        return [model?.label ?? id, model?.sizeLabel, languageLabel]
             .compactMap { $0 }
             .joined(separator: " · ")
+    }
+
+    private var languageLabel: String {
+        state.settings.language == "auto"
+            ? "Automatic language"
+            : (LanguageCatalogue.option(state.settings.language)?.label ?? state.settings.language)
     }
 
     var body: some View {
@@ -68,12 +76,14 @@ struct RecordingView: View {
                 }
             }
             if isLoadingModel {
-                // Named here rather than left to WhisperKit's progress string,
-                // which only says "Loading" once the file is found.
-                Text(modelSummary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("The model loads once. Recordings after this one start immediately.")
+                if advanced {
+                    // Named here rather than left to WhisperKit's progress
+                    // string, which only says "Loading" once the file is found.
+                    Text(modelSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text("The model loads one time. The next recordings start at once.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)
@@ -116,22 +126,24 @@ struct RecordingView: View {
                     .frame(maxWidth: 480)
             }
 
-            InputGainSlider(gainDb: Binding(
-                get: { state.settings.inputGainDb },
-                set: { state.setInputGain($0) }
-            ), isClipping: InputGain.isClipping(state.live.level))
-            .padding(.horizontal, 40)
+            if advanced {
+                InputGainSlider(gainDb: Binding(
+                    get: { state.settings.inputGainDb },
+                    set: { state.setInputGain($0) }
+                ), isClipping: InputGain.isClipping(state.live.level))
+                .padding(.horizontal, 40)
 
-            Toggle(isOn: Binding(
-                get: { state.settings.roomMode },
-                set: { state.setRoomMode($0) }
-            )) {
-                Label("Room mode", systemImage: "person.3")
+                Toggle(isOn: Binding(
+                    get: { state.settings.roomMode },
+                    set: { state.setRoomMode($0) }
+                )) {
+                    Label("Room mode", systemImage: "person.3")
+                }
+                .toggleStyle(.button)
+                .help("Removes low-frequency room noise before transcription. "
+                    + "For a microphone that hears a table and not a person. "
+                    + "The saved recording does not change.")
             }
-            .toggleStyle(.button)
-            .help("Filters out low-frequency room noise before transcription. "
-                + "For a mic picking up a table rather than a person. "
-                + "The saved recording is not affected.")
 
             // Words on the buttons while there is room, icons in a narrow window.
             ViewThatFits(in: .horizontal) {
@@ -152,7 +164,7 @@ struct RecordingView: View {
                 Label(state.live.isMuted ? "Unmute" : "Mute",
                       systemImage: state.live.isMuted ? "mic.slash.fill" : "mic.fill")
             }
-            .help(state.live.isMuted ? "Unmute" : "Mute")
+            .help(state.live.isMuted ? "Unmute the microphone" : "Mute the microphone")
 
             Button {
                 Task { await state.stopRecording() }
@@ -163,7 +175,7 @@ struct RecordingView: View {
             .buttonStyle(.borderedProminent)
             .tint(.red)
             .keyboardShortcut(".", modifiers: .command)
-            .help("Stop recording (⌘.)")
+            .help("Stop the recording (⌘.)")
 
             Button {
                 _ = state.addBookmark()
@@ -205,11 +217,11 @@ struct RecordingView: View {
 
                     if state.live.segments.isEmpty && state.live.partial.isEmpty {
                         VStack(spacing: 6) {
-                            Text(isPreparing ? "Not recording yet…"
-                                 : (state.live.decodeLive ? "Listening…" : "Recording"))
+                            Text(isPreparing ? "The recording has not started."
+                                 : (state.live.decodeLive ? "The app listens. Text comes here." : "Recording"))
                             if !isPreparing, !state.live.decodeLive {
-                                Text("Transcription runs when you stop. Turn on "
-                                     + "“Transcribe while recording” in Settings to see text live.")
+                                Text("The transcript comes after you stop. To see text during "
+                                     + "a recording, turn on “Show text while you record” in Settings.")
                                     .font(.caption)
                                     .multilineTextAlignment(.center)
                                     .frame(maxWidth: 380)
@@ -241,9 +253,7 @@ struct RecordingView: View {
                 footerLeading.labelStyle(.iconOnly).fixedSize()
             }
             Spacer()
-            Text(state.settings.language == "auto"
-                 ? "Auto-detect"
-                 : (LanguageCatalogue.option(state.settings.language)?.label ?? state.settings.language))
+            Text(languageLabel)
                 .lineLimit(1)
         }
         .font(.caption)
@@ -253,12 +263,18 @@ struct RecordingView: View {
         .background(.bar)
     }
 
+    @ViewBuilder
     private var footerLeading: some View {
         HStack(spacing: 14) {
             if !state.live.decodeLive {
-                Label("Transcribes after you stop, on \(ModelCatalogue.option(state.settings.offlineModelId)?.label ?? state.settings.offlineModelId)",
-                      systemImage: "clock")
-            } else {
+                if advanced {
+                    Label("The transcript comes after you stop, on "
+                          + "\(ModelCatalogue.option(state.settings.offlineModelId)?.label ?? state.settings.offlineModelId)",
+                          systemImage: "clock")
+                } else {
+                    Label("The transcript comes after you stop", systemImage: "clock")
+                }
+            } else if advanced {
                 // Which model is decoding: the first thing anyone wants to know
                 // when the live text reads oddly.
                 Label(ModelCatalogue.option(state.settings.liveModelId)?.label
@@ -271,12 +287,14 @@ struct RecordingView: View {
                 Button {
                     showStats.toggle()
                 } label: {
-                    Label("Stats", systemImage: state.live.stats.droppedHops > 0
+                    Label("Statistics", systemImage: state.live.stats.droppedHops > 0
                           ? "exclamationmark.circle" : "info.circle")
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(state.live.stats.droppedHops > 0 ? .orange : .secondary)
                 .popover(isPresented: $showStats, arrowEdge: .top) { statsPopover }
+            } else {
+                Label("Live text", systemImage: "text.bubble")
             }
         }
     }
@@ -296,14 +314,14 @@ struct RecordingView: View {
                 GridRow {
                     Text("RTF").foregroundStyle(.secondary)
                     Text(String(format: "%.2f", stats.meanRtf))
-                        .help("Decode time over audio duration. Below 1.0 keeps up with live audio.")
+                        .help("The decode time divided by the audio duration. Below 1.0, the app keeps up with the audio.")
                 }
             }
             GridRow {
                 Text("Dropped").foregroundStyle(.secondary)
                 Text("\(stats.droppedHops)")
                     .foregroundStyle(stats.droppedHops > 0 ? .orange : .primary)
-                    .help("Windows skipped because the previous decode was still running.")
+                    .help("Windows that the app skipped because the previous decode was not complete.")
             }
             if stats.failedHops > 0 {
                 GridRow {
@@ -314,16 +332,15 @@ struct RecordingView: View {
             GridRow {
                 Text("Utterances").foregroundStyle(.secondary)
                 Text("\(stats.boundaries) closed · \(stats.finalizations) final decodes")
-                    .help("Pauses that ended an utterance, and how many needed a decode of "
-                          + "their own rather than reusing the hop already running.")
+                    .help("Pauses that ended an utterance, and how many of them needed their own decode.")
             }
             if stats.unagreedTailCommits > 0 || stats.finalFlushOnEmpty > 0 {
                 GridRow {
-                    Text("Unagreed").foregroundStyle(.secondary)
+                    Text("Not agreed").foregroundStyle(.secondary)
                     Text("\(stats.unagreedTailCommits) words"
                          + (stats.finalFlushOnEmpty > 0 ? " · \(stats.finalFlushOnEmpty) empty finals" : ""))
-                        .help("Words committed at a pause from the final decode alone, before a "
-                              + "second pass could agree with them.")
+                        .help("Words that the app committed at a pause from the final decode alone, "
+                              + "before a second pass agreed.")
                 }
             }
             if stats.forcedCommits > 0 {
@@ -331,24 +348,25 @@ struct RecordingView: View {
                     Text("Forced").foregroundStyle(.secondary)
                     Text("\(stats.forcedCommits)")
                         .foregroundStyle(.orange)
-                        .help("Commits made without agreement because the window had to slide. "
-                              + "A high count means the hop and window are mistuned.")
+                        .help("Commits with no agreement, because the window had to move. "
+                              + "A high count means that the hop and the window do not match.")
                 }
             }
             if stats.hallucinationsDropped > 0 {
                 GridRow {
                     Text("Not spoken").foregroundStyle(.secondary)
                     Text("\(stats.hallucinationsDropped)")
-                        .help("Words the model placed past the end of the audio or inside a "
-                              + "pause the voice detector had already closed. Dropped.")
+                        .help("Words that the model placed after the end of the audio, or inside a "
+                              + "pause that the voice detector confirmed. The app dropped them.")
                 }
             }
             if stats.duplicatesDropped > 0 {
                 GridRow {
                     Text("Deduplicated").foregroundStyle(.secondary)
                     Text("\(stats.duplicatesDropped)")
-                        .help("Boundary words the model re-read from the pre-roll with drifted "
-                              + "timing, caught by text so they were not committed twice.")
+                        .help("Words at a boundary that the model read again from the pre-roll "
+                              + "with a different time. The app matched them by text and did "
+                              + "not commit them twice.")
                 }
             }
         }

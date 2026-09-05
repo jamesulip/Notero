@@ -16,7 +16,7 @@ struct SearchView: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Search transcripts, notes and bookmarks", text: $state.searchText)
+                TextField("Search the transcripts, notes and bookmarks", text: $state.searchText)
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .focused($focused)
@@ -41,7 +41,8 @@ struct SearchView: View {
                         Label("Search everything", systemImage: "magnifyingglass")
                     } description: {
                         Text("Words from any transcript, note, action item or bookmark. "
-                             + "Quote a phrase to keep it together. Results jump to the moment.")
+                             + "Put a phrase in quotes to keep it together. A result opens the "
+                             + "recording at that moment.")
                     }
                 } else if visible.isEmpty {
                     ContentUnavailableView.search(text: state.searchText)

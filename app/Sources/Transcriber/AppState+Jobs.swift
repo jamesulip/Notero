@@ -60,6 +60,7 @@ extension AppState {
                 try? await writer.appendPartial(segments, to: transcriptId)
             }
             progress[id]?.coveredMs = coveredMs
+            transcriptTicks[id, default: 0] += 1
 
         case .transcribed(let id, let payload):
             let performanceJSON = (try? JSONEncoder().encode(payload.metrics))
@@ -78,9 +79,11 @@ extension AppState {
                 waveform: payload.waveform.isEmpty ? nil : payload.waveform,
                 for: id
             )
+            transcriptTicks[id, default: 0] += 1
 
         case .diarized(let id, let spans, let roster):
             try? await writer.applySpeakers(spans: spans, roster: roster, for: id)
+            transcriptTicks[id, default: 0] += 1
 
         case .failed(let id, let message):
             // No alert: a background job failing should not interrupt whatever

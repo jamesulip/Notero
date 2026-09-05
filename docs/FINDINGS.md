@@ -490,6 +490,58 @@ references before revisiting this. (WER here is `langscore`'s, which keeps
 intra-word hyphens so "i-send" stays one Filipino word; the CLI's own WER
 splits it and reads 27.3% for the same transcript.)
 
+## 12. A confirmed pause drops what a hop read out of it; a style primer does not help (2026-09-06)
+
+Finding 11 left one hallucination standing on the paused clip: a phrase a *hop*
+had read out of a pause survived because speech resumed before the final
+decode returned, the boundary was abandoned, and the next two hops -- whose
+windows still covered the pause -- agreed on the phrase and committed it. The
+final decode's own filter (`speechEndMs + 250 ms`) never saw those hops.
+
+`LiveDecoder` now records every pause the VAD confirms at `silenceBoundaryMs`
+or longer, on the session timeline, and drops from *every* hypothesis a word
+that starts inside one (250 ms of slack at each edge, the same drift the padding
+filter allows). Pauses that end before the commit are pruned. Measured on the
+paused synthetic clip (87 s, 25 inserted pauses of 1.2 s), every decode awaited,
+Balanced tier, today's baseline against today's build:
+
+| Paused clip, live replay | WER | Words | Tail words committed unagreed | Deduplicated by text |
+|---|---:|---:|---:|---:|
+| before | 51.6% | 122 | 59 | 14 |
+| **confirmed-pause filter** | **39.1%** | 127 | 46 | 17 |
+
+Twelve and a half points, and thirteen fewer unagreed tail words: the phrases
+that used to be committed from a pause were exactly the ones no second pass had
+agreed with. The unpaused clips are unchanged (no pause on them reaches 700 ms),
+which is the expected null result. A test reproduces the abandoned-final
+sequence with a scripted VAD and a phantom word and asserts the phantom never
+reaches a partial once the pause is confirmed
+(`LiveDecoderTests.testAWordReadOutOfAConfirmedPauseNeverCommitsEvenWhenTheFinalIsAbandoned`).
+
+**A Taglish style primer in the prompt makes the live path collapse.** The idea
+was to hand Whisper one sentence of ordinary Taglish as the "previous
+transcript" before each window, so it would spell English words in English and
+keep the hyphen in "i-send". The primer names none of the fixture's content
+words, and `TranscriptionPrompt` carries it so the measurement can be repeated
+(`transcribe --style-hint`). Measured, Balanced tier:
+
+| Clip | Path | No primer | Primer |
+|---|---|---:|---:|
+| synthetic | offline | 24.2% | 44.5% |
+| synthetic | live | 27.3% | **96.1%** |
+| meeting01 | offline | 71.7% | 65.0% |
+| meeting01 | live | 63.3% | **280.0%** |
+
+On the live path the model repeats the primer into the hypotheses: 153 and 195
+decoded words against 123 and 51 without it, and the unagreed tail counts go
+from 37 to 5 and from 4 to 38, which is agreement on invented text. Offline it
+is worse on the clip with the trustworthy reference and better on the one whose
+reference is too poor to weigh. The primer is not sent by the app. The user's
+own Names and terms field still goes through, unchanged: it is a short list,
+and this measurement says nothing about short prompts. `suppressBlank` was
+measured in the same run (25.8% / 27.3% / 58.3% against 24.2% / 27.3% / 71.7%)
+and left at WhisperKit's default.
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a

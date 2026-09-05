@@ -29,19 +29,97 @@ struct DetailView: View {
                         .id(recording.id)
                 }
             } else {
-                ContentUnavailableView("Recording not found", systemImage: "questionmark.folder")
+                ContentUnavailableView("The recording is not in the library",
+                                       systemImage: "questionmark.folder")
             }
         case nil:
-            // The welcome card is a dialog over the window, not a pane here.
-            // See WelcomeCard.
-            ContentUnavailableView {
-                Label("Nothing selected", systemImage: "waveform")
-            } description: {
-                Text("Pick something from the sidebar, press ⌘R to record, or drop an audio file here.")
-            } actions: {
-                Button("New Recording") { state.newItem(.recording) }
-                Button("New Meeting") { state.newItem(.meeting) }
+            HomeView()
+        }
+    }
+}
+
+/// The detail column with nothing selected: a drop zone, and the two things
+/// a person can do first.
+///
+/// One target, two buttons. The whole window accepts a drop (see
+/// `ContentView`), but a target that looks like one is what tells a new user
+/// that a drop is possible at all.
+struct HomeView: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        VStack(spacing: 24) {
+            VStack(spacing: 10) {
+                Image(systemName: "waveform.badge.plus")
+                    .font(.system(size: 44, weight: .light))
+                    .foregroundStyle(.secondary)
+                Text("Drop an audio or video file here")
+                    .font(.title2.weight(.semibold))
+                Text("The app transcribes the file on this Mac. No audio leaves it.")
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
+
+            HStack(spacing: 12) {
+                Button {
+                    state.isImporting = true
+                } label: {
+                    Label("Choose a File…", systemImage: "folder")
+                        .frame(minWidth: 130)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .keyboardShortcut(.defaultAction)
+
+                Button {
+                    state.newItem(state.settings.isAdvanced ? .recording : .meeting)
+                } label: {
+                    Label("Record", systemImage: "record.circle")
+                        .frame(minWidth: 130)
+                }
+                .controlSize(.large)
+            }
+
+            if state.settings.isAdvanced {
+                HStack(spacing: 16) {
+                    Button("New Meeting") { state.newItem(.meeting) }
+                    Button("New Note") { state.newItem(.note) }
+                }
+                .buttonStyle(.link)
+                .font(.callout)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    step(1, "Drop a file, or click Record.")
+                    step(2, "Wait. The transcript appears line by line.")
+                    step(3, "Read it, correct it, and export it.")
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
+
+            Text("MP3, WAV, M4A, AIFF, MP4 or MOV")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 40)
+        .padding(.vertical, 36)
+        .frame(maxWidth: 520)
+        .background {
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [9, 7]))
+                .foregroundStyle(.quaternary)
+        }
+        .padding(30)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func step(_ number: Int, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("\(number)")
+                .font(.caption.weight(.bold))
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(.quaternary))
+            Text(text)
         }
     }
 }
@@ -61,6 +139,10 @@ struct DetailView: View {
 ///
 /// A dialog is also the right shape for what this is: asked once, and up until
 /// it is answered.
+///
+/// In Simple mode the card asks for no microphone permission. The first
+/// recording asks for it, at the moment it is needed; a person who only drops
+/// files is never asked.
 struct WelcomeCard: View {
     @Environment(AppState.self) private var state
 
@@ -68,7 +150,7 @@ struct WelcomeCard: View {
     /// is the card's; taking it off the screen is the caller's.
     var onAnswer: () -> Void = {}
 
-    private var modelId: String { state.settings.liveModelId }
+    private var modelId: String { state.settings.offlineModelId }
     private var model: ModelOption? { ModelCatalogue.option(modelId) }
 
     var body: some View {
@@ -76,16 +158,20 @@ struct WelcomeCard: View {
 
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Before your first recording")
+                Text("Welcome to Notero")
                     .font(.title2.weight(.semibold))
-                Text("Everything runs on this Mac. Nothing leaves it.")
+                Text("Drop an audio or video file on the window, or record a meeting. "
+                     + "Everything runs on this Mac. Nothing leaves it.")
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             GroupBox {
                 VStack(alignment: .leading, spacing: 14) {
-                    MicrophonePermissionRow()
-                    Divider()
+                    if state.settings.isAdvanced {
+                        MicrophonePermissionRow()
+                        Divider()
+                    }
                     modelRow
                     Divider()
                     HStack {
@@ -110,7 +196,7 @@ struct WelcomeCard: View {
             }
 
             HStack {
-                Button("Import Audio…") {
+                Button("Choose a File…") {
                     answered()
                     state.isImporting = true
                 }
@@ -119,10 +205,10 @@ struct WelcomeCard: View {
                 // download continues without the card, and everything on it
                 // is in Settings too.
                 Button("Done") { answered() }
-                    .help("Close this. Everything on it is also in Settings.")
-                Button("New Recording") {
+                    .help("Close this card. Everything on it is also in Settings.")
+                Button("Record") {
                     answered()
-                    state.newItem(.recording)
+                    state.newItem(state.settings.isAdvanced ? .recording : .meeting)
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
@@ -179,11 +265,11 @@ struct WelcomeCard: View {
         if downloaded { return "\(name) is on this Mac." }
         let size = model?.sizeLabel ?? ""
         if downloading {
-            return "Downloading \(name). This runs in the background; you can close this card."
+            return "The app downloads \(name) in the background. You can close this card."
         }
-        return "\(name) (\(size)) is not on this Mac yet, and nothing can be transcribed "
-             + "without it. Downloading it now means the first recording does not wait for "
-             + "it. You can skip this and download it later in Settings."
+        return "\(name) (\(size)) is not on this Mac. The app cannot transcribe without it. "
+             + "Download it now, and the first transcription does not wait for it. "
+             + "You can also download it later in Settings."
     }
 }
 
@@ -195,7 +281,12 @@ struct RecordingDetailView: View {
     let recording: StoredRecording
 
     @State private var inspector: InspectorTab = .notes
-    @State private var showInspector = true
+    /// Nil until the user has clicked the toggle in this view: until then the
+    /// remembered choice for the recording kind applies. Read on demand, not
+    /// copied in `onAppear`: an `onAppear` write flipped the inspector after
+    /// the first layout, and the flip rebuilt the transcript view, which read
+    /// the whole transcript a second time.
+    @State private var showInspector: Bool?
     /// An earlier transcript revision open for reading. Nil is the latest.
     @State private var revision: Int?
 
@@ -247,7 +338,7 @@ struct RecordingDetailView: View {
         // their left edge and the inspector its right. Folding the inspector
         // keeps the transcript whole; widening the window brings it back.
         .inspector(isPresented: Binding(
-            get: { showInspector && state.hasRoomForInspector },
+            get: { inspectorWanted && state.hasRoomForInspector },
             set: { showInspector = $0 }
         )) {
             VStack(spacing: 0) {
@@ -268,23 +359,26 @@ struct RecordingDetailView: View {
             }
             .inspectorColumnWidth(min: 260, ideal: 320, max: 520)
         }
-        .onAppear { showInspector = state.settings.inspectorShown(for: recording.kind) }
         .onChange(of: showInspector) { _, shown in
-            state.settings.setInspectorShown(shown, for: recording.kind)
+            if let shown { state.settings.setInspectorShown(shown, for: recording.kind) }
         }
         .toolbar {
             ToolbarItem {
                 Button {
-                    withAnimation(.snappy) { showInspector.toggle() }
+                    withAnimation(.snappy) { showInspector = !inspectorWanted }
                 } label: {
-                    Label("Meeting Notes", systemImage: "sidebar.right")
+                    Label("Notes", systemImage: "sidebar.right")
                 }
                 .disabled(!state.hasRoomForInspector)
                 .help(state.hasRoomForInspector
-                      ? "Show or hide the meeting workspace"
-                      : "Widen the window to show the meeting workspace beside the transcript")
+                      ? "Show or hide the notes"
+                      : "Make the window wider to show the notes beside the transcript")
             }
         }
+    }
+
+    private var inspectorWanted: Bool {
+        showInspector ?? state.settings.inspectorShown(for: recording.kind)
     }
 
     /// "Notes 7", "Speakers 6": the count is the reason to open the tab.
@@ -340,20 +434,19 @@ struct RecordingDetailView: View {
                 StatusChip(status: recording.status)
             } else if recording.status == .failed {
                 StatusChip(status: .failed)
-                if recording.hasAudio { RerunButton(recording: recording, label: "Retry") }
+                if recording.hasAudio { rerun("Retry") }
             } else if recording.status == .cancelled {
                 StatusChip(status: .cancelled)
-                if recording.hasAudio { RerunButton(recording: recording, label: "Transcribe") }
+                if recording.hasAudio { rerun("Transcribe") }
             } else if let warning = recording.warningMessage ?? state.warnings[recording.id] {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .lineLimit(2)
                     .help(warning)
-                if recording.hasAudio { RerunButton(recording: recording) }
+                if recording.hasAudio { rerun("Transcribe Again") }
             } else if recording.hasAudio {
-                RerunButton(recording: recording, label: "Re-run")
-                    .help("Transcribe again on another tier, or identify speakers again")
+                rerun("Transcribe Again")
             }
 
             // Click exports; the arrow offers the clipboard. Copy is the more
@@ -374,9 +467,24 @@ struct RecordingDetailView: View {
             } primaryAction: {
                 state.isExporting = true
             }
-            .help("Export as text, Markdown minutes, SRT, VTT or JSON (⌘E). "
-                + "The arrow copies to the clipboard instead.")
+            .help("Export as text, Markdown, SRT, VTT or JSON (⌘E). "
+                + "The arrow copies the transcript to the clipboard.")
             .disabled(recording.transcript == nil)
+        }
+    }
+
+    /// Advanced mode offers the tiers and the speaker pass; Simple mode has
+    /// one button that uses the tier from Settings.
+    @ViewBuilder
+    private func rerun(_ label: String) -> some View {
+        if state.settings.isAdvanced {
+            RerunButton(recording: recording, label: label)
+                .help("Transcribe again on another tier, or identify the speakers again")
+        } else {
+            Button(label) { state.retranscribe(recording) }
+                .buttonStyle(.borderless)
+                .font(.caption)
+                .help("Transcribe this recording again")
         }
     }
 }

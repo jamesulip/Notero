@@ -63,7 +63,7 @@ catalogue and the storage layout.
 cd app && swift test
 ```
 
-There are 278 tests: 250 XCTest tests and 28 swift-testing tests. **They need
+There are 289 tests: 261 XCTest tests and 28 swift-testing tests. **They need
 no model weights, no microphone and no network.** This property is deliberate,
 and you must keep it. The four-layer split in
 [ARCHITECTURE.md](ARCHITECTURE.md) is what makes it possible.

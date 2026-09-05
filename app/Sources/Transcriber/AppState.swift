@@ -130,6 +130,11 @@ final class AppState {
 
     /// Per-recording pipeline progress, keyed by recording id.
     var progress: [UUID: JobProgress] = [:]
+    /// Bumped when a job writes rows into a recording's transcript: a batch of
+    /// partial rows, the final rows, the speaker labels. The transcript view
+    /// reads it instead of counting the rows, which is a query it would run
+    /// on every redraw.
+    var transcriptTicks: [UUID: Int] = [:]
     /// Per-recording notes about work that finished imperfectly.
     var warnings: [UUID: String] = [:]
     /// The recording the live session is working on, set the moment the user
@@ -187,6 +192,11 @@ final class AppState {
         live.config = settings.sessionConfig
         live.inputGainDb = settings.inputGainDb
         live.isRoomMode = settings.roomMode
+        // Read here, not only at the first recording: the launch warm-up asks
+        // the session whether it decodes live, and the session's own default
+        // is yes. With the setting off, a 1.6 GB model loaded at every launch
+        // for a path that was never going to run.
+        live.decodeLive = settings.liveTranscription
         // Before any view reads the store: the live session and the queue did
         // not survive the last quit, so anything they still claim to be working
         // on is stranded.
@@ -210,6 +220,12 @@ final class AppState {
     }
 
     var context: ModelContext { container.mainContext }
+
+    /// A reader on its own context, for one read of a transcript off the main
+    /// actor. New each time on purpose: refer to `TranscriptReader`.
+    func makeReader() -> TranscriptReader {
+        TranscriptReader(modelContainer: container)
+    }
 
     /// Pending questions, asked one at a time.
     var duplicateImports: [DuplicateImport] = []
@@ -239,7 +255,7 @@ final class AppState {
             if kind != .note { Task { await beginRecording(recording) } }
             return recording
         } catch {
-            alert = AppAlert(title: "Could not create that", message: error.localizedDescription)
+            alert = AppAlert(title: "The app could not create that", message: error.localizedDescription)
             return nil
         }
     }
@@ -252,8 +268,7 @@ final class AppState {
     func addSelectionAsItem(_ kind: MeetingItemKind) {
         guard let recording = selectedRecording,
               let segmentId = selectedSegmentId,
-              let segment = (recording.transcript?.orderedSegments ?? [])
-                  .first(where: { $0.id == segmentId })
+              let segment = try? TranscriptReader.segmentRow(id: segmentId, in: context)
         else { return }
         do {
             try RecordingStore.addItem(kind, text: segment.displayText,
@@ -261,7 +276,7 @@ final class AppState {
             RecordingStore.reindex(recording)
             try context.save()
         } catch {
-            alert = AppAlert(title: "Could not add that note", message: error.localizedDescription)
+            alert = AppAlert(title: "The app could not add the note", message: error.localizedDescription)
         }
     }
 

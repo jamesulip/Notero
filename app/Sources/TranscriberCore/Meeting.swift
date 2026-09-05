@@ -38,13 +38,13 @@ public enum TranscriptionStatus: String, Codable, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
-        case .pending: return "Queued"
-        case .preparing: return "Preparing"
+        case .pending: return "In queue"
+        case .preparing: return "Preparation"
         case .recording: return "Recording"
-        case .transcribing: return "Transcribing"
-        case .diarizing: return "Identifying speakers"
-        case .finalizing: return "Finalizing"
-        case .completed: return "Completed"
+        case .transcribing: return "Transcription"
+        case .diarizing: return "Speaker identification"
+        case .finalizing: return "Last step"
+        case .completed: return "Complete"
         case .cancelled: return "Cancelled"
         case .failed: return "Failed"
         }

@@ -2,6 +2,37 @@ import Foundation
 import Observation
 import TranscriberCore
 
+/// How much of the app is on show.
+///
+/// Simple is the default. It has one button to record, one place to drop a
+/// file, the transcript and the notes. Advanced adds the model tiers, the
+/// audio controls, the benchmark, the decode statistics and the revision menu.
+/// Both modes use the same store and the same pipeline; the switch changes
+/// what the window shows and nothing else.
+enum InterfaceMode: String, CaseIterable, Identifiable {
+    case simple, advanced
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .simple: return "Simple"
+        case .advanced: return "Advanced"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .simple:
+            return "Record, drop a file, read the transcript, write notes. "
+                 + "The app selects the model and the audio settings."
+        case .advanced:
+            return "Adds the model tiers, the audio controls, the benchmark, "
+                 + "the decode statistics and the transcript revisions."
+        }
+    }
+}
+
 /// User preferences. Small enough to live in `UserDefaults`, and deliberately
 /// not in the store: none of it is per-recording, and none of it is worth a
 /// migration when it changes.
@@ -30,6 +61,7 @@ final class AppSettings {
         static let inspectorShown = "ui.inspectorShown"
         static let clockTimestamps = "ui.clockTimestamps"
         static let hasSeenWelcome = "ui.hasSeenWelcome"
+        static let interfaceMode = "ui.interfaceMode"
     }
 
     private let defaults: UserDefaults
@@ -47,7 +79,10 @@ final class AppSettings {
             diarizationMode = legacy ? .accurate : .off
         }
         neuralVAD = defaults.object(forKey: Key.neuralVAD) as? Bool ?? true
-        liveTranscription = defaults.object(forKey: Key.liveTranscription) as? Bool ?? true
+        // Off unless asked for. The whole-file pass after the recording is the
+        // better transcript, and a meeting with no model running keeps the
+        // Mac cool and quiet at the table. Nothing loads at launch either.
+        liveTranscription = defaults.object(forKey: Key.liveTranscription) as? Bool ?? false
         keepWorkingCopy = defaults.object(forKey: Key.keepWorkingCopy) as? Bool ?? false
         overrides = defaults.dictionary(forKey: Key.overrides) as? [String: String] ?? [:]
         roomMode = defaults.object(forKey: Key.roomMode) as? Bool ?? false
@@ -60,9 +95,21 @@ final class AppSettings {
         inspectorShown = defaults.dictionary(forKey: Key.inspectorShown) as? [String: Bool] ?? [:]
         clockTimestamps = defaults.object(forKey: Key.clockTimestamps) as? Bool ?? false
         hasSeenWelcome = defaults.object(forKey: Key.hasSeenWelcome) as? Bool ?? false
+        interfaceMode = InterfaceMode(rawValue: defaults.string(forKey: Key.interfaceMode) ?? "")
+            ?? .simple
     }
 
     // MARK: - Interface
+
+    /// Simple or Advanced. Refer to `InterfaceMode`.
+    var interfaceMode: InterfaceMode {
+        didSet { defaults.set(interfaceMode.rawValue, forKey: Key.interfaceMode) }
+    }
+
+    var isAdvanced: Bool {
+        get { interfaceMode == .advanced }
+        set { interfaceMode = newValue ? .advanced : .simple }
+    }
 
     /// Show transcript times as time of day ("9:47:12 PM") rather than offsets.
     var clockTimestamps: Bool { didSet { defaults.set(clockTimestamps, forKey: Key.clockTimestamps) } }
@@ -151,8 +198,13 @@ final class AppSettings {
 
     var offlineModelId: String { modelId(for: tier) }
 
+    /// What the decoder is told before each window: the names and terms the
+    /// user typed, and nothing else. The Taglish style primer in
+    /// `TranscriptionPrompt` is measured through the CLI only: on the live
+    /// path it made the model repeat the primer instead of the room
+    /// (docs/FINDINGS.md, finding 12), so the app never sends it.
     var promptOrNil: String? {
-        prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : prompt
+        TranscriptionPrompt.compose(language: language, usePrimer: false, vocabulary: prompt)
     }
 
     var sessionConfig: SessionConfig {

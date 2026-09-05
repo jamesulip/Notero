@@ -5,10 +5,26 @@ What each part of the app does. For the build, read
 [ARCHITECTURE.md](ARCHITECTURE.md). For the command-line tool, read
 [CLI.md](CLI.md).
 
+## Simple and Advanced
+
+The app has two modes. **Simple** is the default. It shows the recordings, a
+button to record, a button to transcribe a file, the transcript and the notes.
+The app selects the model and the audio settings. **Advanced** adds the model
+tiers, the audio controls, the benchmark, the decode statistics and the
+transcript revisions.
+
+To change the mode, click the mode name at the bottom of the sidebar, or
+select **View › Advanced Mode** (⌥⌘A), or go to **Settings › General › Mode**.
+The two modes use the same library and the same pipeline.
+
+This document describes the Advanced mode. A setting that this document names
+is not on the screen in Simple mode.
+
 ## Record or import
 
-**Record.** The app records from the microphone and writes two files from one
-audio tap. The first file is a 64 kbps AAC archive at the hardware sample rate.
+**Record.** Click **Record** in the toolbar, or press ⌘R. The app asks for the
+microphone permission at the first recording, and not before. The app records
+from the microphone and writes two files from one audio tap. The first file is a 64 kbps AAC archive at the hardware sample rate.
 The second file is a 16 kHz mono working copy for the models. Both files come
 from the same tap, thus their samples stay aligned.
 
@@ -41,17 +57,27 @@ device disconnects during a recording, the recording continues on the default
 input of macOS and shows a message. The recording keeps the message as a
 warning.
 
-**Import.** Drop an MP3, WAV, M4A, MP4 or MOV file on the window, or on the
-Dock icon. The app copies the file into the library and adds it to the queue.
+**Transcribe a file.** Drop an MP3, WAV, M4A, AIFF, MP4 or MOV file on the
+window or on the Dock icon. You can also click **Transcribe a File** (⌘O), or
+select **Open With › Notero** in the Finder. The window shows a frame while a
+file is over it. The app copies the file into the library and adds it to the
+queue. If a file with the same size is already in the library, the app asks
+before it imports a second copy.
 
 ## Transcribe
 
-**Live transcription** runs while you record. It decodes a 15-second context
-every 1.5 seconds and applies LocalAgreement-2. **Committed text never changes
-later.** Each decode also reads 1.5 seconds of committed audio in front of the
-active region, thus the model does not start cold at a commit boundary. When
-the voice detector hears 700 ms of silence, the app decodes the audio up to
-that pause and closes the utterance.
+**Live text is off by default.** The app records only, and it makes the
+transcript when you stop. Nothing runs on the Mac during the meeting, and the
+app loads no model at the start. To see text during a recording, turn on
+**Settings › General › Show text while you record**.
+
+**Live text**, when it is on, decodes a 15-second context every 1.5 seconds and
+applies LocalAgreement-2. **Committed text never changes later.** Each decode
+also reads 1.5 seconds of committed audio in front of the active region, thus
+the model does not start cold at a commit boundary. When the voice detector
+hears 700 ms of silence, the app decodes the audio up to that pause and closes
+the utterance. The app drops a word that the model places inside such a pause,
+because the model read it out of silence.
 
 **Whole-file transcription** runs after a recording, and on each import. It
 finds the speech, packs it into windows that end in silence, and decodes each
@@ -134,9 +160,11 @@ You can also export selected speakers only, or one time range only.
 
 | Keys | Function |
 | --- | --- |
-| ⌘R, ⇧⌘M, ⌘N | New recording, meeting or note |
+| ⌘R | Record. In Advanced mode, ⇧⌘M makes a meeting and ⌘N makes a note |
 | ⌘. | Stop the recording |
-| ⌘O, ⌘E | Import, export |
+| ⌘O | Transcribe a file |
+| ⌘E | Export |
+| ⌥⌘A | Advanced mode on or off |
 | ⌘F | Find in this transcript |
 | ⇧⌘F | Search all recordings |
 | ⌘B | Bookmark this moment |

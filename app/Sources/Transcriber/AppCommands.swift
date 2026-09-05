@@ -22,21 +22,27 @@ struct AppCommands: Commands {
         }
 
         CommandGroup(replacing: .newItem) {
-            Button("New Recording") { state.newItem(.recording) }
-                .keyboardShortcut("r")
-            Button("New Meeting") { state.newItem(.meeting) }
-                .keyboardShortcut("m", modifiers: [.command, .shift])
-            Button("New Note") { state.newItem(.note) }
-                .keyboardShortcut("n")
+            // ⌘R records in both modes. Simple mode makes a meeting, which
+            // opens with the notes beside the transcript.
+            Button(state.settings.isAdvanced ? "New Recording" : "Record") {
+                state.newItem(state.settings.isAdvanced ? .recording : .meeting)
+            }
+            .keyboardShortcut("r")
+            if state.settings.isAdvanced {
+                Button("New Meeting") { state.newItem(.meeting) }
+                    .keyboardShortcut("m", modifiers: [.command, .shift])
+                Button("New Note") { state.newItem(.note) }
+                    .keyboardShortcut("n")
+            }
 
             Divider()
 
-            Button("Import Audio or Video…") { state.isImporting = true }
+            Button("Transcribe a File…") { state.isImporting = true }
                 .keyboardShortcut("o")
         }
 
         CommandGroup(after: .newItem) {
-            Button("Stop Recording") { Task { await state.stopRecording() } }
+            Button("Stop the Recording") { Task { await state.stopRecording() } }
                 .keyboardShortcut(".", modifiers: .command)
                 .disabled(!state.isRecording)
 
@@ -69,14 +75,14 @@ struct AppCommands: Commands {
         }
 
         CommandMenu("Meeting") {
-            Button("Add Bookmark") { _ = state.addBookmark() }
+            Button("Add a Bookmark") { _ = state.addBookmark() }
                 .keyboardShortcut("b")
                 .disabled(state.selectedRecording == nil)
 
             Divider()
 
             ForEach(MeetingItemKind.allCases) { kind in
-                Button("Add Selection as \(kind.label)") {
+                Button("Add the Selection as \(kind.label)") {
                     state.addSelectionAsItem(kind)
                 }
                 .keyboardShortcut(shortcut(for: kind), modifiers: [.command, .control])
@@ -122,20 +128,28 @@ struct AppCommands: Commands {
         }
 
         CommandMenu("View") {
-            Toggle("Show Times of Day", isOn: Binding(
+            Toggle("Advanced Mode", isOn: Binding(
+                get: { state.settings.isAdvanced },
+                set: { state.settings.isAdvanced = $0 }
+            ))
+            .keyboardShortcut("a", modifiers: [.command, .option])
+            Divider()
+            Toggle("Show the Time of Day", isOn: Binding(
                 get: { state.settings.clockTimestamps },
                 set: { state.settings.clockTimestamps = $0 }
             ))
             .keyboardShortcut("t", modifiers: [.command, .option])
-            Toggle("Follow Playback", isOn: Binding(
+            Toggle("Follow the Playback", isOn: Binding(
                 get: { state.followPlayback },
                 set: { state.followPlayback = $0 }
             ))
         }
 
-        CommandGroup(after: .toolbar) {
-            Button("Model Benchmark") { state.route = .benchmark }
-                .keyboardShortcut("k", modifiers: [.command, .shift])
+        if state.settings.isAdvanced {
+            CommandGroup(after: .toolbar) {
+                Button("Model Benchmark") { state.route = .benchmark }
+                    .keyboardShortcut("k", modifiers: [.command, .shift])
+            }
         }
     }
 

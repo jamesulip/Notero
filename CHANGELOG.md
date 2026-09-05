@@ -2,6 +2,57 @@
 
 ## Unreleased
 
+### Simple mode
+
+- The app has two modes. **Simple** is the default. It shows the recordings, a
+  **Record** button, a **Transcribe a File** button, the transcript and the
+  notes. **Advanced** shows every control: the model tiers, the audio controls,
+  the benchmark, the decode statistics and the transcript revisions. To change
+  the mode, click the mode name at the bottom of the sidebar, select **View ›
+  Advanced Mode** (⌥⌘A), or go to **Settings › General › Mode**.
+- The detail column with nothing selected is a drop target with two buttons and
+  three steps. The whole window shows a frame while a file is over it.
+- A drop on the Dock icon, **Open With › Notero** in the Finder and
+  `open -a Notero file.m4a` all transcribe the file. The app declared the file
+  types since the first release, but nothing received them.
+- Live text is off by default. The app records only and makes the transcript
+  when you stop. The app also loads no model at the start when live text is
+  off. Before this change the app loaded a 1.6 GB model at each start for a
+  path that did not run.
+- Simple mode asks for the microphone permission at the first recording, and
+  not on the first-run card.
+- The labels, the messages and the help texts follow ASD-STE100 Simplified
+  Technical English. The status names are nouns: In queue, Preparation,
+  Transcription, Speaker identification, Complete.
+
+### A long transcript opens fast
+
+- The transcript view reads the rows in one query, in time order, off the main
+  thread, and groups them before they reach the view. Before this change the
+  view walked the relationship, which faulted each row one by one on the main
+  thread, and it did this again on each redraw. On a store on disk with 4000
+  rows, the walk takes 278 ms and the query takes 50 ms. In the app, a
+  3909-row transcript of a 3 h 51 min meeting is on the screen in 0.3 to 0.7 s,
+  and the window does not wait for it.
+- The info bar, the export, the search index and the editor read the rows the
+  same way. The editor read the whole transcript at each keystroke. It now
+  reads its own lines one time.
+- The transcript view no longer reloads when the notes column opens on the
+  first layout.
+
+### Live text
+
+- The decoder drops a word that the model places inside a pause that the
+  voice detector found, from every hypothesis and not only from the final
+  decode. On the paused synthetic clip the word error rate went from 51.6% to
+  39.1%, and the decoder committed 13 fewer words with no agreement. Finding 12
+  in `docs/FINDINGS.md` gives the mechanism.
+- Measured and not shipped: a Taglish style primer in the prompt made the live
+  path repeat the primer (27% to 96% WER), and `suppressBlank` was noise.
+  `transcribe --style-hint` and `--prompt` repeat the measurement.
+
+### The audio input
+
 - When the room listens through speakers, the microphone also hears the persons
   on the call, and the room lane transcribed each remote sentence a second
   time. The app now drops a room line that repeats a call line at the same
