@@ -55,6 +55,7 @@ public final class AudioCapture: @unchecked Sendable {
     private var archive: ArchiveWriter?
     private var onAudio: (@Sendable (CapturedAudio) -> Void)?
     private var _isMuted = false
+    private var _isPaused = false
     private var _gain: Float = 1
     private var _roomMode = false
     private var _onNotice: (@Sendable (CaptureNotice) -> Void)?
@@ -67,6 +68,19 @@ public final class AudioCapture: @unchecked Sendable {
     public var isMuted: Bool {
         get { stateLock.withLock { _isMuted } }
         set { stateLock.withLock { _isMuted = newValue } }
+    }
+
+    /// Paused capture drops the frames: nothing reaches the archive, the
+    /// working copy or the decoder, and the clock of the recording stands
+    /// still. The opposite of mute, on purpose. Mute keeps the timeline on
+    /// the wall clock and puts silence in the file; pause takes the time out
+    /// of the recording, the way a tape recorder does, so a ten-minute break
+    /// is not ten minutes of silence to scroll past. The input keeps running,
+    /// so resume is instant and a device change during the pause is still
+    /// handled.
+    public var isPaused: Bool {
+        get { stateLock.withLock { _isPaused } }
+        set { stateLock.withLock { _isPaused = newValue } }
     }
 
     /// Input gain in decibels, applied to both the archive and the inference
@@ -230,10 +244,11 @@ public final class AudioCapture: @unchecked Sendable {
         let onAudio = self.onAudio
         let archive = self.archive
         let muted = _isMuted
+        let paused = _isPaused
         let gain = _gain
         let roomMode = _roomMode
         stateLock.unlock()
-        guard let onAudio, !chains.isEmpty else { return }
+        guard let onAudio, !chains.isEmpty, !paused else { return }
 
         var peaks: [CaptureLane: Float] = [:]
         var pcm: [CaptureLane: Data] = [:]
@@ -307,8 +322,11 @@ public final class AudioCapture: @unchecked Sendable {
         let chains = self.chains
         let onAudio = self.onAudio
         let archive = self.archive
+        let paused = _isPaused
         stateLock.unlock()
-        guard let onAudio, frames > 0 else { return }
+        // A gap during a pause is part of the pause: nothing was going to be
+        // recorded in that time anyway.
+        guard let onAudio, frames > 0, !paused else { return }
 
         var buffers: [CaptureLane: AVAudioPCMBuffer] = [:]
         for lane in lanes {

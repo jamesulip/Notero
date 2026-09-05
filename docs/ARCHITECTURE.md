@@ -127,6 +127,13 @@ recording, the capture restarts on the device that is available, converts its
 samples to the rate of the archive, writes the lost time as silence, and
 reports the change to the recording screen.
 
+**Mute and pause are two switches on `AudioCapture`.** Mute writes silence:
+the timeline stays on the wall clock, and the transcript stays in step with
+the file. Pause drops the frames: nothing reaches the archive, the working copy
+or the decoder, the clock of the recording stands still, and resume continues
+on the same timeline with no gap. The input keeps running during a pause, thus
+resume is immediate, and the app still handles a device change during the pause.
+
 ## Live transcription
 
 `LiveDecoder` owns everything between a chunk of PCM and a committed token.

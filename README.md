@@ -17,6 +17,7 @@ No recording, no transcript and no note goes off your Mac.
   icon, or record from the microphone.
 - Whole-file transcription after a recording or an import. Live text during a
   recording is optional, and off by default.
+- Pause and resume a recording. The break is not in the file.
 - Two modes. Simple shows the transcript, the notes and two buttons. Advanced
   shows every control.
 - 15 languages and automatic detection. Tagalog and Taglish are the default.

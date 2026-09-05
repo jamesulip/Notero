@@ -352,6 +352,10 @@ struct HistoryRow: View {
                 if let progress = state.progress[recording.id] {
                     StatusChip(status: progress.status, fraction: progress.fraction,
                                remaining: progress.remaining)
+                } else if state.isLive(recording.id), state.isPaused {
+                    Label("Paused", systemImage: "pause.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 } else if recording.status.isBusy {
                     // Preparing and recording are live-path states; they never
                     // get a queue entry, so they need the stored status.

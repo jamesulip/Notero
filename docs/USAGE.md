@@ -28,6 +28,12 @@ from the microphone and writes two files from one audio tap. The first file is a
 The second file is a 16 kHz mono working copy for the models. Both files come
 from the same tap, thus their samples stay aligned.
 
+**Pause.** Click **Pause** (⇧⌘P) to stop the clock and the file during a
+break. Click **Resume** to continue. The break is not in the recording, and
+the transcript continues with no gap. **Mute** is different: the clock
+continues, and the file gets silence for the length of the mute. A time of day
+in the transcript does not count the paused time.
+
 **Select the input.** Go to **Settings › Audio › Record**. There are three
 inputs:
 
@@ -161,6 +167,7 @@ You can also export selected speakers only, or one time range only.
 | Keys | Function |
 | --- | --- |
 | ⌘R | Record. In Advanced mode, ⇧⌘M makes a meeting and ⌘N makes a note |
+| ⇧⌘P | Pause or resume the recording |
 | ⌘. | Stop the recording |
 | ⌘O | Transcribe a file |
 | ⌘E | Export |

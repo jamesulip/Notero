@@ -42,6 +42,11 @@ struct AppCommands: Commands {
         }
 
         CommandGroup(after: .newItem) {
+            Button(state.isPaused ? "Resume the Recording" : "Pause the Recording") {
+                state.togglePause()
+            }
+            .keyboardShortcut("p", modifiers: [.command, .shift])
+            .disabled(!state.isRecording)
             Button("Stop the Recording") { Task { await state.stopRecording() } }
                 .keyboardShortcut(".", modifiers: .command)
                 .disabled(!state.isRecording)

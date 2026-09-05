@@ -257,7 +257,15 @@ struct ContentView: View {
         }
 
         if state.isRecording {
-            ToolbarItem(placement: .principal) {
+            ToolbarItemGroup(placement: .principal) {
+                Button {
+                    state.togglePause()
+                } label: {
+                    Label(state.isPaused ? "Resume" : "Pause",
+                          systemImage: state.isPaused ? "play.fill" : "pause.fill")
+                }
+                .help(state.isPaused ? "Continue the recording (⇧⌘P)" : "Pause the recording (⇧⌘P)")
+
                 Button {
                     Task { await state.stopRecording() }
                 } label: {

@@ -23,6 +23,16 @@ extension AppState {
     /// phase.
     func isLive(_ id: UUID) -> Bool { activeRecordingId == id && isLiveBusy }
 
+    /// The recording is under way and paused: the clock and the file stand
+    /// still until Resume.
+    var isPaused: Bool { isRecording && live.isPaused }
+
+    /// ⇧⌘P, the Pause button and the toolbar. Nothing to do outside a recording.
+    func togglePause() {
+        guard isRecording else { return }
+        live.isPaused.toggle()
+    }
+
     func beginRecording(_ recording: StoredRecording) async {
         // A launch warmup may still be loading the model. Waiting for it is the
         // point -- the `isBusy` guard below would otherwise drop the recording

@@ -21,6 +21,10 @@
   path that did not run.
 - Simple mode asks for the microphone permission at the first recording, and
   not on the first-run card.
+- A recording has a **Pause** button (⇧⌘P). The clock, the file and the live
+  text stop, and Resume continues on the same timeline with no gap. Mute is
+  the other switch: the clock continues and the file gets silence. Before this
+  change, Mute was the only way to stop the sound.
 - The labels, the messages and the help texts follow ASD-STE100 Simplified
   Technical English. The status names are nouns: In queue, Preparation,
   Transcription, Speaker identification, Complete.

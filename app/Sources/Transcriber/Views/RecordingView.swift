@@ -95,16 +95,24 @@ struct RecordingView: View {
         .background(.background.secondary)
     }
 
+    private var isPaused: Bool { state.live.isPaused }
+
+    private var headerTitle: String {
+        if isPaused { return "Paused" }
+        return state.live.isMuted ? "Muted" : "Recording"
+    }
+
     private var recordingHeader: some View {
         VStack(spacing: 14) {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(.red)
+                    .fill(isPaused ? Color.secondary : Color.red)
                     .frame(width: 10, height: 10)
-                    .opacity(state.live.isMuted ? 0.3 : 1)
-                    .symbolEffect(.pulse, isActive: true)
-                Text(state.live.isMuted ? "Muted" : "Recording")
+                    .opacity(state.live.isMuted && !isPaused ? 0.3 : 1)
+                    .symbolEffect(.pulse, isActive: !isPaused)
+                Text(headerTitle)
                     .font(.headline)
+                    .contentTransition(.identity)
             }
 
             Text(TimeFormat.short(ms: state.live.elapsedMs))
@@ -164,7 +172,25 @@ struct RecordingView: View {
                 Label(state.live.isMuted ? "Unmute" : "Mute",
                       systemImage: state.live.isMuted ? "mic.slash.fill" : "mic.fill")
             }
-            .help(state.live.isMuted ? "Unmute the microphone" : "Mute the microphone")
+            .help(state.live.isMuted
+                  ? "Unmute the microphone"
+                  : "Mute the microphone. The clock continues, and the file gets silence.")
+
+            // Pause is the other way to stop the sound: the clock and the
+            // file stop too, and the break is not in the recording.
+            Button {
+                state.togglePause()
+            } label: {
+                Label(isPaused ? "Resume" : "Pause",
+                      systemImage: isPaused ? "play.fill" : "pause.fill")
+                    .frame(minWidth: 60)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(isPaused ? .green : .accentColor)
+            .keyboardShortcut("p", modifiers: [.command, .shift])
+            .help(isPaused
+                  ? "Continue the recording (⇧⌘P)"
+                  : "Pause the recording. The clock and the file stop until Resume (⇧⌘P).")
 
             Button {
                 Task { await state.stopRecording() }
@@ -215,7 +241,14 @@ struct RecordingView: View {
                         .id("partial")
                     }
 
-                    if state.live.segments.isEmpty && state.live.partial.isEmpty {
+                    if isPaused {
+                        Label("Paused. Click Resume to continue.", systemImage: "pause.circle")
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 12)
+                            .frame(maxWidth: .infinity)
+                    }
+
+                    if state.live.segments.isEmpty && state.live.partial.isEmpty && !isPaused {
                         VStack(spacing: 6) {
                             Text(isPreparing ? "The recording has not started."
                                  : (state.live.decodeLive ? "The app listens. Text comes here." : "Recording"))

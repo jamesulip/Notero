@@ -52,6 +52,26 @@ final class InputGainSessionTests: XCTestCase {
         XCTAssertEqual(session.inputGainDb, InputGain.minDb)
     }
 
+    /// Pause is a flag the audio callback reads per buffer, like gain. A
+    /// session that ends paused must not leave the next one paused.
+    func testPauseRoundTripsAndClearsTheMeter() throws {
+        let session = makeSession()
+        XCTAssertFalse(session.isPaused)
+        session.isPaused = true
+        XCTAssertTrue(session.isPaused)
+        XCTAssertEqual(session.level, 0)
+        XCTAssertTrue(session.laneLevels.isEmpty)
+        session.isPaused = false
+        XCTAssertFalse(session.isPaused)
+
+        let capture = try XCTUnwrap(AudioCapture())
+        XCTAssertFalse(capture.isPaused)
+        capture.isPaused = true
+        XCTAssertTrue(capture.isPaused)
+        capture.isMuted = true
+        XCTAssertTrue(capture.isMuted, "mute and pause are separate switches")
+    }
+
     /// The capture object applies gain per buffer, so the value set before a
     /// session starts has to survive to the tap rather than being reset to 0 dB.
     func testCaptureCarriesTheGain() throws {
