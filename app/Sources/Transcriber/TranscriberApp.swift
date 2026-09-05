@@ -12,6 +12,14 @@ import TranscriberStore
 /// nothing. Files that arrive before the app has a state to give them to are
 /// kept and delivered when it does.
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Runs once the application has finished its launch. The global
+    /// shortcuts register here: the Carbon event target exists by then.
+    var onLaunch: (() -> Void)?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        onLaunch?()
+    }
+
     var onOpen: (([URL]) -> Void)? {
         didSet {
             guard let onOpen, !pending.isEmpty else { return }
@@ -59,10 +67,11 @@ struct TranscriberApp: App {
         _state = State(initialValue: state)
         _startupFailure = State(initialValue: failure)
         delegate.onOpen = { urls in state.importFiles(urls) }
+        delegate.onLaunch = { state.applyMenuBarSetting() }
     }
 
     var body: some Scene {
-        WindowGroup("Notero") {
+        WindowGroup("Notero", id: "main") {
             ContentView()
                 .environment(state)
                 .modelContainer(state.container)
@@ -98,5 +107,20 @@ struct TranscriberApp: App {
                 .environment(state)
                 .modelContainer(state.container)
         }
+
+        // Record, Pause and Stop from any application, with the clock beside
+        // the icon. Off in Settings › General if a person does not want it.
+        MenuBarExtra(isInserted: Binding(
+            get: { state.settings.menuBarItem },
+            set: { state.setMenuBarItem($0) }
+        )) {
+            MenuBarMenu()
+                .environment(state)
+                .modelContainer(state.container)
+        } label: {
+            MenuBarLabel()
+                .environment(state)
+        }
+        .menuBarExtraStyle(.menu)
     }
 }

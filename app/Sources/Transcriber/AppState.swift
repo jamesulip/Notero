@@ -34,6 +34,8 @@ final class AppState {
     let live: LiveSession
     let player = AudioPlayer()
     let writer: TranscriptWriter
+    /// ⌃⌥R and ⌃⌥P in every application, while the menu bar item is on.
+    let hotKeys = GlobalHotKeys()
 
     /// Sidebar selection. Nil is the empty state.
     var route: Route?

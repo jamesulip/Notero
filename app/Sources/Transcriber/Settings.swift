@@ -62,6 +62,7 @@ final class AppSettings {
         static let clockTimestamps = "ui.clockTimestamps"
         static let hasSeenWelcome = "ui.hasSeenWelcome"
         static let interfaceMode = "ui.interfaceMode"
+        static let menuBarItem = "ui.menuBarItem"
     }
 
     private let defaults: UserDefaults
@@ -97,6 +98,7 @@ final class AppSettings {
         hasSeenWelcome = defaults.object(forKey: Key.hasSeenWelcome) as? Bool ?? false
         interfaceMode = InterfaceMode(rawValue: defaults.string(forKey: Key.interfaceMode) ?? "")
             ?? .simple
+        menuBarItem = defaults.object(forKey: Key.menuBarItem) as? Bool ?? true
     }
 
     // MARK: - Interface
@@ -110,6 +112,10 @@ final class AppSettings {
         get { interfaceMode == .advanced }
         set { interfaceMode = newValue ? .advanced : .simple }
     }
+
+    /// The Notero item in the menu bar, with the global shortcuts. Change it
+    /// through `AppState.setMenuBarItem`, which also registers the shortcuts.
+    var menuBarItem: Bool { didSet { defaults.set(menuBarItem, forKey: Key.menuBarItem) } }
 
     /// Show transcript times as time of day ("9:47:12 PM") rather than offsets.
     var clockTimestamps: Bool { didSet { defaults.set(clockTimestamps, forKey: Key.clockTimestamps) } }

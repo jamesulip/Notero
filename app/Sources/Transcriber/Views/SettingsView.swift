@@ -135,6 +135,19 @@ struct GeneralSettings: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Menu bar") {
+                Toggle("Show Notero in the menu bar", isOn: Binding(
+                    get: { settings.menuBarItem },
+                    set: { state.setMenuBarItem($0) }
+                ))
+                Text("Record, pause and stop from any application. The item shows the "
+                     + "clock of the recording. ⌃⌥R starts or stops a recording, and ⌃⌥P "
+                     + "pauses or resumes it, in every application while the item is on.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section("While you record") {
                 Toggle("Show text while you record", isOn: $settings.liveTranscription)
                 Text(liveDetail(advanced: advanced))

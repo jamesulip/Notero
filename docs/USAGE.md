@@ -34,6 +34,14 @@ the transcript continues with no gap. **Mute** is different: the clock
 continues, and the file gets silence for the length of the mute. A time of day
 in the transcript does not count the paused time.
 
+**The menu bar.** Notero puts an item in the menu bar. Click it to record,
+pause, resume or stop from any application, and to add a bookmark. During a
+recording, macOS draws its orange microphone indicator on the item. Open the
+menu to see the clock and the paused state. Two shortcuts work in every application
+while the item is on: ⌃⌥R starts or stops a recording, and ⌃⌥P pauses or
+resumes it. To hide the item, turn off **Settings › General › Show Notero in
+the menu bar**. This also removes the two shortcuts.
+
 **Select the input.** Go to **Settings › Audio › Record**. There are three
 inputs:
 
@@ -169,6 +177,8 @@ You can also export selected speakers only, or one time range only.
 | ⌘R | Record. In Advanced mode, ⇧⌘M makes a meeting and ⌘N makes a note |
 | ⇧⌘P | Pause or resume the recording |
 | ⌘. | Stop the recording |
+| ⌃⌥R | Start or stop a recording, from any application |
+| ⌃⌥P | Pause or resume the recording, from any application |
 | ⌘O | Transcribe a file |
 | ⌘E | Export |
 | ⌥⌘A | Advanced mode on or off |

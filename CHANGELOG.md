@@ -21,6 +21,12 @@
   path that did not run.
 - Simple mode asks for the microphone permission at the first recording, and
   not on the first-run card.
+- A menu bar item gives Record, Pause, Resume, Stop and Add a Bookmark from any
+  application, and its menu shows the clock of the recording. During a
+  recording, macOS draws its orange microphone indicator on the item. ⌃⌥R starts or stops a
+  recording and ⌃⌥P pauses or resumes it, in every application, with no
+  accessibility permission. **Settings › General › Show Notero in the menu
+  bar** turns the item and the two shortcuts off together.
 - A recording has a **Pause** button (⇧⌘P). The clock, the file and the live
   text stop, and Resume continues on the same timeline with no gap. Mute is
   the other switch: the clock continues and the file gets silence. Before this
