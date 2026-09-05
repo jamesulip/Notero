@@ -31,7 +31,10 @@ shortcuts.
 
 ## Demo
 
+[![The Notero window after a two-lane recording. The transcript alternates between a Room line and a Remote line, each with its timestamp and a coloured badge.](docs/images/demo-poster.png)](docs/images/demo.mp4)
+
 [**Watch the demo**](docs/images/demo.mp4) — under two minutes, with sound.
+Click the picture to play it.
 
 The video shows one recording from the start to the transcript:
 
@@ -46,7 +49,9 @@ The video shows one recording from the start to the transcript:
 **The demo plays a synthetic clip, and it is not a real meeting.** The clip
 comes from the macOS `say` command, the same as the screenshots below. Read the
 note under the screenshots: those voices say Tagalog words incorrectly, thus
-the transcript in the video has more errors than real speech gives.
+the transcript in the video has more errors than real speech gives. The sidebar
+in the video shows the test recordings of the maintainer, with the automatic
+names that the app gives.
 
 ## What It Looks Like
 
