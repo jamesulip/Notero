@@ -12,6 +12,7 @@ import TranscriberStore
 /// Models and Storage, and more rows in the first two.
 struct SettingsView: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
     @State private var pane: Pane? = .general
 
     enum Pane: String, CaseIterable, Identifiable {
@@ -39,7 +40,7 @@ struct SettingsView: View {
     }
 
     private var panes: [Pane] {
-        Pane.allCases.filter { state.settings.isAdvanced || !$0.isAdvanced }
+        Pane.allCases.filter { mode == .advanced || !$0.isAdvanced }
     }
 
     var body: some View {
@@ -61,9 +62,9 @@ struct SettingsView: View {
         }
         .navigationTitle((pane ?? .general).label)
         .frame(minWidth: 700, idealWidth: 760, minHeight: 500, idealHeight: 580)
-        .onChange(of: state.settings.isAdvanced) { _, advanced in
+        .onChange(of: mode) { _, mode in
             // A pane that just left the list must not stay on show.
-            if !advanced, pane?.isAdvanced == true { pane = .general }
+            if mode == .simple, pane?.isAdvanced == true { pane = .general }
         }
     }
 }
@@ -97,10 +98,12 @@ struct InterfaceModeSection: View {
 
 struct GeneralSettings: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
+    @State private var notesAvailability: NotesAvailability?
 
     var body: some View {
         @Bindable var settings = state.settings
-        let advanced = settings.isAdvanced
+        let advanced = mode == .advanced
 
         Form {
             InterfaceModeSection()
@@ -191,8 +194,59 @@ struct GeneralSettings: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
+            if state.canDraftNotes {
+                Section {
+                    Toggle("Draft the notes when a recording is complete",
+                           isOn: $settings.autoDraftNotes)
+                    // A plain string, not a literal, so SwiftUI does not read
+                    // markdown here. Emphasis has to be carried by the words.
+                    Text(settings.autoDraftNotes
+                         ? "The app drafts the notes as soon as the transcript is ready, and "
+                         + "shows them for you to select. It never runs during a recording, "
+                         + "and a draft that is running stops when you record: the two would "
+                         + "share one chip."
+                         : "The app drafts the notes only when you click Draft Notes. Turn "
+                         + "this on and it drafts them after every recording instead. Either "
+                         + "way it never runs during a recording.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Picker("Language of the notes", selection: $settings.notesStyle) {
+                        ForEach(NotesStyle.allCases) { style in
+                            Text(style.label).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text(settings.notesStyle.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } header: {
+                    Text("Automatic notes")
+                } footer: {
+                    Text(notesFooter)
+                        .font(.caption)
+                        .foregroundStyle(notesAvailability?.isAvailable == false ? .orange : .secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .task { notesAvailability = await state.notesAvailability() }
+            }
         }
         .formStyle(.grouped)
+    }
+
+    /// What the button in the notes pane does, and whether it can run today.
+    /// The language limit is stated here because a Taglish meeting is the
+    /// normal case for this app, and the model refuses it.
+    private var notesFooter: String {
+        let what = "Draft Notes in the notes pane reads the transcript with the Apple Intelligence "
+                 + "model on this Mac and proposes a summary and notes. You select what to keep. "
+                 + "Nothing leaves the Mac. The model does not accept a transcript that is mostly "
+                 + "Tagalog."
+        guard let notesAvailability, !notesAvailability.isAvailable else { return what }
+        return what + " " + notesAvailability.message
     }
 
     private func liveDetail(advanced: Bool) -> String {
@@ -215,6 +269,7 @@ struct GeneralSettings: View {
 
 struct AudioSettings: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
 
     var body: some View {
         @Bindable var settings = state.settings
@@ -245,7 +300,7 @@ struct AudioSettings: View {
                 }
             }
 
-            if settings.isAdvanced {
+            if mode == .advanced {
                 Section("Input") {
                     InputGainSlider(gainDb: $settings.inputGainDb)
                     Text("The microphone in a laptop is 15 to 20 dB quieter than a headset at "

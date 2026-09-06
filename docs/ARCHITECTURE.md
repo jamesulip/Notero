@@ -12,6 +12,7 @@ app/            Swift 6 and SwiftUI. The product.
 ├── Sources/TranscriberCore/     pure logic: commit policy, merger, exports, search
 ├── Sources/TranscriberStore/    SwiftData schema and queries
 ├── Sources/TranscriberEngine/   audio, WhisperKit, FluidAudio VAD and speaker models
+├── Sources/TranscriberFlow/     the app's decisions with no window
 ├── Sources/Transcriber/         the SwiftUI app
 └── Sources/TranscriberCLI/      the same pipeline, with no window
 ```
@@ -21,7 +22,7 @@ Transcriber, which the app had through its private builds. The data directory
 holds the recordings that those builds wrote, thus a rename there hides them.
 The module names are internal, and a rename gives the user nothing.
 
-## The four layers
+## The five layers
 
 Each layer builds and tests without the layer above it:
 
@@ -30,17 +31,18 @@ Each layer builds and tests without the layer above it:
 | `TranscriberCore` | nothing | AVFoundation, CoreML, SwiftUI, SwiftData, models |
 | `TranscriberStore` | Core | inference of any kind |
 | `TranscriberEngine` | Core | SwiftUI |
-| `Transcriber` | Core, Store, Engine | — |
+| `TranscriberFlow` | Core, Store, Engine | SwiftUI, AppKit |
+| `Transcriber` | Core, Store, Engine, Flow | — |
 
 This split lets you test the commit policy, the segment merger, the exporters
 and the search index on a Mac that has no microphone and no model weights. That
 property is what keeps the CI job free of secrets and free of model downloads.
 
-The diagram in the [README](../README.md) shows the same four layers as a
-stack, from the user interface down to the models. The table above is the
-dependency rule. `TranscriberStore` and `TranscriberEngine` both depend on
-`TranscriberCore` and not on each other. The SwiftUI app is the only layer that
-sees all three.
+The diagram in the [README](../README.md) shows the same layers as a stack,
+from the user interface down to the models. The table above is the dependency
+rule. `TranscriberStore` and `TranscriberEngine` both depend on
+`TranscriberCore` and not on each other. `TranscriberFlow` and the SwiftUI app
+see all three.
 
 ### `TranscriberCore`
 
@@ -66,7 +68,27 @@ the microphone, the audio of this Mac through `SystemAudioTap`, or both.
 `SpeakerEngine` wrap WhisperKit and FluidAudio. `LiveDecoder` and `LiveSession`
 run the live path. `OfflinePipeline` runs the whole-file path.
 `TranscriptionQueue` runs the background jobs. `EngineHost` owns the models.
-`BenchmarkRunner` measures the tiers.
+`BenchmarkRunner` measures the tiers. `NotesEngine.swift` holds the
+`NotesGenerating` seam, `NotesPipeline` and the Apple Intelligence backend for
+the automatic notes.
+
+### `TranscriberFlow`
+
+The decisions of the app, with no window and no AppKit, so a test can make
+them. `JobCoordinator` consumes the events of the transcription queue, writes
+to the store through `TranscriptWriter`, and holds the three values the views
+read about a job: the progress, the warning and the transcript tick. It also
+takes the three commands: enqueue, cancel and add a warning.
+`RecordingDisplayStatus` is the one ladder from the stored status, the job
+progress, the live session and the warning to what a row, a header and an
+empty transcript show. `StopPlan` decides what a stop of the live session does:
+the failure warning, where the live transcript goes, the follow-up job, the
+device-notice warning and the short-take question. The app executes the plan.
+`NotesCoordinator` holds one draft of automatic notes per recording, from the
+request through the progress to the review, and writes nothing to the store.
+
+Before this layer existed, the first three lived on the app state as private
+methods and internal dictionaries, and no test reached them.
 
 ### `Transcriber`
 
@@ -78,22 +100,24 @@ address of the releases page, which is the only address in the app target.
 
 ### `TranscriberCLI`
 
-`transcribe` is two files, `main.swift` and `Record.swift`. It is not a second
-implementation. It calls `OfflinePipeline`, `LiveDecoder`, `SpeakerEngine` and
-`Exporter` exactly as the app does. It therefore verifies the real path on real
-audio with no window, no microphone and no person. That is what makes it usable
-from CI and from the evaluation harness in `eval/`. [CLI.md](CLI.md) gives its
-options.
+`transcribe` is three files, `main.swift`, `Record.swift` and `Notes.swift`. It
+is not a second implementation. It calls `OfflinePipeline`, `LiveDecoder`,
+`SpeakerEngine`, `NotesPipeline` and `Exporter` exactly as the app does. It
+therefore verifies the real path on real audio with no window, no microphone
+and no person. That is what makes it usable from CI and from the evaluation
+harness in `eval/`. [CLI.md](CLI.md) gives its options.
 
 ## The engine protocols
 
-Three protocols in `TranscriberEngine/Protocols.swift` hide the backends:
+Three protocols in `TranscriberEngine/Protocols.swift` and one in
+`TranscriberEngine/NotesEngine.swift` hide the backends:
 
 | Protocol | Current backend |
 | --- | --- |
 | `SpeechRecognizing` | WhisperKit |
 | `VoiceActivityDetecting` | FluidAudio Silero VAD, with an energy fallback |
 | `SpeakerDiarizing` | FluidAudio pyannote segmentation and WeSpeaker embedding |
+| `NotesGenerating` | The Apple Intelligence model, through Foundation Models, on macOS 26 |
 
 To replace a backend, write a new conformance to the related protocol. You do
 not have to change the user interface. The tests use fake conformances, which
@@ -343,3 +367,69 @@ false while the user is likely to run a stage again.
 is `HighPassFilter.roomCornerHz`. The queue reads the setting when it puts the job in the queue, and
 it does not store the mode on the recording. A meeting that was captured in the
 wrong mode is therefore fixed with the switch and one more transcription.
+
+## Automatic notes
+
+The notes model reads the transcript in parts and writes into the shape the
+user fills by hand: a summary, and `MeetingItemKind` rows with a source line.
+Nothing is written until the user has selected what to keep.
+
+```
+segments ──► NotesChunker ──► parts ──► NotesGenerating ──► ChunkNotes
+                                              │                   │
+                                        (one call each)     NotesReducer
+                                                                  │
+                                              summaries ──► NotesGenerating ──► NotesDraft
+```
+
+`NotesChunker` in `TranscriberCore` cuts the transcript into parts of at most
+5,000 characters, at turn boundaries. Apple's model has a window of 4,096
+tokens for the instructions, the part and the answer together, and Tagalog
+costs more tokens per word than English, thus the budget is in characters and
+it is low. Each line of a part is `[m:ss] Name: text`, and the model is asked
+to copy the timestamp of the line that a note comes from. `NotesReducer`
+resolves that timestamp to the line at or before it, inside the part only: a
+timestamp outside the part is a copy error, and the note keeps no link. Two
+notes of the same kind that share 70 % of their content words are one note.
+
+`NotesPipeline` in `TranscriberEngine` runs the parts through a
+`NotesGenerating` backend and knows two recoveries. A part that the model
+reports as too long is cut in two and each half is read, down to one line. A
+part that the content filter refuses is skipped, and the draft carries a
+warning that says so. A language refusal is not recovered: the rest of the
+transcript is in the same language, and a draft made from the parts that
+happened to pass would misrepresent the meeting.
+
+`FoundationNotesEngine` is the backend on macOS 26: the Apple Intelligence
+model through the Foundation Models framework, with guided generation, thus the
+answer is a typed value and not text to parse. **It refuses Tagalog.** Measured
+on 2026-09-06 on a 93-minute Taglish meeting, a part with 28 % Tagalog words
+was accepted and parts with 50 % and 92 % were refused before any generation,
+with the default and the permissive guardrails alike. Finding 13 in
+[FINDINGS.md](FINDINGS.md) gives the measurement, and the measurement of the
+models that do accept it, none of which is in the app. A second backend is a
+new conformance to `NotesGenerating` and one line in `AppState+Notes`.
+
+`AutoDraft` in `TranscriberFlow` decides whether a finished transcription
+drafts its own notes. Six inputs, one of which is the point: **the notes model
+never runs while a recording does.** A draft is minutes of the chip and the
+live decoder shares it, so a hop that arrives late is dropped and a dropped
+hop is missing words. The whole-file queue already refuses to start during a
+recording; this is that rule for the notes, in both directions -- a draft does
+not start during a recording, and one that is running is cancelled when a
+recording starts. The status it reads comes from a context of its own: the
+queue emits `.completed` and then `.finished`, and the main context has not
+always merged the writer actor's save by then.
+
+`NotesCoordinator` in `TranscriberFlow` holds one state per recording:
+running with the progress, ready with the draft, or failed with the message.
+The pane shows the state; the sheet shows the draft; `RecordingStore.apply`
+writes the rows the user selected. The package on macOS 15 builds without the
+framework, and the pane shows no button there.
+
+`NotesScoring` in `TranscriberCore` is how a backend is measured before it is
+trusted: grounding (the content words of a note that occur in the transcript
+near its timestamp), the language mix of the transcript against the notes, and
+the coverage of the hand-written notes by the draft. `transcribe --notes`
+reports the three for the Apple model and `eval/notes_eval.py` for a candidate,
+on the app's JSON export of a recording.

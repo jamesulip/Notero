@@ -30,6 +30,8 @@ transcribe --audio FILE [--reference FILE] [--models DIR]
            [--format txt|markdown|srt|vtt|json] [--out FILE] [--json FILE]
            [--live [--realtime] [--hop MS] [--pre-roll MS] [--context MS] [--adaptive-hop]]
 transcribe --audio FILE --lane room|remote
+transcribe --notes EXPORT.json [--notes-style english|spoken] [--notes-chars N]
+           [--out DRAFT.md] [--json REPORT.json]
 transcribe --record [--source microphone|systemAudio|both] [--device UID]
            [--seconds N] [--out FILE.m4a] [--gui]
 transcribe --devices
@@ -101,6 +103,9 @@ Replay a file through the live path at wall-clock speed:
 | `--devices` | List each audio device with its channel counts and its UID, then stop. |
 | `--channels` | Capture the raw channels of the combined device and report the peak level of each channel. |
 | `--log FILE` | Write a copy of the stderr output to this file. |
+| `--notes EXPORT.json` | Draft the notes for a recording that the app exported as JSON, and score the draft. Refer to "Automatic notes". |
+| `--notes-style english\|spoken` | With `--notes`, the language of the notes. The default is `english`. |
+| `--notes-chars N` | With `--notes`, the characters of transcript per part. The default is 5000. |
 
 The default speaker mode is `accurate`. Use `--fast-diarize` or `--no-diarize`
 to change it.
@@ -153,6 +158,35 @@ the language that you asked for, the language that the model detected, the
 language of each window, the duration, the decode time, the RTF, the word
 count, the transcript, each token, the WER, the live statistics and the live
 configuration.
+
+## Automatic notes
+
+`--notes EXPORT.json` reads a recording that the app exported as JSON, drafts
+the notes with the same pipeline and the same model as the app, prints the
+draft as Markdown, and scores it. It needs macOS 26 with Apple Intelligence on.
+The model refuses a transcript that is mostly Tagalog; finding 13 in
+[FINDINGS.md](FINDINGS.md) gives the limit.
+
+```bash
+./.build/release/transcribe --notes meeting.json --json out/notes.json
+```
+
+The tool reports:
+
+- The share of Tagalog words in the transcript and in the notes.
+- **Grounding:** the share of the content words of each note that occur in the
+  transcript within two minutes of the note's timestamp, and how many notes are
+  under 0.4. A low value means that the model invented. English notes about
+  Tagalog speech score lower by construction.
+- **Coverage:** how many of the hand-written notes in the export the draft also
+  has, and how many draft notes match a hand-written one, by content-word
+  overlap. A meeting with notes that you wrote by hand is therefore a scored
+  pair with no extra work.
+- The parts that the model skipped, and why.
+
+`--json FILE` writes the `NotesRunReport` structure with these scores and the
+draft. `eval/notes_eval.py` writes the same scores for a candidate model, thus the
+two can be compared.
 
 ## Live mode
 

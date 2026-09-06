@@ -5,6 +5,7 @@ import TranscriberStore
 
 struct SidebarView: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
     @Environment(\.modelContext) private var context
     @Query(sort: \StoredRecording.createdAt, order: .reverse)
     private var recordings: [StoredRecording]
@@ -35,7 +36,7 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             // The filter is an Advanced control. Simple mode shows the whole
             // library, newest first, and nothing to select before the list.
-            if state.settings.isAdvanced {
+            if mode == .advanced {
                 filterBar
             } else {
                 simpleTopBar
@@ -54,8 +55,8 @@ struct SidebarView: View {
             if let route, !selection.contains(route) { selection = [route] }
             if route == nil { selection = [] }
         }
-        .onChange(of: state.settings.isAdvanced) { _, advanced in
-            if !advanced { filter = .all }
+        .onChange(of: mode) { _, mode in
+            if mode == .simple { filter = .all }
         }
         .onDeleteCommand { pendingDelete = selectedRecordings }
         .confirmationDialog(
@@ -106,7 +107,7 @@ struct SidebarView: View {
         switch filter {
         case .all: return recordings
         case .active:
-            return recordings.filter { state.progress[$0.id] != nil || $0.status.isBusy }
+            return recordings.filter { state.jobs.isBusy($0.id) || $0.status.isBusy }
         case .favorites: return recordings.filter(\.isFavorite)
         case .meetings: return recordings.filter { $0.kind == .meeting }
         }
@@ -212,24 +213,22 @@ struct SidebarView: View {
                 Button {
                     withAnimation(.snappy) { state.settings.isAdvanced.toggle() }
                 } label: {
-                    Label(state.settings.isAdvanced ? "Advanced" : "Simple",
-                          systemImage: "slider.horizontal.3")
+                    Label(mode.label, systemImage: "slider.horizontal.3")
                         .font(.caption)
                 }
-                .help(state.settings.isAdvanced
+                .help(mode == .advanced
                       ? "Advanced mode. Click to change to Simple mode, which has fewer controls."
                       : "Simple mode. Click to change to Advanced mode, which shows all controls.")
 
                 Spacer()
-                if state.settings.isAdvanced {
-                    Button {
-                        state.route = .benchmark
-                    } label: {
-                        Label("Benchmark", systemImage: "speedometer")
-                    }
-                    .help("Measure the model tiers on this Mac (⇧⌘K)")
-                    .labelStyle(.iconOnly)
+                Button {
+                    state.route = .benchmark
+                } label: {
+                    Label("Benchmark", systemImage: "speedometer")
                 }
+                .help("Measure the model tiers on this Mac (⇧⌘K)")
+                .labelStyle(.iconOnly)
+                .advancedOnly()
                 SettingsLink {
                     Label("Settings", systemImage: "gearshape")
                 }
@@ -252,7 +251,7 @@ struct SidebarView: View {
             try? context.save()
         }
         if recording.hasAudio {
-            if state.settings.isAdvanced {
+            if mode == .advanced {
                 RerunItems(recording: recording)
             } else {
                 Button("Transcribe Again", systemImage: "arrow.clockwise") {
@@ -263,7 +262,7 @@ struct SidebarView: View {
                 if let url = recording.audioURL { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             }
         }
-        if recording.kind == .recording, state.settings.isAdvanced {
+        if recording.kind == .recording, mode == .advanced {
             Button("Make This a Meeting", systemImage: RecordingKind.meeting.symbol) {
                 recording.kind = .meeting
                 try? context.save()
@@ -297,6 +296,7 @@ struct HistoryRow: View {
     private var isRenaming: Bool { renaming == recording.id }
 
     var body: some View {
+        let display = state.displayStatus(for: recording)
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: recording.kind.symbol)
                 .font(.system(size: 13))
@@ -340,7 +340,7 @@ struct HistoryRow: View {
                     if (recording.items?.isEmpty == false) {
                         Image(systemName: "note.text")
                     }
-                    if let warning = recording.warningMessage {
+                    if let warning = display.warning {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                             .help(warning)
@@ -349,21 +349,12 @@ struct HistoryRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                if let progress = state.progress[recording.id] {
-                    StatusChip(status: progress.status, fraction: progress.fraction,
-                               remaining: progress.remaining)
-                } else if state.isLive(recording.id), state.isPaused {
+                if display.isPaused {
                     Label("Paused", systemImage: "pause.circle.fill")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                } else if recording.status.isBusy {
-                    // Preparing and recording are live-path states; they never
-                    // get a queue entry, so they need the stored status.
-                    StatusChip(status: recording.status, fraction: 0)
-                } else if recording.status == .failed {
-                    StatusChip(status: .failed, fraction: 0)
-                } else if recording.status == .cancelled {
-                    StatusChip(status: .cancelled, fraction: 0)
+                } else if let chip = display.chip {
+                    StatusChip(status: chip.status, fraction: chip.fraction, remaining: chip.remaining)
                 }
             }
             Spacer(minLength: 0)

@@ -143,6 +143,41 @@ speaker said.
 
 Press ⌘B to bookmark the moment during a recording or during playback.
 
+### Draft the notes automatically
+
+On macOS 26 with Apple Intelligence on, the notes pane has a button, **Draft
+Notes from the Transcript** (⇧⌘D). The Apple Intelligence model on this Mac
+reads the transcript in parts and proposes a summary and notes of the five
+kinds. Nothing leaves the Mac.
+
+**The app writes nothing until you select it.** A sheet shows the draft. Each
+note has a checkbox and the moment it came from, thus you can play the line
+before you keep the note. The summary has a checkbox too. If you wrote a
+summary, the draft does not replace it unless you select that.
+
+**The model does not accept Tagalog.** It refuses a part of the transcript
+that is mostly Tagalog before it reads it. On a 93-minute Taglish meeting, a
+part with 28 % Tagalog words was accepted and parts with 50 % or more were
+refused. A Taglish meeting therefore gets the message "The model does not
+accept the language of this transcript", and no draft. Finding 13 in
+[FINDINGS.md](FINDINGS.md) gives the measurement, and the measurement of the
+models that do accept Taglish, none of which is in the app. An English
+meeting works.
+
+**Settings › General › Automatic notes** selects the language of the notes:
+English, or the mix of languages that the speakers used.
+
+**Draft after every recording, with no button.** Turn on **Draft the notes
+when a recording is complete** in the same place. The app then drafts as soon
+as a transcript is ready and shows you the sheet. It is off unless you turn it
+on, because it costs time on the chip after every recording.
+
+**The model never runs during a recording.** An automatic draft waits until
+the recording stops, and a draft that is already running stops when you press
+Record. The speech model and the notes model would otherwise share one chip,
+and a decode that arrives late is words missing from the transcript. This is
+the same rule that stops the transcription queue during a recording.
+
 ## Edit the transcript
 
 **Transcribe one turn again.** Right-click a turn and select **Transcribe

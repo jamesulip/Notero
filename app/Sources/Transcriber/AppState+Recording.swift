@@ -3,6 +3,7 @@ import SwiftData
 import SwiftUI
 import TranscriberCore
 import TranscriberEngine
+import TranscriberFlow
 import TranscriberStore
 
 /// The live session from the tap on New Recording to the row it leaves behind,
@@ -46,6 +47,10 @@ extension AppState {
             )
             return
         }
+        // A draft that is running would compete with the live decoder for the
+        // GPU, and a late hop is dropped words. Refer to `AutoDraft`.
+        stopNotesForRecording()
+
         let id = recording.id
         activeRecordingId = id
         let name = Paths.newRecordingName(id: id, ext: "m4a", on: recording.createdAt)
@@ -53,12 +58,7 @@ extension AppState {
         recording.status = .preparing
         try? context.save()
 
-        live.config = settings.sessionConfig
-        live.inputGainDb = settings.inputGainDb
-        live.isRoomMode = settings.roomMode
-        live.decodeLive = settings.liveTranscription
-        live.captureSource = settings.captureSource
-        live.microphoneUID = settings.microphoneUID
+        live.configure(settings.liveConfiguration)
 
         // The tap is global -- it has to be, or it stops delivering whenever
         // this app is the only thing playing -- so anything Notero plays goes
@@ -101,6 +101,8 @@ extension AppState {
         }
     }
 
+    /// Stops the session and carries out the plan for what it left behind.
+    /// The decisions are `StopPlan.make`; this method is the awaits.
     func stopRecording() async {
         let finished = await live.stop()
         live.onCommitted = nil
@@ -109,35 +111,35 @@ extension AppState {
         activeRecordingId = nil
         guard let result = finished else { return }
         await engines.endLive()
-        let decodedLive = live.decodeLive
+        let id = result.recordingId
+
+        let plan = StopPlan.make(
+            result: result, decodedLive: live.decodeLive, hadPersister: persister != nil,
+            diarizationMode: settings.diarizationMode, keepWorkingCopy: settings.keepWorkingCopy,
+            shortTakeMs: Self.shortTakeMs
+        )
 
         // A thrown decode is counted, not shown, during the session -- here is
-        // where it has to surface. Without this, a backend that failed on
-        // every hop produces a completed recording with an empty transcript.
-        if decodedLive, result.stats.failedHops > 0 {
-            let detail = result.stats.lastError.map { " Last error: \($0)" } ?? ""
-            warnings[result.recordingId] = result.stats.hops == 0
-                ? "Live transcription failed for this entire recording "
-                  + "(\(result.stats.failedHops) decode errors).\(detail) "
-                  + "The audio was saved -- use Transcribe Again to recover it."
-                : "\(result.stats.failedHops) decode(s) failed during this "
-                  + "recording, so some words may be missing.\(detail)"
+        // where it surfaces. Without it, a backend that failed on every hop
+        // produces a completed recording with an empty transcript.
+        if let warning = plan.liveFailureWarning {
+            await jobs.addWarning(warning, for: id)
         }
 
-        if decodedLive {
+        switch plan.transcript {
+        case .completePersister:
             // The final list replaces the rows written during the recording,
-            // through the same call the whole-file job uses; with no open
-            // revision it stores a fresh one, as before.
-            if let persister {
-                _ = try? await persister.complete(segments: result.segments,
-                                                  processMs: result.stats.totalInferMs)
-            } else {
-                _ = try? await writer.storeTranscript(
-                    segments: result.segments, roster: [], modelId: result.modelId,
-                    language: result.language, processMs: result.stats.totalInferMs,
-                    didDiarize: false, for: result.recordingId
-                )
-            }
+            // through the same call the whole-file job uses.
+            _ = try? await persister?.complete(segments: result.segments,
+                                               processMs: result.stats.totalInferMs)
+        case .storeFresh:
+            _ = try? await writer.storeTranscript(
+                segments: result.segments, roster: [], modelId: result.modelId,
+                language: result.language, processMs: result.stats.totalInferMs,
+                didDiarize: false, for: id
+            )
+        case .none:
+            break
         }
         try? await writer.attachAudio(
             fileName: result.archiveFileName ?? "",
@@ -145,68 +147,45 @@ extension AppState {
             durationMs: result.durationMs,
             waveform: result.waveform.isEmpty ? nil : result.waveform,
             lanes: result.lanes,
-            for: result.recordingId
+            for: id
         )
 
-        // A two-lane recording always gets the whole-file pass, even when the
-        // live decoder already produced a transcript. Live decoding runs on
-        // the two lanes summed -- one stream, because that is what a live
-        // transcript can afford -- so what it produced has no idea which side
-        // of the meeting each line came from. Only the whole-file pass reads
-        // the channels apart, and it is the better transcript in any case.
-        if !decodedLive || result.lanes.count > 1 {
-            // Capture-only session: the whole-file pass is the transcript.
-            // The working copy it needs is the one the session just wrote.
-            if let stored = recording(result.recordingId) {
+        switch plan.followUp {
+        case .fullTranscription:
+            // The working copy the pass needs is the one the session wrote.
+            if let stored = recording(id) {
                 enqueueTranscription(stored, work: .full)
             }
-        } else if settings.diarizationMode.performsDiarization {
-            let job = TranscriptionJob(
-                id: result.recordingId,
-                title: recording(result.recordingId)?.title ?? "Recording",
+        case .diarizeOnly(let mode):
+            jobs.enqueue(TranscriptionJob(
+                id: id,
+                title: recording(id)?.title ?? "Recording",
                 sourceURL: result.archiveFileName.map { Paths.recordingURL($0) },
                 cacheURL: result.cacheURL,
                 modelId: result.modelId,
                 language: result.language,
-                diarizationMode: settings.diarizationMode,
+                diarizationMode: mode,
                 work: .diarizeOnly,
                 discardCacheWhenDone: !settings.keepWorkingCopy,
-                expectedSpeakers: recording(result.recordingId)?.expectedSpeakers
-            )
-            queuedJobs[job.id] = job
-            await queue.enqueue(job)
-        } else {
-            try? await writer.updateStatus(.completed, progress: 1, for: result.recordingId)
-            if !settings.keepWorkingCopy {
+                expectedSpeakers: recording(id)?.expectedSpeakers
+            ))
+        case .markCompleted(let discardCache):
+            try? await writer.updateStatus(.completed, progress: 1, for: id)
+            if discardCache {
                 try? FileManager.default.removeItem(at: result.cacheURL)
             }
         }
-        // What changed under the recording: a microphone that was unplugged
-        // and replaced, a default input that moved, an input that could not
-        // be restarted. Kept with the recording, because the person reading
+
+        // What changed under the recording, kept with it: the person who reads
         // the transcript tomorrow has to know why the room goes quiet at 0:41.
-        // After the enqueue above, which clears the row's warning for the job
-        // it starts; the job's own warnings are added to this one, not put in
-        // its place.
-        if !result.notices.isEmpty {
-            let changes = result.notices.map(\.message).joined(separator: " ")
-            let combined = [warnings[result.recordingId], changes]
-                .compactMap { $0 }.joined(separator: " ")
-            warnings[result.recordingId] = combined
-            try? await writer.setWarning(combined, for: result.recordingId)
+        // After the enqueue, which clears the warning for the job it starts.
+        if let notices = plan.noticesWarning {
+            await jobs.addWarning(notices, for: id)
         }
         await queue.setLiveActive(false)
 
-        if result.durationMs < Self.shortTakeMs {
-            shortTake = ShortTake(
-                id: result.recordingId,
-                durationMs: result.durationMs,
-                words: decodedLive
-                    ? result.segments.reduce(0) {
-                        $0 + $1.displayText.split(whereSeparator: \.isWhitespace).count
-                    }
-                    : nil
-            )
+        if let take = plan.shortTake {
+            shortTake = ShortTake(id: id, durationMs: take.durationMs, words: take.words)
         }
     }
 

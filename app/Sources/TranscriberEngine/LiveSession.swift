@@ -20,6 +20,56 @@ public struct LiveSessionResult: Sendable {
     /// What changed under the recording, in order: a replaced microphone, a
     /// moved default input, a capture that could not be restarted.
     public var notices: [CaptureNotice]
+
+    public init(recordingId: UUID, segments: [Segment], durationMs: Int, archiveFileName: String?,
+                archiveSampleRate: Int, cacheURL: URL, waveform: [Float], stats: SessionStats,
+                modelId: String, language: String, lanes: [CaptureLane], notices: [CaptureNotice]) {
+        self.recordingId = recordingId
+        self.segments = segments
+        self.durationMs = durationMs
+        self.archiveFileName = archiveFileName
+        self.archiveSampleRate = archiveSampleRate
+        self.cacheURL = cacheURL
+        self.waveform = waveform
+        self.stats = stats
+        self.modelId = modelId
+        self.language = language
+        self.lanes = lanes
+        self.notices = notices
+    }
+}
+
+/// Everything a live session needs to know before it starts, in one value.
+///
+/// Six settings used to be copied onto `LiveSession` one property at a time
+/// from four call sites, and the launch warm-up copied four of the six. One
+/// value cannot be half-copied: a caller either hands over a configuration or
+/// it does not. The two knobs a person turns during a recording, the gain and
+/// room mode, stay as properties as well, because they change mid-session.
+public struct LiveConfiguration: Sendable, Equatable {
+    /// The decoder's knobs: language, prompt, hop, context.
+    public var session: SessionConfig
+    /// Whether to decode while recording, or only capture.
+    public var decodeLive: Bool
+    /// Which lanes to record.
+    public var captureSource: CaptureSource
+    /// Which microphone, by UID, or nil to follow the system default.
+    public var microphoneUID: String?
+    /// Microphone boost in decibels at the start. Adjustable afterwards.
+    public var inputGainDb: Float
+    /// High-pass for a far-field room at the start. Adjustable afterwards.
+    public var isRoomMode: Bool
+
+    public init(session: SessionConfig = SessionConfig(), decodeLive: Bool = true,
+                captureSource: CaptureSource = .default, microphoneUID: String? = nil,
+                inputGainDb: Float = InputGain.defaultDb, isRoomMode: Bool = false) {
+        self.session = session
+        self.decodeLive = decodeLive
+        self.captureSource = captureSource
+        self.microphoneUID = microphoneUID
+        self.inputGainDb = inputGainDb
+        self.isRoomMode = isRoomMode
+    }
 }
 
 /// The live path: capture -> working copy -> `LiveDecoder` -> commit -> UI.
@@ -97,7 +147,8 @@ public final class LiveSession {
     public private(set) var vadBackend = "energy"
     public private(set) var recordingId: UUID?
 
-    public var config = SessionConfig()
+    /// The decoder's knobs. Set through `configure(_:)`.
+    public private(set) var config = SessionConfig()
     public var isMuted = false { didSet { capture?.isMuted = isMuted } }
 
     /// Paused: the clock, the file and the live text all stop, and resume
@@ -116,19 +167,35 @@ public final class LiveSession {
         }
     }
 
-    /// Which lanes to record. Read at `start`; changing it mid-session does
-    /// nothing, because the archive's channel count is fixed when the file is
-    /// created.
-    public var captureSource: CaptureSource = .default
+    /// Which lanes to record. Read at `start`; the archive's channel count is
+    /// fixed when the file is created. Set through `configure(_:)`.
+    public private(set) var captureSource: CaptureSource = .default
 
-    /// Which microphone, by UID, or nil to follow the system default.
-    public var microphoneUID: String?
+    /// Which microphone, by UID, or nil to follow the system default. Set
+    /// through `configure(_:)`.
+    public private(set) var microphoneUID: String?
 
     /// Whether to decode while recording. Off, the session only captures --
     /// archive and working copy -- and the whole-file pass runs at stop. That
     /// pass is the better transcript anyway, and a two-hour meeting with no
     /// model running keeps the machine cool and the fan quiet at the table.
-    public var decodeLive = true
+    /// Set through `configure(_:)`.
+    public private(set) var decodeLive = true
+
+    /// Takes every setting the next session needs, in one call. Refused while
+    /// a session is under way: the archive and the decoder are already built
+    /// on the previous values, and a change now would describe a recording
+    /// other than the one being made. The gain and room mode are the
+    /// exception and have their own properties.
+    public func configure(_ configuration: LiveConfiguration) {
+        guard !state.isBusy else { return }
+        config = configuration.session
+        decodeLive = configuration.decodeLive
+        captureSource = configuration.captureSource
+        microphoneUID = configuration.microphoneUID
+        inputGainDb = configuration.inputGainDb
+        isRoomMode = configuration.isRoomMode
+    }
 
     /// Called with each batch of newly committed segments, in order, as soon
     /// as they are committed -- during the recording, not at Stop. This is how

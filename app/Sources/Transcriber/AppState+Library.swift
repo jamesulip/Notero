@@ -3,6 +3,7 @@ import SwiftData
 import SwiftUI
 import TranscriberCore
 import TranscriberEngine
+import TranscriberFlow
 import TranscriberStore
 import UniformTypeIdentifiers
 
@@ -100,7 +101,8 @@ extension AppState {
                               modelId: String? = nil,
                               diarizationMode: DiarizationMode? = nil) {
         guard let name = recording.audioFileName else { return }
-        warnings[recording.id] = nil
+        // The row's stored warning goes at once; the coordinator clears its own
+        // copy when it takes the job.
         recording.warningMessage = nil
         let job = TranscriptionJob(
             id: recording.id,
@@ -117,9 +119,7 @@ extension AppState {
             expectedSpeakers: recording.expectedSpeakers,
             lanes: recording.lanes
         )
-        progress[recording.id] = JobProgress(status: .pending, fraction: 0)
-        queuedJobs[recording.id] = job
-        Task { await queue.enqueue(job) }
+        jobs.enqueue(job)
     }
 
     /// Decode again, optionally on a named tier. Nil means the tier Settings
@@ -136,7 +136,7 @@ extension AppState {
     /// with the turn's speaker on them.
     func retranscribe(_ recording: StoredRecording, turn block: TranscriptBlock,
                       tier: ModelTier = .accurate) {
-        guard let name = recording.audioFileName, progress[recording.id] == nil else { return }
+        guard let name = recording.audioFileName, !jobs.isBusy(recording.id) else { return }
         let job = TranscriptionJob(
             id: recording.id,
             title: recording.title,
@@ -152,9 +152,7 @@ extension AppState {
             roomMode: settings.roomMode,
             lanes: recording.lanes
         )
-        progress[recording.id] = JobProgress(status: .pending, fraction: 0)
-        queuedJobs[recording.id] = job
-        Task { await queue.enqueue(job) }
+        jobs.enqueue(job)
     }
 
     /// Speaker identification only, over the transcript that exists. Forced on
@@ -166,7 +164,7 @@ extension AppState {
     }
 
     func cancelJob(_ id: UUID) {
-        Task { await queue.cancel(id) }
+        jobs.cancel(id)
     }
 
     // MARK: - Deleting

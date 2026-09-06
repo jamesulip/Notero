@@ -542,6 +542,132 @@ and this measurement says nothing about short prompts. `suppressBlank` was
 measured in the same run (25.8% / 27.3% / 58.3% against 24.2% / 27.3% / 71.7%)
 and left at WhisperKit's default.
 
+## 13. Automatic notes: Apple's model refuses Taglish, and the small MLX models write English notes from it but not Tagalog ones (2026-09-06)
+
+The notes workspace has had the shape for this since v1: a summary and five
+typed lists whose rows keep a source timestamp. The question was which
+on-device model could write into it, and how well, on a Taglish meeting. The
+reference is the one meeting in the library with notes written by hand: a
+93-minute product-taxonomy meeting, 1,525 segments, an 845-character summary and
+41 notes (15 decisions, 9 action items, 9 key points, 5 questions, 3
+follow-ups). `eval/langscore.py` classes 64 % of its words as Tagalog; the
+function-word list in `NotesScoring.languageMix` classes 43 %. Both numbers
+below name their heuristic.
+
+**Apple's Foundation Models framework refuses the transcript before it reads
+it.** `SystemLanguageModel.default` is available on this Mac and lists 23
+locales, none of them Filipino. A `LanguageModelSession.respond` with a part of
+the transcript as the prompt returns `unsupportedLanguageOrLocale` in 0.0 s.
+Four parts of the same meeting, chosen by their Tagalog share, with the default
+guardrails and with `.permissiveContentTransformations`:
+
+| Part of the meeting | Tagalog words (langscore) | Default guardrails | Permissive guardrails |
+|---|---:|---|---|
+| the most English turns, 3,646 chars | 28 % | accepted, 3.5 s | accepted, 2.0 s |
+| mixed turns, 3,744 chars | 50 % | refused | refused |
+| 6:21–12:00 in order, 4,450 chars | 71 % | refused | refused |
+| the most Tagalog turns, 3,452 chars | 92 % | refused | refused |
+
+The limit is somewhere between 28 % and 50 % Tagalog words, and it is a check on
+the prompt's language, not on its content: the guardrail setting changes
+nothing, and the instructions were English in every case. A Taglish meeting
+is refused whole, since every part of it is over the limit. The pipeline
+treats that refusal as fatal rather than skipping the refused parts: a draft
+made from the English-heavy minutes of a Taglish meeting would misrepresent
+it. The app says "The model does not accept the language of this transcript."
+
+On what it accepts, the model works. An export reduced to the 95 segments
+with at most 25 % Tagalog words (6 % overall) gave 8 notes in 11 s across 2
+parts, 6 of them with a source line, grounding 0.68 with none under 0.4 -- and
+two of the eight were noise ("25, 25." as a key point, "Akay, sir?" as a
+question). Guided generation held the shape; it did not hold the judgement.
+
+**The MLX models accept Taglish.** `eval/notes_eval.py` runs the same parts,
+the same instructions and the same JSON request through `mlx_lm`, and scores
+the draft as `transcribe --notes` does. Five runs on the reference meeting,
+14 parts of at most 5,000 characters, temperature 0.2, on this 24 GB Mac:
+
+| Model (4-bit) | Weights | s per part | Notes K/D/A/Q/F | With a line | Grounding mean, under 0.4 | Tagalog in notes (langscore) | Hand-written notes covered at 0.5 / 0.3 of 41 | Draft notes that match one at 0.5 / 0.3 |
+|---|---:|---:|---|---:|---|---:|---|---|
+| Qwen2.5-3B-Instruct, English | 1.6 GB | 4.1 | 41/5/27/10/20 = 103 | 100 | 0.42, 48 | 10 % | 3 / 15 | 5 / 28 of 103 |
+| Qwen3-4B-Instruct-2507, English | 2.1 GB | 6.6 | 90/0/3/7/13 = 113 | 111 | 0.47, 36 | 12 % | 11 / 25 | 15 / 48 of 113 |
+| Qwen3-4B-Instruct-2507, as spoken | 2.1 GB | 8.0 | 92/0/2/7/10 = 111 | 105 | 0.55, 30 | 46 % | 9 / 22 | 9 / 42 of 111 |
+| gemma-3-4b-it-qat, English | 2.8 GB | 7.0 | 74/12/21/15/9 = 131 | 126 | 0.46, 47 | 13 % | 6 / 21 | 8 / 35 of 131 |
+| Qwen3-8B, English | 4.3 GB | 11.3 | 71/1/13/8/7 = 100 | 92 | 0.42, 40 | 13 % | 5 / 17 | 5 / 33 of 100 |
+| Qwen3-4B-Instruct-2507, English, at most 5 notes a part | 2.1 GB | 4.5 | 47/0/2/4/6 = 59 | 56 | 0.47, 22 | 15 % | 10 / 19 | 10 / 25 of 59 |
+
+Loading takes 1.5 to 2.6 s; a 93-minute meeting is read in one and a half to
+two minutes on the 4B models. "Grounding" is the share of a note's content
+words that occur in the transcript within two minutes of the note's
+timestamp, and English notes about Tagalog speech score lower by
+construction -- which is why the as-spoken run has the best grounding and the
+worst text. "Covered at 0.5" needs half of a hand-written note's content words
+in one draft note; 0.3 is the looser match a paraphrase gets. Neither is a
+judgement of the writing, so the drafts were also read.
+
+What the reading says:
+
+- **Qwen3-4B's English summary is the hand-written summary in other words.**
+  It names the flowchart module and its highlighting, the hierarchy of
+  groupings, each person's own workspace with a super admin publishing to
+  the company backbone, the prefix for unapproved modules, the
+  taxonomy of category, product family, product, model and variant, the 10 %
+  costing buffer and the Thursday review. The key points are specific and
+  carry the right timestamps ("To avoid naming conflicts, modules created by
+  a user carry a prefix until they are approved. (30:39)").
+- **Every 4B-class model over-extracts, and Qwen3 cannot tell a decision from
+  a key point.** 103 to 131 notes against 41 by hand. Qwen3-4B filed 90 of
+  its 113 as key points and none as decisions, where the hand-written notes
+  have 15 decisions; sentences that begin "The group agreed to..." landed
+  under key points. Gemma spread its notes across the kinds but invented
+  more (47 under 0.4). Qwen2.5-3B called 27 notes action items. The content
+  is largely right; the kind is the weak part, and that is what the review
+  sheet's Change To menu is for until a second pass fixes it.
+- **The as-spoken style does not work at 4B.** Qwen3-4B reads Taglish well
+  enough to write the English notes above, and cannot write Tagalog: "Pinagkakatiwalaan
+  ang pagbabayad ng version at approval para sa pagkakaiba ng data" -- payment
+  for the version, entrusted, for the difference of the data -- is
+  representative, and the notes drift into English half-way through. The
+  notes reach 46 % Tagalog words against the transcript's 64 %, and the
+  Tagalog that is there is wrong. English is the default for the notes.
+- **Twice the weights bought nothing.** Qwen3-8B covered 5 hand-written
+  notes to the 4B's 11, took 11.3 s a part to its 6.6, and its summary says
+  "no specific decisions were made" of a meeting whose notes hold 15. The
+  4B-Instruct-2507 tune is the better note-taker of the two on this meeting.
+- **A cap of five notes a part halves the draft and keeps the coverage.** The
+  same Qwen3-4B with "at most 5 items" wrote 59 notes instead of 113, covered
+  10 hand-written notes at 0.5 to the 11 before, and took 4.5 s a part to
+  6.6. The cap costs nothing that the reference measures; the app's prompt
+  and the guided schema still say ten, and should say five.
+- Qwen2.5-3B broke the JSON on 8 of its 14 answers, closing with `}}}` and
+  no `]`. Every one of them held usable notes, and `ChunkNotes.parse` now
+  reads the summary string and each item object on its own when the brackets
+  are wrong. Its first score, with the strict parser, was 31 notes and
+  0 of 41 covered.
+
+**Measured and not shipped.** A working MLX backend was built against these
+numbers -- `MLXNotesEngine` over `mlx-swift-lm`, a picker, a downloader, and
+the Metal shader step that `swift build` cannot do -- and driven through the
+app: Qwen3 4B drafted 120 notes from the whole reference meeting in 1 min
+46 s. It is not in this change. Shipping it costs two Swift dependencies, a
+2.1 GB download per user, an app binary that grows from 41 MB to 107 MB, and
+a build that needs Xcode's separately-downloaded Metal Toolchain. The
+maintainer's judgement is that a hosted model is the better route for the
+notes, so the local one was left out rather than carried.
+
+That decision has a price this file should state. **Apple's model is the only
+backend in the app, and it refuses Taglish**, so automatic notes do nothing
+for the meetings this project exists for until another backend lands. And a
+hosted model would send the transcript off the machine, which every other
+part of this project promises not to do; whatever ships next has to answer
+that in the README, in SECURITY.md and at the point of use, not quietly.
+
+What the numbers say about any future backend, hosted or not: notes in
+English, a cap of five a part rather than ten, and a second pass on the kind
+of each note, which is the weak part of every model measured here. The
+harness and the CLI report the same scores, so the next candidate is one
+command on the same meeting.
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a

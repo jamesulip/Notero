@@ -39,18 +39,18 @@ cd .. && python3 -m venv .venv
 ```
 
 Neither test suite needs model weights, a microphone or a network. This is
-deliberate, and you must keep this property. Refer to "The four layers".
+deliberate, and you must keep this property. Refer to "The five layers".
 
 ## Before you open a pull request
 
 Run each command that applies to your change:
 
 ```bash
-cd app && swift build && swift test    # 301 tests, and 0 warnings
+cd app && swift build && swift test    # 369 tests, and 0 warnings
 ./.venv/bin/python -m pytest           # 75 tests
 ```
 
-The 301 tests are 273 XCTest tests and 28 swift-testing tests. Keep
+The 369 tests are 341 XCTest tests and 28 swift-testing tests. Keep
 `swift build` at **zero warnings**. There is no linter and no formatter for
 either language. Write code in the style of the code around it.
 `.editorconfig` gives the indentation.
@@ -59,9 +59,9 @@ CI (`.github/workflows/app.yml`) builds the app, runs `swift test`, and
 assembles the release bundle. It does this on each push and each pull request
 that touches `app/`. CI needs no secrets, thus it also runs on a fork.
 
-## The four layers
+## The five layers
 
-`app/Sources/` has four layers. Each layer must build and be testable without
+`app/Sources/` has five layers. Each layer must build and be testable without
 the layer above it:
 
 | Layer | Can depend on | Must not touch |
@@ -69,7 +69,12 @@ the layer above it:
 | `TranscriberCore` | nothing | AVFoundation, CoreML, SwiftUI, SwiftData, models |
 | `TranscriberStore` | Core | inference of any kind |
 | `TranscriberEngine` | Core | SwiftUI |
-| `Transcriber` | Core, Store, Engine | — |
+| `TranscriberFlow` | Core, Store, Engine | SwiftUI, AppKit |
+| `Transcriber` | Core, Store, Engine, Flow | — |
+
+Put a decision of the app in `TranscriberFlow` with a test, and not in a view
+or in `AppState`. `JobCoordinator`, `RecordingDisplayStatus` and `StopPlan` are
+the pattern.
 
 This split lets you test the commit policy, the segment merger, the exporters
 and the search index on a Mac that has no microphone and no model weights.

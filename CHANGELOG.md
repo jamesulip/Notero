@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+### Automatic notes
+
+- On macOS 26 with Apple Intelligence on, the notes pane has **Draft Notes
+  from the Transcript** (⇧⌘D). The Apple Intelligence model on this Mac reads
+  the transcript in parts and proposes a summary and notes of the five kinds,
+  each with the line it came from. A sheet shows the draft with a checkbox on
+  each note. The app writes nothing until you select it, and it does not
+  replace a summary that you wrote unless you select that. Nothing leaves the
+  Mac. **Settings › General › Automatic notes** selects English or the mix of
+  languages that the speakers used.
+- **The Apple model refuses Tagalog.** Measured on a 93-minute Taglish meeting
+  from the library: a part with 28 % Tagalog words was accepted, and parts with
+  50 % and 92 % were refused before any generation. The app says so instead of
+  showing a draft made from the parts that passed. Finding 13 in
+  `docs/FINDINGS.md` gives the measurement, and the measurement of the local
+  models that do accept Taglish, on the same meeting against the notes that
+  were written by hand. **None of those is in the app**, so automatic notes do
+  nothing for a Taglish meeting yet.
+- `transcribe --notes EXPORT.json` drafts the notes for an exported recording
+  and scores the draft: how much of each note is in the transcript near its
+  timestamp, which language the notes lean to, and how many of the hand-written
+  notes in the export the draft also has. `eval/notes_eval.py` does the same
+  with a local model through `mlx_lm`, thus a candidate can be measured before
+  it is wired into the app.
+- **Settings › General › Automatic notes › Draft the notes when a recording is
+  complete** drafts with no button, as soon as a transcript is ready. Off
+  unless you turn it on. **The model never runs during a recording:** an
+  automatic draft waits for the recording to stop, and a draft that is running
+  stops when you press Record, because the speech model and the notes model
+  would share one chip and a late decode is missing words. `AutoDraft` in
+  `TranscriberFlow` is that decision, with a test for each way it can be
+  refused.
+- The review sheet belongs to the recording rather than to the notes pane. An
+  automatic draft finishes whether or not that pane is open, and while the
+  sheet hung off the pane a draft made with it closed was invisible.
+- The pipeline is behind a fourth engine protocol, `NotesGenerating`, beside
+  the three for speech, voice activity and speakers. A second backend is a new
+  conformance.
+
 ### Simple mode
 
 - The app has two modes. **Simple** is the default. It shows the recordings, a
@@ -79,6 +118,24 @@
 - Measured and not shipped: a Taglish style primer in the prompt made the live
   path repeat the primer (27% to 96% WER), and `suppressBlank` was noise.
   `transcribe --style-hint` and `--prompt` repeat the measurement.
+
+### Under the hood
+
+- A new layer, `TranscriberFlow`, holds the decisions of the app with no
+  window: the job coordinator, the display status of a recording and the stop
+  plan. Each has tests. Before, these were private methods and internal
+  dictionaries on the app state, and no test reached them. The live session's
+  failure warning is now saved; before, it was in memory only unless a device
+  notice followed it.
+- The speaker roster sync and the search index exist one time each, for both
+  the main actor and the writer actor. They were byte-identical copies.
+- The live session takes its six settings as one value. Four call sites copied
+  them one by one, and the launch path copied four of the six.
+- The recording screen and the player bar are split by rate of change, thus a
+  meter tick or a playhead tick re-runs one small view and not the screen. The
+  transcript rows read one playing-turn value in place of the raw playhead.
+- The interface mode is an environment value with one `advancedOnly()`
+  modifier, in place of a read of the settings at each control.
 
 ### The audio input
 

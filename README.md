@@ -27,6 +27,9 @@ No recording, no transcript and no note goes off your Mac.
 - Meeting notes: a summary and five lists, which are key points, decisions,
   action items, questions and follow-ups. Each item keeps the timestamp and the
   transcript line that it came from.
+- A draft of the notes from the Apple Intelligence model on this Mac, on
+  macOS 26, with a review before anything is written. The Apple model does not
+  accept Tagalog; the measurement of the models that do is in the findings.
 - Transcript editing, with revisions and one-step undo for each turn. One
   turn can be transcribed again on another tier, without the rest of the
   meeting.
@@ -85,6 +88,8 @@ development workflow.
 ```
 SwiftUI              the window, the library and the transcript view
   ↓
+TranscriberFlow      the decisions of the app: jobs, status, the stop of a recording
+  ↓
 TranscriberStore     the SwiftData schema and the queries
   ↓
 TranscriberCore      the commit policy, the merger, the exports and the search
@@ -94,7 +99,7 @@ TranscriberEngine    the audio, the models and the job queue
   └── FluidAudio     voice activity detection and speaker identification
 ```
 
-There are four layers. Each layer builds and tests without the layer above it.
+There are five layers. Each layer builds and tests without the layer above it.
 Three protocols hide the engines, thus you can replace a backend without a
 change to the user interface.
 
@@ -140,7 +145,7 @@ encryption of its own, thus FileVault is the only protection.
 | Document | Contents |
 | --- | --- |
 | [docs/USAGE.md](docs/USAGE.md) | What each part of the app does, and the keyboard |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The four layers, the pipelines and the algorithms |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The five layers, the pipelines and the algorithms |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Build, tests, CI, scripts and the workflow |
 | [docs/MODELS.md](docs/MODELS.md) | The three tiers, the model IDs and the naming trap |
 | [docs/CLI.md](docs/CLI.md) | The `transcribe` command-line tool |

@@ -4,6 +4,7 @@ import SwiftData
 import SwiftUI
 import TranscriberCore
 import TranscriberEngine
+import TranscriberFlow
 import TranscriberStore
 
 /// Where the detail pane is pointing.
@@ -20,10 +21,12 @@ enum Route: Hashable {
 /// everything else through here.
 ///
 /// The stored state and the small view-facing helpers are here. The larger
-/// concerns each have a file: `AppState+Jobs` consumes the queue's events,
-/// `AppState+Recording` runs the live session, `AppState+Library` imports,
-/// re-runs and deletes, `AppState+Models` manages weights and memory. Members
-/// those files reach are internal rather than private for that reason.
+/// concerns each have a file: `AppState+Recording` runs the live session,
+/// `AppState+Library` imports, re-runs and deletes, `AppState+Models` manages
+/// weights and memory. The queue's events are consumed by `jobs`, a
+/// `JobCoordinator` from TranscriberFlow, which owns the progress, the
+/// warnings and the transcript ticks the views read. Members those files
+/// reach are internal rather than private for that reason.
 @Observable
 final class AppState {
 
@@ -31,6 +34,11 @@ final class AppState {
     let settings: AppSettings
     let engines: EngineHost
     let queue: TranscriptionQueue
+    /// Consumes the queue's events; owns what the views read about jobs.
+    let jobs: JobCoordinator
+    /// One draft of automatic notes per recording, from the request to the
+    /// review. Refer to `AppState+Notes`.
+    let notes = NotesCoordinator()
     let live: LiveSession
     let player = AudioPlayer()
     let writer: TranscriptWriter
@@ -119,26 +127,33 @@ final class AppState {
     /// split view gives the sidebar and the inspector their widths and lets
     /// the transcript overflow, cropping the window at both edges. Below
     /// `inspectorNeedsWidth` the inspector folds away instead.
-    var contentWidth: CGFloat = .infinity
+    ///
+    /// Written on every resize event. The two flags below are what the views
+    /// read, and they are stored rather than computed so that a reader
+    /// invalidates only when a threshold is crossed, not on every pixel of a
+    /// drag. `@Observable` skips the write when the value is unchanged.
+    var contentWidth: CGFloat = .infinity {
+        didSet {
+            isCompact = contentWidth < Self.sidebarNeedsWidth
+            hasRoomForInspector = contentWidth >= Self.inspectorNeedsWidth
+        }
+    }
     /// Sidebar at its ideal (268), a readable transcript (~450) and the
     /// inspector at its ideal (320), with slack for the dividers.
     static let inspectorNeedsWidth: CGFloat = 1_060
-    var hasRoomForInspector: Bool { contentWidth >= Self.inspectorNeedsWidth }
+    private(set) var hasRoomForInspector = true
     /// Sidebar at its minimum (200) plus a transcript column worth reading.
     /// Below this the sidebar folds and the detail has the window to itself;
     /// the toolbar toggle still brings it back on request.
     static let sidebarNeedsWidth: CGFloat = 800
-    var isCompact: Bool { contentWidth < Self.sidebarNeedsWidth }
+    private(set) var isCompact = false
 
-    /// Per-recording pipeline progress, keyed by recording id.
-    var progress: [UUID: JobProgress] = [:]
-    /// Bumped when a job writes rows into a recording's transcript: a batch of
-    /// partial rows, the final rows, the speaker labels. The transcript view
-    /// reads it instead of counting the rows, which is a query it would run
-    /// on every redraw.
-    var transcriptTicks: [UUID: Int] = [:]
-    /// Per-recording notes about work that finished imperfectly.
-    var warnings: [UUID: String] = [:]
+    /// The transcript turn under the playhead, or nil between turns. Set by
+    /// the transcript view's follower, which is the one view that reads the
+    /// raw playhead. The rows read this instead: it changes when the turn
+    /// changes, not twenty times a second.
+    var playingBlockId: UUID?
+
     /// The recording the live session is working on, set the moment the user
     /// asks for one rather than when the first sample arrives. `live.recordingId`
     /// only exists once capture starts, which on a cold model is several
@@ -146,35 +161,11 @@ final class AppState {
     /// something for.
     var activeRecordingId: UUID?
 
-    var pump: Task<Void, Never>?
     var warmup: Task<Void, Never>?
 
-    /// Jobs handed to the queue, kept until they finish: `.partial` events
-    /// need the model and language the job was started with.
-    var queuedJobs: [UUID: TranscriptionJob] = [:]
-    /// The revision each running job is appending to, from its first window.
-    var openTranscripts: [UUID: UUID] = [:]
     /// Writes the live session's committed lines as they land, so a crash
     /// mid-meeting keeps everything up to the last commit.
     var livePersister: LiveTranscriptPersister?
-    /// When the current stage of each job began and the last estimate made
-    /// from it. The estimate is smoothed against this.
-    var stageClock: [UUID: StageClock] = [:]
-
-    struct StageClock {
-        var status: TranscriptionStatus
-        var since: Date
-        var remaining: TimeInterval?
-    }
-
-    struct JobProgress: Equatable {
-        var status: TranscriptionStatus
-        var fraction: Double
-        /// Seconds left in this stage, once enough of it has run to say.
-        var remaining: TimeInterval?
-        /// How far into the audio the decode has reached.
-        var coveredMs: Int = 0
-    }
 
     struct AppAlert: Identifiable {
         let id = UUID()
@@ -188,22 +179,24 @@ final class AppState {
         let engines = EngineHost(modelsDirectory: Paths.models,
                                  preferNeuralVAD: settings.neuralVAD)
         self.engines = engines
-        self.queue = TranscriptionQueue(engines: engines)
+        let queue = TranscriptionQueue(engines: engines)
+        let writer = TranscriptWriter(modelContainer: container)
+        self.queue = queue
+        self.writer = writer
+        self.jobs = JobCoordinator(queue: queue, writer: writer)
         self.live = LiveSession(engines: engines, supportDirectory: Paths.support)
-        self.writer = TranscriptWriter(modelContainer: container)
-        live.config = settings.sessionConfig
-        live.inputGainDb = settings.inputGainDb
-        live.isRoomMode = settings.roomMode
-        // Read here, not only at the first recording: the launch warm-up asks
-        // the session whether it decodes live, and the session's own default
-        // is yes. With the setting off, a 1.6 GB model loaded at every launch
-        // for a path that was never going to run.
-        live.decodeLive = settings.liveTranscription
+        // The whole configuration, not four of its six fields: the launch
+        // warm-up asks the session whether it decodes live, and a session
+        // configured by hand once loaded a 1.6 GB model at every launch for
+        // a path that was never going to run.
+        live.configure(settings.liveConfiguration)
         // Before any view reads the store: the live session and the queue did
         // not survive the last quit, so anything they still claim to be working
         // on is stranded.
         _ = try? RecordingStore.recoverInterrupted(in: container.mainContext)
-        startPump()
+        // Before the pump starts, so no finished job is missed.
+        jobs.onFinished = { [weak self] id in self?.autoDraftNotes(for: id) }
+        jobs.start()
     }
 
     /// Persists the gain and pushes it to a session already running, so moving
@@ -232,6 +225,22 @@ final class AppState {
     /// Pending questions, asked one at a time.
     var duplicateImports: [DuplicateImport] = []
 
+    // MARK: - Display status
+
+    /// The one ladder for a recording's row, header and empty transcript. The
+    /// warning has one source here: the stored one, else the coordinator's.
+    func displayStatus(for recording: StoredRecording) -> RecordingDisplayStatus {
+        RecordingDisplayStatus.make(
+            status: recording.status,
+            progress: jobs.progress(for: recording.id),
+            isLive: isLive(recording.id),
+            isPaused: isPaused,
+            warning: recording.warningMessage ?? jobs.warning(for: recording.id),
+            hasAudio: recording.hasAudio,
+            errorMessage: recording.errorMessage
+        )
+    }
+
     // MARK: - Lookup
 
     func recording(_ id: UUID) -> StoredRecording? {
@@ -248,6 +257,13 @@ final class AppState {
     }
 
     // MARK: - Creating
+
+    /// What Record makes. Simple mode makes a meeting, which opens with the
+    /// notes beside the transcript; Advanced mode makes a plain recording and
+    /// offers the meeting as its own command.
+    var newRecordingKind: RecordingKind {
+        settings.isAdvanced ? .recording : .meeting
+    }
 
     @discardableResult
     func newItem(_ kind: RecordingKind) -> StoredRecording? {

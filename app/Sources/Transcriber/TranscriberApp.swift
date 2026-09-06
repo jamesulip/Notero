@@ -74,6 +74,7 @@ struct TranscriberApp: App {
         WindowGroup("Notero", id: "main") {
             ContentView()
                 .environment(state)
+                .environment(\.interfaceMode, state.settings.interfaceMode)
                 .modelContainer(state.container)
                 // Small enough to sit beside another window. Below ~700 pt the
                 // sidebar folds, below ~1060 the inspector does; every row in
@@ -105,6 +106,7 @@ struct TranscriberApp: App {
         Settings {
             SettingsView()
                 .environment(state)
+                .environment(\.interfaceMode, state.settings.interfaceMode)
                 .modelContainer(state.container)
         }
 

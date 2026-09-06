@@ -63,7 +63,7 @@ catalogue and the storage layout.
 cd app && swift test
 ```
 
-There are 301 tests: 273 XCTest tests and 28 swift-testing tests. **They need
+There are 369 tests: 341 XCTest tests and 28 swift-testing tests. **They need
 no model weights, no microphone and no network.** This property is deliberate,
 and you must keep it. The four-layer split in
 [ARCHITECTURE.md](ARCHITECTURE.md) is what makes it possible.
@@ -73,6 +73,7 @@ and you must keep it. The four-layer split in
 | `TranscriberCoreTests` | Pure logic. No fakes are necessary. |
 | `TranscriberStoreTests` | The SwiftData schema and the queries. |
 | `TranscriberEngineTests` | The real pipeline, driven through fakes for the three engine protocols. |
+| `TranscriberFlowTests` | The job coordinator against an in-memory store, the display status and the stop plan. |
 
 If model weights are unavailable for a test, add a fake. Do not skip the test.
 

@@ -178,7 +178,7 @@ extension AppState {
         if isRecording {
             Task { await stopRecording() }
         } else if !isLiveBusy {
-            newItem(settings.isAdvanced ? .recording : .meeting)
+            newItem(newRecordingKind)
         }
     }
 
