@@ -240,9 +240,11 @@ struct TranscriptView: View {
                 .frame(maxWidth: .infinity)
                 .background {
                     // Lives inside the scroll view so it re-renders per player
-                    // tick on its own, not the whole list with it.
+                    // tick on its own, not the whole list with it. It is the
+                    // one view here that reads the raw playhead; it publishes
+                    // the turn under it for the rows.
                     PlaybackFollower(blocks: blocks) { blockId in
-                        guard state.followPlayback, state.player.isPlaying else { return }
+                        guard let blockId, state.followPlayback, state.player.isPlaying else { return }
                         request(blockId, anchor: .center)
                     }
                 }
@@ -429,18 +431,23 @@ struct TranscriptView: View {
 }
 
 /// Watches the playhead and names the block under it. Its body is the only
-/// thing that re-evaluates per tick.
+/// thing that re-evaluates per tick: a binary search over the blocks, and a
+/// write to `AppState.playingBlockId` that `@Observable` drops when the turn
+/// has not changed. Every visible row used to read the playhead itself and
+/// re-run its body twenty times a second; now only the row that gains or
+/// loses the highlight does.
 private struct PlaybackFollower: View {
     @Environment(AppState.self) private var state
     let blocks: [TranscriptBlock]
-    let onChange: (UUID) -> Void
+    let onChange: (UUID?) -> Void
 
     var body: some View {
         let current = TranscriptGrouping.blockIndex(at: state.player.currentMs, in: blocks)
             .map { blocks[$0].id }
         Color.clear
-            .onChange(of: current) { _, next in
-                if let next { onChange(next) }
+            .onChange(of: current, initial: true) { _, next in
+                state.playingBlockId = next
+                onChange(next)
             }
     }
 }
@@ -581,11 +588,10 @@ struct TranscriptBlockRow: View {
     /// Nil when the transcript cannot be edited right now.
     var onEdit: (() -> Void)?
 
-    /// Read here rather than passed in from the list. Observation then
-    /// invalidates only the rows, and `LazyVStack` only builds the visible
-    /// ones -- so a two-hour transcript costs the same per tick as a short one.
+    /// The coarse value from the follower, not the raw playhead: this row
+    /// invalidates when the highlight arrives or leaves, and at no other tick.
     private var isPlaying: Bool {
-        block.contains(ms: state.player.currentMs)
+        state.playingBlockId == block.id
     }
 
     private var isSelected: Bool {

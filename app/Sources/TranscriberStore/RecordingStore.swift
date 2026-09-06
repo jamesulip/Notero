@@ -29,10 +29,16 @@ public enum RecordingStore {
     }
 
     public static func defaultTitle(for kind: RecordingKind, at date: Date) -> String {
+        "\(kind.label) \(titleFormatter.string(from: date))"
+    }
+
+    /// One formatter for the life of the process. `DateFormatter` is costly
+    /// to make and this is a static helper, so a fresh one per call was waste.
+    private static let titleFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMM, HH:mm"
-        return "\(kind.label) \(formatter.string(from: date))"
-    }
+        return formatter
+    }()
 
     // MARK: - Deleting
 

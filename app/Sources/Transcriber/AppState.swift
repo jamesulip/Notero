@@ -119,16 +119,32 @@ final class AppState {
     /// split view gives the sidebar and the inspector their widths and lets
     /// the transcript overflow, cropping the window at both edges. Below
     /// `inspectorNeedsWidth` the inspector folds away instead.
-    var contentWidth: CGFloat = .infinity
+    ///
+    /// Written on every resize event. The two flags below are what the views
+    /// read, and they are stored rather than computed so that a reader
+    /// invalidates only when a threshold is crossed, not on every pixel of a
+    /// drag. `@Observable` skips the write when the value is unchanged.
+    var contentWidth: CGFloat = .infinity {
+        didSet {
+            isCompact = contentWidth < Self.sidebarNeedsWidth
+            hasRoomForInspector = contentWidth >= Self.inspectorNeedsWidth
+        }
+    }
     /// Sidebar at its ideal (268), a readable transcript (~450) and the
     /// inspector at its ideal (320), with slack for the dividers.
     static let inspectorNeedsWidth: CGFloat = 1_060
-    var hasRoomForInspector: Bool { contentWidth >= Self.inspectorNeedsWidth }
+    private(set) var hasRoomForInspector = true
     /// Sidebar at its minimum (200) plus a transcript column worth reading.
     /// Below this the sidebar folds and the detail has the window to itself;
     /// the toolbar toggle still brings it back on request.
     static let sidebarNeedsWidth: CGFloat = 800
-    var isCompact: Bool { contentWidth < Self.sidebarNeedsWidth }
+    private(set) var isCompact = false
+
+    /// The transcript turn under the playhead, or nil between turns. Set by
+    /// the transcript view's follower, which is the one view that reads the
+    /// raw playhead. The rows read this instead: it changes when the turn
+    /// changes, not twenty times a second.
+    var playingBlockId: UUID?
 
     /// Per-recording pipeline progress, keyed by recording id.
     var progress: [UUID: JobProgress] = [:]

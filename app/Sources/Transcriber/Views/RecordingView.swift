@@ -4,19 +4,44 @@ import TranscriberStore
 
 /// The live screen. Everything on it is transient except the committed text.
 ///
-/// Simple mode shows the clock, the meter, the three buttons and the text.
+/// Three view types, one per rate of change. The header reads the clock,
+/// the level and the meter, which move ten to twelve times a second. The
+/// transcript reads the committed lines and the partial, which move at each
+/// commit. The footer reads the statistics, which move at each decode. As
+/// one body, a meter tick re-ran the transcript list and the footer with it.
+///
+/// Simple mode shows the clock, the meter, the buttons and the text.
 /// Advanced mode adds the gain slider, room mode, the model and the decode
 /// statistics.
 struct RecordingView: View {
     @Environment(AppState.self) private var state
     let recording: StoredRecording
 
-    private var advanced: Bool { state.settings.isAdvanced }
-
     /// The model is still loading. Capture has not started, so there is no
     /// elapsed time, no level and nothing to mute yet -- but there is very
     /// much something to say.
     private var isPreparing: Bool { !state.live.state.isRecording }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if isPreparing {
+                RecordingPreparingHeader()
+            } else {
+                RecordingHeader()
+            }
+            Divider()
+            LiveTranscript(isPreparing: isPreparing)
+            Divider()
+            RecordingFooter()
+        }
+    }
+}
+
+/// The model load, which is seconds cold. Reads the session state only.
+private struct RecordingPreparingHeader: View {
+    @Environment(AppState.self) private var state
+
+    private var advanced: Bool { state.settings.isAdvanced }
 
     /// Specifically the model load, as opposed to `.finishing`, which uses the
     /// same header on the way out and should not be told the model loads once.
@@ -29,29 +54,12 @@ struct RecordingView: View {
     private var modelSummary: String {
         let id = state.settings.liveModelId
         let model = ModelCatalogue.option(id)
-        return [model?.label ?? id, model?.sizeLabel, languageLabel]
+        return [model?.label ?? id, model?.sizeLabel, RecordingLabels.language(state.settings.language)]
             .compactMap { $0 }
             .joined(separator: " · ")
     }
 
-    private var languageLabel: String {
-        state.settings.language == "auto"
-            ? "Automatic language"
-            : (LanguageCatalogue.option(state.settings.language)?.label ?? state.settings.language)
-    }
-
     var body: some View {
-        VStack(spacing: 0) {
-            if isPreparing { preparingHeader } else { recordingHeader }
-
-            Divider()
-            liveTranscript
-            Divider()
-            footer
-        }
-    }
-
-    private var preparingHeader: some View {
         VStack(spacing: 12) {
             HStack(spacing: 10) {
                 if state.live.state.fraction == nil {
@@ -94,15 +102,22 @@ struct RecordingView: View {
         .frame(maxWidth: .infinity)
         .background(.background.secondary)
     }
+}
 
+/// The clock, the meter and the transport. The one view here whose body runs
+/// on every audio chunk.
+private struct RecordingHeader: View {
+    @Environment(AppState.self) private var state
+
+    private var advanced: Bool { state.settings.isAdvanced }
     private var isPaused: Bool { state.live.isPaused }
 
-    private var headerTitle: String {
+    private var title: String {
         if isPaused { return "Paused" }
         return state.live.isMuted ? "Muted" : "Recording"
     }
 
-    private var recordingHeader: some View {
+    var body: some View {
         VStack(spacing: 14) {
             HStack(spacing: 8) {
                 Circle()
@@ -110,7 +125,7 @@ struct RecordingView: View {
                     .frame(width: 10, height: 10)
                     .opacity(state.live.isMuted && !isPaused ? 0.3 : 1)
                     .symbolEffect(.pulse, isActive: !isPaused)
-                Text(headerTitle)
+                Text(title)
                     .font(.headline)
                     .contentTransition(.identity)
             }
@@ -155,16 +170,24 @@ struct RecordingView: View {
 
             // Words on the buttons while there is room, icons in a narrow window.
             ViewThatFits(in: .horizontal) {
-                transportButtons.fixedSize()
-                transportButtons.labelStyle(.iconOnly).fixedSize()
+                RecordingTransport().fixedSize()
+                RecordingTransport().labelStyle(.iconOnly).fixedSize()
             }
         }
         .padding(.vertical, 24)
         .frame(maxWidth: .infinity)
         .background(.background.secondary)
     }
+}
 
-    private var transportButtons: some View {
+/// Mute, Pause, Stop and Bookmark. Reads the two switches only, so the
+/// clock does not rebuild the buttons.
+private struct RecordingTransport: View {
+    @Environment(AppState.self) private var state
+
+    private var isPaused: Bool { state.live.isPaused }
+
+    var body: some View {
         HStack(spacing: 16) {
             Button {
                 state.live.isMuted.toggle()
@@ -211,27 +234,29 @@ struct RecordingView: View {
             .help("Bookmark this moment (⌘B)")
         }
     }
+}
 
-    private var liveTranscript: some View {
+/// The committed lines and the provisional tail. Reads them and the two
+/// flags that decide the empty state; not the clock.
+private struct LiveTranscript: View {
+    @Environment(AppState.self) private var state
+    let isPreparing: Bool
+
+    private var isPaused: Bool { state.live.isPaused }
+
+    var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     ForEach(state.live.segments) { segment in
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Text(TimeFormat.short(ms: segment.startMs))
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(.tertiary)
-                                .frame(width: 52, alignment: .trailing)
-                            Text(segment.displayText)
-                                .textSelection(.enabled)
-                        }
-                        .id(segment.id)
+                        LiveSegmentRow(startMs: segment.startMs, text: segment.displayText)
+                            .id(segment.id)
                     }
 
                     if !state.live.partial.isEmpty {
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Text("")
-                                .frame(width: 52)
+                            Color.clear
+                                .frame(width: 52, height: 1)
                             // Provisional. It may be rewritten by the next pass;
                             // committed text above it never will be.
                             Text(state.live.partial)
@@ -276,17 +301,41 @@ struct RecordingView: View {
             }
         }
     }
+}
 
+/// One committed line. Plain data in, so the list skips the rows that did
+/// not change when a new one lands.
+private struct LiveSegmentRow: View {
+    let startMs: Int
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(TimeFormat.short(ms: startMs))
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.tertiary)
+                .frame(width: 52, alignment: .trailing)
+            Text(text)
+                .textSelection(.enabled)
+        }
+    }
+}
+
+/// The model, the language and the decode statistics.
+private struct RecordingFooter: View {
+    @Environment(AppState.self) private var state
     @State private var showStats = false
 
-    private var footer: some View {
+    private var advanced: Bool { state.settings.isAdvanced }
+
+    var body: some View {
         HStack(spacing: 14) {
             ViewThatFits(in: .horizontal) {
-                footerLeading.fixedSize()
-                footerLeading.labelStyle(.iconOnly).fixedSize()
+                leading.fixedSize()
+                leading.labelStyle(.iconOnly).fixedSize()
             }
             Spacer()
-            Text(languageLabel)
+            Text(RecordingLabels.language(state.settings.language))
                 .lineLimit(1)
         }
         .font(.caption)
@@ -297,7 +346,7 @@ struct RecordingView: View {
     }
 
     @ViewBuilder
-    private var footerLeading: some View {
+    private var leading: some View {
         HStack(spacing: 14) {
             if !state.live.decodeLive {
                 if advanced {
@@ -325,19 +374,26 @@ struct RecordingView: View {
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(state.live.stats.droppedHops > 0 ? .orange : .secondary)
-                .popover(isPresented: $showStats, arrowEdge: .top) { statsPopover }
+                .popover(isPresented: $showStats, arrowEdge: .top) {
+                    LiveStatsTable(stats: state.live.stats, vadBackend: state.live.vadBackend)
+                }
             } else {
                 Label("Live text", systemImage: "text.bubble")
             }
         }
     }
+}
 
-    private var statsPopover: some View {
-        let stats = state.live.stats
-        return Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 6) {
+/// The decode counters. Plain data in: the popover shows a snapshot.
+private struct LiveStatsTable: View {
+    let stats: SessionStats
+    let vadBackend: String
+
+    var body: some View {
+        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 6) {
             GridRow {
                 Text("Voice detection").foregroundStyle(.secondary)
-                Text(state.live.vadBackend == "silero" ? "Silero (neural)" : "Energy")
+                Text(vadBackend == "silero" ? "Silero (neural)" : "Energy")
             }
             GridRow {
                 Text("Decodes").foregroundStyle(.secondary)
@@ -406,5 +462,14 @@ struct RecordingView: View {
         .font(.callout)
         .monospacedDigit()
         .padding(14)
+    }
+}
+
+/// Labels the live screen shares between its views.
+private enum RecordingLabels {
+    static func language(_ code: String) -> String {
+        code == "auto"
+            ? "Automatic language"
+            : (LanguageCatalogue.option(code)?.label ?? code)
     }
 }

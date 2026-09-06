@@ -7,7 +7,6 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Environment(AppState.self) private var state
-    @Environment(\.modelContext) private var context
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     /// What the user last chose while there was room, restored on widening.
     @State private var wideVisibility = NavigationSplitViewVisibility.all
