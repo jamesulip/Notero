@@ -27,7 +27,11 @@ No recording, no transcript and no note goes off your Mac.
 - Meeting notes: a summary and five lists, which are key points, decisions,
   action items, questions and follow-ups. Each item keeps the timestamp and the
   transcript line that it came from.
-- Transcript editing, with revisions and one-step undo for each turn.
+- Transcript editing, with revisions and one-step undo for each turn. One
+  turn can be transcribed again on another tier, without the rest of the
+  meeting.
+- Your corrections export as a reference set, thus the evaluation harness can
+  score each change on your own meetings.
 - Synchronized transcript and audio playback, with bookmarks.
 - Full-text search across each transcript, note, action item and bookmark.
 - Export to TXT, Markdown, SRT, VTT and JSON.

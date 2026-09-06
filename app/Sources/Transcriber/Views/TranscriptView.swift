@@ -616,6 +616,11 @@ struct TranscriptBlockRow: View {
                 }
             }
 
+            // Not selectable. With selection on, a double-click on the words
+            // selected a word instead of opening the editor, and a right-click
+            // on them showed the text menu of macOS instead of the turn's
+            // menu: the gestures worked only on the time and the speaker name.
+            // The turn's menu has Copy, and the editor has the text.
             Group {
                 if highlights.isEmpty {
                     Text(block.text)
@@ -623,7 +628,6 @@ struct TranscriptBlockRow: View {
                     HighlightedText(text: block.text, highlights: highlights)
                 }
             }
-            .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
@@ -676,6 +680,24 @@ struct TranscriptBlockRow: View {
                 Divider()
                 Button("Edit the Text…", systemImage: "pencil") { onEdit() }
                 speakerMenu
+                if recording.hasAudio {
+                    // The one bad window in a long meeting, without the other
+                    // four hours. Advanced offers the tiers; Simple takes the
+                    // Accurate one, which is why anyone redoes a turn.
+                    if state.settings.isAdvanced {
+                        Menu("Transcribe This Turn Again", systemImage: "arrow.clockwise") {
+                            ForEach(ModelTier.allCases) { tier in
+                                Button("\(tier.label) · \(ModelCatalogue.option(state.settings.modelId(for: tier))?.label ?? "")") {
+                                    state.retranscribe(recording, turn: block, tier: tier)
+                                }
+                            }
+                        }
+                    } else {
+                        Button("Transcribe This Turn Again", systemImage: "arrow.clockwise") {
+                            state.retranscribe(recording, turn: block)
+                        }
+                    }
+                }
             }
             Divider()
             Button("Copy", systemImage: "doc.on.doc") {

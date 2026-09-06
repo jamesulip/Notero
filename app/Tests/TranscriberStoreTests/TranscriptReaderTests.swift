@@ -94,6 +94,56 @@ final class TranscriptReaderTests: XCTestCase {
         XCTAssertEqual(try TranscriptReader.segmentRows(ids: [], in: context).count, 0)
     }
 
+    func testReplacingARangeKeepsTheRestAndRenumbers() async throws {
+        let context = container.mainContext
+        let (recording, transcript) = try seed(rows: 10, in: context)
+        let writer = TranscriptWriter(modelContainer: container)
+
+        // Rows 3, 4 and 5 start at 9, 12 and 15 s. Replace 9 s ..< 18 s.
+        let removed = try await writer.replaceSegments(
+            fromMs: 9_000, toMs: 18_000,
+            with: [Segment(index: 0, startMs: 9_100, endMs: 13_000, text: "better", speakerId: "S9"),
+                   Segment(index: 0, startMs: 13_100, endMs: 17_500, text: "words", speakerId: "S9")],
+            for: recording.id
+        )
+        XCTAssertEqual(removed, 3)
+
+        let rows = try TranscriptReader.segments(ofTranscript: transcript.id, in: context)
+        XCTAssertEqual(rows.count, 9)
+        XCTAssertEqual(rows.map(\.index), Array(0..<9), "renumbered in time order")
+        XCTAssertEqual(rows[3].text, "better")
+        XCTAssertEqual(rows[4].text, "words")
+        XCTAssertEqual(rows[4].speakerId, "S9")
+        XCTAssertEqual(rows[2].text, "line 2")
+        XCTAssertEqual(rows[5].text, "line 6")
+        // The search index is rebuilt on the writer's context; read it back
+        // from the store rather than from the row this context still holds.
+        let id = recording.id
+        let fresh = try ModelContext(container).fetch(FetchDescriptor<StoredRecording>(
+            predicate: #Predicate { $0.id == id }
+        )).first
+        let index = try XCTUnwrap(fresh?.searchText)
+        XCTAssertTrue(index.contains("better"), index)
+        XCTAssertTrue(index.contains("words"), index)
+        XCTAssertFalse(index.contains("line 4"), "the replaced row left the index")
+    }
+
+    func testCorrectedTranscriptsFindsOnlyRecordingsWithARealEdit() async throws {
+        let context = container.mainContext
+        let (edited, transcript) = try seed(rows: 4, in: context)
+        let (_, untouched) = try seed(rows: 4, in: context)
+        let (_, restored) = try seed(rows: 4, in: context)
+        transcript.orderedSegments[1].textClean = "a correction"
+        restored.orderedSegments[0].textClean = restored.orderedSegments[0].text
+        _ = untouched
+        try context.save()
+
+        let found = try await TranscriptReader(modelContainer: container).correctedTranscripts()
+        XCTAssertEqual(found.map(\.recordingId), [edited.id])
+        XCTAssertEqual(found.first?.segments.count, 4)
+        XCTAssertEqual(found.first?.segments[1].displayText, "a correction")
+    }
+
     /// The two ways to read a long transcript, on a store on disk, so the
     /// numbers mean what the app sees. The walk of the relationship faults
     /// every row on the way to the sort; the fetch is one query. Printed, not

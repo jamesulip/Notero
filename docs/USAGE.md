@@ -145,12 +145,39 @@ Press ⌘B to bookmark the moment during a recording or during playback.
 
 ## Edit the transcript
 
+**Transcribe one turn again.** Right-click a turn and select **Transcribe
+This Turn Again**. The app decodes only that turn, on the Accurate tier in
+Simple mode and on the tier that you select in Advanced mode, and replaces the
+lines of the turn. The rest of the transcript does not change, and the turn
+keeps its speaker. A four-hour meeting with one bad window is therefore fixed
+in seconds. The first run on the Accurate tier downloads its model.
+
 Double-click a turn to edit it line by line. The app keeps the raw model output
 below your edit. The search index and the exports read the edited text.
 
 You can restore a line, delete it, or move it to a different speaker. Press ⌘Z
 to undo all edits to one turn in one step. A menu in the info bar shows the
 earlier revisions.
+
+## Your corrections as references
+
+Each edit that you make is stored beside the raw model text. A recording with
+edits is therefore a scored pair: the raw text is the hypothesis, and your
+edited transcript is the reference. In Advanced mode, select **File › Export
+Corrections as References…** and select a folder. The app writes a dated
+folder with a copy of each corrected recording, its reference text, the raw
+text, the corrected lines with the raw text beside each, `manifest.json` for
+the evaluation harness, and `summary.md`. The summary scores the raw text
+against your corrections with no new decode.
+
+To score a configuration against the folder, from the repository root:
+
+```bash
+python3 eval/compare_language.py --manifest FOLDER/manifest.json \
+    --bin app/.build/release/transcribe --models models --arms tl
+```
+
+**The folder holds real meetings.** Do not attach it to a public issue.
 
 ## Find it again
 

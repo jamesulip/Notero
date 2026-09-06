@@ -35,6 +35,25 @@
   Technical English. The status names are nouns: In queue, Preparation,
   Transcription, Speaker identification, Complete.
 
+### One turn again, and your corrections as references
+
+- Right-click a turn and select **Transcribe This Turn Again**. The app
+  decodes only that turn, on the Accurate tier in Simple mode or on the tier
+  you select in Advanced mode, and replaces its lines in place. The turn keeps
+  its speaker. Before this change, one bad window in a four-hour meeting cost a
+  second decode of the four hours.
+- **File › Export Corrections as References…** (Advanced) writes a folder with
+  a copy of each corrected recording, the reference text with your edits, the
+  raw model text, the corrected lines with the raw text beside each, a
+  `manifest.json` for `eval/compare_language.py`, and a `summary.md` that
+  scores the raw text against your corrections with no new decode. The project
+  had no real Taglish references before this.
+
+- A double-click or a right-click works on the whole turn. Before this change,
+  the words of a turn were selectable text: a double-click on them selected a
+  word instead of opening the editor, and a right-click on them showed the text
+  menu of macOS instead of the menu of the turn. Copy is in the menu of the turn.
+
 ### A long transcript opens fast
 
 - The transcript view reads the rows in one query, in time order, off the main

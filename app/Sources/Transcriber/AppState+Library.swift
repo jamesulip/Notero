@@ -130,6 +130,33 @@ extension AppState {
                              modelId: tier.map { settings.modelId(for: $0) })
     }
 
+    /// One turn again, on a tier, without the rest of the meeting. Accurate
+    /// unless another tier is named: the turn is being redone because the
+    /// first model got it wrong. The rows of the turn are replaced in place,
+    /// with the turn's speaker on them.
+    func retranscribe(_ recording: StoredRecording, turn block: TranscriptBlock,
+                      tier: ModelTier = .accurate) {
+        guard let name = recording.audioFileName, progress[recording.id] == nil else { return }
+        let job = TranscriptionJob(
+            id: recording.id,
+            title: recording.title,
+            sourceURL: Paths.recordingURL(name),
+            cacheURL: AudioCache.url(for: recording.id, under: Paths.support),
+            modelId: settings.modelId(for: tier),
+            language: settings.language,
+            prompt: settings.promptOrNil,
+            diarizationMode: .off,
+            work: .range(TranscriptionJob.RangeRequest(fromMs: block.startMs, toMs: block.endMs,
+                                                       speakerId: block.speakerId)),
+            discardCacheWhenDone: !settings.keepWorkingCopy,
+            roomMode: settings.roomMode,
+            lanes: recording.lanes
+        )
+        progress[recording.id] = JobProgress(status: .pending, fraction: 0)
+        queuedJobs[recording.id] = job
+        Task { await queue.enqueue(job) }
+    }
+
     /// Speaker identification only, over the transcript that exists. Forced on
     /// regardless of the setting: asking for it is the setting.
     func rediarize(_ recording: StoredRecording) {

@@ -28,6 +28,34 @@ public actor TranscriptReader {
         TranscriptGrouping.blocks(from: try segments(ofTranscript: id))
     }
 
+    /// Every recording whose latest transcript has at least one corrected
+    /// row, with that transcript's rows. What the reference-set export reads.
+    ///
+    /// One query finds the edited rows; the recordings come from them, so a
+    /// library of hundreds of untouched meetings costs nothing here.
+    public func correctedTranscripts() throws -> [CorrectedTranscript] {
+        let edited = try modelContext.fetch(FetchDescriptor<StoredSegment>(
+            predicate: #Predicate { $0.textClean != nil }
+        ))
+        var seen: Set<UUID> = []
+        var out: [CorrectedTranscript] = []
+        for row in edited {
+            guard let transcript = row.transcript, let recording = transcript.recording,
+                  recording.transcript?.id == transcript.id,
+                  !seen.contains(transcript.id) else { continue }
+            seen.insert(transcript.id)
+            let segments = try Self.segments(ofTranscript: transcript.id, in: modelContext)
+            guard ReferenceSet.hasCorrections(segments) else { continue }
+            out.append(CorrectedTranscript(
+                recordingId: recording.id, title: recording.title,
+                createdAt: recording.createdAt, durationMs: recording.durationMs,
+                audioURL: recording.audioURL, language: transcript.language,
+                modelId: transcript.modelId, segments: segments
+            ))
+        }
+        return out.sorted { $0.createdAt < $1.createdAt }
+    }
+
     /// The same fetch on any context, for a caller that is already on the
     /// main actor and must answer at once.
     public static func segments(ofTranscript id: UUID, in context: ModelContext) throws -> [Segment] {
@@ -60,6 +88,18 @@ public actor TranscriptReader {
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
+}
+
+/// A recording with corrected rows, as the reference-set export needs it.
+public struct CorrectedTranscript: Sendable {
+    public var recordingId: UUID
+    public var title: String
+    public var createdAt: Date
+    public var durationMs: Int
+    public var audioURL: URL?
+    public var language: String
+    public var modelId: String
+    public var segments: [Segment]
 }
 
 public extension Segment {

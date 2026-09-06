@@ -332,6 +332,83 @@ extension PipelineDecodeTests {
     }
 }
 
+/// One stretch decoded again: only words inside it come back, on the file's
+/// timeline, and a quiet range is still decoded as one window.
+final class RangeDecodeTests: XCTestCase {
+
+    private actor SilentVAD: VoiceActivityDetecting {
+        func prepare(progress: ProgressReport?) async throws {}
+        func push(_ samples: [Float]) async throws -> VoiceActivityReading {
+            VoiceActivityReading(isSpeech: false, probability: 0, trailingSilenceMs: 0, speechMs: 0)
+        }
+        func clearSpeechCounter() {}
+        func reset() {}
+        func regions(in samples: [Float]) async throws -> [SpeechRegion] { [] }
+    }
+
+    func testOnlyWordsInsideTheRangeComeBackOnTheFileTimeline() async throws {
+        // Two minutes of audio; the fake says one word per second of window.
+        let source = ArrayPCM([Float](repeating: 0.1, count: Audio.sampleRate * 120))
+        let report = try await OfflinePipeline.transcribeRange(
+            SpeechRegion(startMs: 60_000, endMs: 70_000),
+            in: source, using: SilentVAD(), asr: FakeRecognizer(),
+            language: "tl", prompt: nil
+        )
+        XCTAssertEqual(report.windowCount, 1, "a quiet range is decoded as one window")
+        XCTAssertEqual(report.droppedWindows, 0)
+        XCTAssertFalse(report.tokens.isEmpty)
+        for token in report.tokens {
+            // The first word may start in the 200 ms of padding before the
+            // range, as the model stamps it; its midpoint is inside.
+            XCTAssertGreaterThanOrEqual(token.startMs, 60_000 - OfflinePipeline.padMs)
+            XCTAssertGreaterThanOrEqual((token.startMs + token.endMs) / 2, 60_000)
+            XCTAssertLessThan(token.startMs, 70_000)
+        }
+        XCTAssertFalse(report.tokens.contains { $0.text.contains("hallucinated") })
+    }
+
+    /// The detector hears the turn start late. The decode must not.
+    private actor LateVAD: VoiceActivityDetecting {
+        func prepare(progress: ProgressReport?) async throws {}
+        func push(_ samples: [Float]) async throws -> VoiceActivityReading {
+            VoiceActivityReading(isSpeech: false, probability: 0, trailingSilenceMs: 0, speechMs: 0)
+        }
+        func clearSpeechCounter() {}
+        func reset() {}
+        func regions(in samples: [Float]) async throws -> [SpeechRegion] {
+            let ms = samples.count * 1000 / Audio.sampleRate
+            return [SpeechRegion(startMs: 3_000, endMs: ms - 2_000)]
+        }
+    }
+
+    func testTheRangeEdgesAreTheDecodeEdgesWhateverTheDetectorHeard() async throws {
+        let source = ArrayPCM([Float](repeating: 0.1, count: Audio.sampleRate * 120))
+        let report = try await OfflinePipeline.transcribeRange(
+            SpeechRegion(startMs: 60_000, endMs: 70_000),
+            in: source, using: LateVAD(), asr: FakeRecognizer(),
+            language: "tl", prompt: nil
+        )
+        let first = try XCTUnwrap(report.tokens.first)
+        let last = try XCTUnwrap(report.tokens.last)
+        // The fake speaks one word per second from the window's start, which
+        // is 200 ms before the range: that first word is kept, because most
+        // of it lies inside the range.
+        XCTAssertEqual(first.startMs, 60_000 - OfflinePipeline.padMs, "the first word of the turn was decoded")
+        XCTAssertGreaterThan(last.startMs, 68_000, "the last seconds of the turn were decoded")
+    }
+
+    func testAnEmptyRangeDecodesNothing() async throws {
+        let source = ArrayPCM([Float](repeating: 0.1, count: Audio.sampleRate * 10))
+        let report = try await OfflinePipeline.transcribeRange(
+            SpeechRegion(startMs: 5_000, endMs: 5_000),
+            in: source, using: SilentVAD(), asr: FakeRecognizer(),
+            language: "tl", prompt: nil
+        )
+        XCTAssertEqual(report.windowCount, 0)
+        XCTAssertTrue(report.tokens.isEmpty)
+    }
+}
+
 final class TranscriptionQueueCancellationTests: XCTestCase {
     func testCancellingAQueuedJobEmitsCancelledAndFinished() async throws {
         let scratch = FileManager.default.temporaryDirectory

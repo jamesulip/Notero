@@ -56,6 +56,9 @@ struct AppCommands: Commands {
             Button("Export…") { state.isExporting = true }
                 .keyboardShortcut("e")
                 .disabled(state.selectedRecording == nil)
+            if state.settings.isAdvanced {
+                Button("Export Corrections as References…") { state.exportReferenceSet() }
+            }
         }
 
         CommandGroup(after: .textEditing) {

@@ -278,6 +278,18 @@ A new `TranscriptReader` for each read, on purpose. A context keeps the values
 it has loaded, and a fetch does not refresh them, thus a long-lived reader
 would return an edit that the main context saved a moment ago in its old form.
 
+## One turn again
+
+`TranscriptionJob.Work.range` decodes one stretch of a recording again.
+`OfflinePipeline.transcribeRange` runs the voice detector over the stretch,
+packs the windows as the whole-file pass does, decodes them with the retry
+ladder, and keeps only the words that start inside the stretch. The queue
+stamps the speaker of the turn on the new rows, and
+`TranscriptWriter.replaceSegments` deletes the rows that start inside the
+stretch, inserts the new rows and renumbers the transcript. The rows change in
+place, in the latest revision: a new revision for forty seconds of a four-hour
+meeting would copy every row and break every note that points at one.
+
 ## Transcript revisions
 
 A transcript is a revision and not a mutable document. `StoredRecording` holds

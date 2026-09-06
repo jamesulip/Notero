@@ -9,6 +9,25 @@ public struct TranscriptionJob: Sendable, Identifiable, Equatable {
         /// Audio is already transcribed -- the live path did it. Only identify
         /// speakers and stamp them onto the segments that exist.
         case diarizeOnly
+        /// Decode one stretch again and replace the rows in it. The rest of
+        /// the transcript is not touched.
+        case range(RangeRequest)
+    }
+
+    /// One turn to decode again: its bounds on the recording's timeline, and
+    /// the speaker its new rows get. The speaker is carried rather than found
+    /// again, because one turn is one speaker and the diarizer would need the
+    /// whole recording to say more.
+    public struct RangeRequest: Sendable, Equatable {
+        public var fromMs: Int
+        public var toMs: Int
+        public var speakerId: String?
+
+        public init(fromMs: Int, toMs: Int, speakerId: String?) {
+            self.fromMs = fromMs
+            self.toMs = toMs
+            self.speakerId = speakerId
+        }
     }
 
     public var id: UUID
@@ -103,6 +122,9 @@ public enum JobEvent: Sendable {
     /// pass. `coveredMs` is how far into the audio the decode has reached.
     case partial(id: UUID, segments: [Segment], coveredMs: Int)
     case transcribed(id: UUID, payload: TranscriptionPayload)
+    /// One stretch decoded again. The rows between the bounds are replaced
+    /// by these; `modelId` is the model that produced them.
+    case rangeTranscribed(id: UUID, fromMs: Int, toMs: Int, segments: [Segment], modelId: String)
     case diarized(id: UUID, spans: [SpeakerSpan], roster: [SpeakerLabel])
     case failed(id: UUID, message: String)
     /// The job finished, but not intact. Surfaced rather than swallowed: a
@@ -222,6 +244,16 @@ public actor TranscriptionQueue {
             emit(.stage(id: job.id, status: .preparing, progress: 0))
 
             let source = try await workingCopy(for: job)
+
+            // Before the envelope: a range job is a few seconds of work, and
+            // the envelope walks the whole file for a waveform that exists.
+            if case .range(let request) = job.work {
+                try await transcribeRange(job, request: request,
+                                          source: job.roomMode ? HighPassPCM(source) : source)
+                if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
+                return
+            }
+
             let waveform = WaveformAnalyzer.envelope(of: source)
             let durationMs = source.durationMs
             emit(.prepared(id: job.id, durationMs: durationMs, waveform: waveform))
@@ -417,6 +449,39 @@ public actor TranscriptionQueue {
             emit(.failed(id: job.id, message: error.localizedDescription))
             emit(.stage(id: job.id, status: .failed, progress: 0))
         }
+    }
+
+    /// One turn again, on the model the job names. The speaker of the turn is
+    /// stamped on the new rows; nothing else in the transcript changes.
+    private func transcribeRange(_ job: TranscriptionJob, request: TranscriptionJob.RangeRequest,
+                                 source: any PCMSource) async throws {
+        try await engines.loadModel(job.modelId) { _, fraction in
+            if let fraction {
+                self.emit(.stage(id: job.id, status: .preparing, progress: fraction))
+            }
+        }
+        emit(.stage(id: job.id, status: .transcribing, progress: 0))
+        try? await engines.prepareVAD(progress: nil)
+        let vad = await engines.voiceActivity
+        let asr = await engines.recognizer
+        let report = try await OfflinePipeline.transcribeRange(
+            SpeechRegion(startMs: request.fromMs, endMs: request.toMs),
+            in: source, using: vad, asr: asr,
+            language: job.language, prompt: job.prompt
+        ) { fraction in
+            self.emit(.stage(id: job.id, status: .transcribing, progress: fraction))
+        }
+        try Task.checkCancellation()
+        if report.droppedWindows > 0 {
+            emit(.warning(id: job.id, message:
+                "\(report.droppedWindows) window\(report.droppedWindows == 1 ? "" : "s") of the "
+                + "turn could not be decoded again. The old text of that part is gone."))
+        }
+        var segments = SegmentMerger.segments(from: report.tokens)
+        for index in segments.indices { segments[index].speakerId = request.speakerId }
+        emit(.rangeTranscribed(id: job.id, fromMs: request.fromMs, toMs: request.toMs,
+                               segments: segments, modelId: job.modelId))
+        emit(.stage(id: job.id, status: .completed, progress: 1))
     }
 
     private func diarizeOnly(_ job: TranscriptionJob, source: MappedPCM) async throws {

@@ -278,6 +278,19 @@ of commits for each stream falls by approximately one third.
 
 ## Measure your own audio
 
+**Your corrections are the best references you have.** In Advanced mode,
+**File › Export Corrections as References…** writes a folder with a copy of
+each recording that has edits, the edited transcript as the reference, and a
+`manifest.json`. Point the harness at it:
+
+```bash
+python3 eval/compare_language.py --manifest FOLDER/manifest.json \
+    --bin app/.build/release/transcribe --models models --arms tl
+```
+
+The folder's `summary.md` also gives the raw model text scored against your
+corrections, with no new decode. That number is the error rate you experience.
+
 In the app, press ⇧⌘K for the model benchmark. It measures the three tiers on
 your own audio and recommends the slowest tier that stays at real-time speed.
 **It ranks the tiers by decode time, and it does not measure accuracy.**

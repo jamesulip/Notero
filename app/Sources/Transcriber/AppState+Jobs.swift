@@ -81,6 +81,10 @@ extension AppState {
             )
             transcriptTicks[id, default: 0] += 1
 
+        case .rangeTranscribed(let id, let fromMs, let toMs, let segments, _):
+            _ = try? await writer.replaceSegments(fromMs: fromMs, toMs: toMs, with: segments, for: id)
+            transcriptTicks[id, default: 0] += 1
+
         case .diarized(let id, let spans, let roster):
             try? await writer.applySpeakers(spans: spans, roster: roster, for: id)
             transcriptTicks[id, default: 0] += 1
