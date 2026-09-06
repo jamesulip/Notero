@@ -77,9 +77,9 @@ public actor TranscriptWriter {
         modelContext.insert(transcript)
         insert(segments, into: transcript)
 
-        syncSpeakers(roster, on: recording)
+        SpeakerSync.apply(roster, to: recording, in: modelContext)
         recording.updatedAt = Date()
-        RecordingStore.reindexOffMain(recording)
+        SearchIndex.rebuild(recording)
         try modelContext.save()
         return revision
     }
@@ -152,9 +152,9 @@ public actor TranscriptWriter {
         transcript.didDiarize = didDiarize
         transcript.isComplete = true
 
-        syncSpeakers(roster, on: recording)
+        SpeakerSync.apply(roster, to: recording, in: modelContext)
         recording.updatedAt = Date()
-        RecordingStore.reindexOffMain(recording)
+        SearchIndex.rebuild(recording)
         try modelContext.save()
         return transcript.revision
     }
@@ -185,7 +185,7 @@ public actor TranscriptWriter {
             row.index = index
         }
         recording.updatedAt = Date()
-        RecordingStore.reindexOffMain(recording)
+        SearchIndex.rebuild(recording)
         try modelContext.save()
         return removed
     }
@@ -223,30 +223,9 @@ public actor TranscriptWriter {
             )?.speakerId
         }
         transcript.didDiarize = true
-        syncSpeakers(roster, on: recording)
+        SpeakerSync.apply(roster, to: recording, in: modelContext)
         recording.updatedAt = Date()
         try modelContext.save()
-    }
-
-    private func syncSpeakers(_ roster: [SpeakerLabel], on recording: StoredRecording) {
-        var existing = Dictionary(
-            (recording.speakers ?? []).map { ($0.speakerId, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        for (offset, label) in roster.enumerated() {
-            if let row = existing.removeValue(forKey: label.id) {
-                row.speechMs = label.speechMs
-                row.colorIndex = offset
-            } else {
-                let row = StoredSpeaker(speakerId: label.id,
-                                        displayName: label.displayName,
-                                        speechMs: label.speechMs,
-                                        colorIndex: offset)
-                row.recording = recording
-                modelContext.insert(row)
-            }
-        }
-        for orphan in existing.values { modelContext.delete(orphan) }
     }
 
     private func find(_ id: UUID) throws -> StoredRecording? {
@@ -255,19 +234,5 @@ public actor TranscriptWriter {
         )
         descriptor.fetchLimit = 1
         return try modelContext.fetch(descriptor).first
-    }
-}
-
-extension RecordingStore {
-    /// The same flattening as `reindex`, callable from the writer actor.
-    ///
-    /// `RecordingStore` is main-actor because it is the UI's entry point; the
-    /// background writer needs this one operation and nothing else from it.
-    nonisolated static func reindexOffMain(_ recording: StoredRecording) {
-        var parts = [recording.title, recording.summary, recording.body]
-        parts.append(contentsOf: (recording.transcript?.orderedSegments ?? []).map(\.displayText))
-        parts.append(contentsOf: (recording.items ?? []).map(\.text))
-        parts.append(contentsOf: (recording.bookmarks ?? []).map(\.label))
-        recording.searchText = parts.filter { !$0.isEmpty }.joined(separator: "\n")
     }
 }
