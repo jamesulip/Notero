@@ -4,6 +4,7 @@ import SwiftData
 import SwiftUI
 import TranscriberCore
 import TranscriberEngine
+import TranscriberFlow
 import TranscriberStore
 
 /// Where the detail pane is pointing.
@@ -20,10 +21,12 @@ enum Route: Hashable {
 /// everything else through here.
 ///
 /// The stored state and the small view-facing helpers are here. The larger
-/// concerns each have a file: `AppState+Jobs` consumes the queue's events,
-/// `AppState+Recording` runs the live session, `AppState+Library` imports,
-/// re-runs and deletes, `AppState+Models` manages weights and memory. Members
-/// those files reach are internal rather than private for that reason.
+/// concerns each have a file: `AppState+Recording` runs the live session,
+/// `AppState+Library` imports, re-runs and deletes, `AppState+Models` manages
+/// weights and memory. The queue's events are consumed by `jobs`, a
+/// `JobCoordinator` from TranscriberFlow, which owns the progress, the
+/// warnings and the transcript ticks the views read. Members those files
+/// reach are internal rather than private for that reason.
 @Observable
 final class AppState {
 
@@ -31,6 +34,8 @@ final class AppState {
     let settings: AppSettings
     let engines: EngineHost
     let queue: TranscriptionQueue
+    /// Consumes the queue's events; owns what the views read about jobs.
+    let jobs: JobCoordinator
     let live: LiveSession
     let player = AudioPlayer()
     let writer: TranscriptWriter
@@ -146,15 +151,6 @@ final class AppState {
     /// changes, not twenty times a second.
     var playingBlockId: UUID?
 
-    /// Per-recording pipeline progress, keyed by recording id.
-    var progress: [UUID: JobProgress] = [:]
-    /// Bumped when a job writes rows into a recording's transcript: a batch of
-    /// partial rows, the final rows, the speaker labels. The transcript view
-    /// reads it instead of counting the rows, which is a query it would run
-    /// on every redraw.
-    var transcriptTicks: [UUID: Int] = [:]
-    /// Per-recording notes about work that finished imperfectly.
-    var warnings: [UUID: String] = [:]
     /// The recording the live session is working on, set the moment the user
     /// asks for one rather than when the first sample arrives. `live.recordingId`
     /// only exists once capture starts, which on a cold model is several
@@ -162,35 +158,11 @@ final class AppState {
     /// something for.
     var activeRecordingId: UUID?
 
-    var pump: Task<Void, Never>?
     var warmup: Task<Void, Never>?
 
-    /// Jobs handed to the queue, kept until they finish: `.partial` events
-    /// need the model and language the job was started with.
-    var queuedJobs: [UUID: TranscriptionJob] = [:]
-    /// The revision each running job is appending to, from its first window.
-    var openTranscripts: [UUID: UUID] = [:]
     /// Writes the live session's committed lines as they land, so a crash
     /// mid-meeting keeps everything up to the last commit.
     var livePersister: LiveTranscriptPersister?
-    /// When the current stage of each job began and the last estimate made
-    /// from it. The estimate is smoothed against this.
-    var stageClock: [UUID: StageClock] = [:]
-
-    struct StageClock {
-        var status: TranscriptionStatus
-        var since: Date
-        var remaining: TimeInterval?
-    }
-
-    struct JobProgress: Equatable {
-        var status: TranscriptionStatus
-        var fraction: Double
-        /// Seconds left in this stage, once enough of it has run to say.
-        var remaining: TimeInterval?
-        /// How far into the audio the decode has reached.
-        var coveredMs: Int = 0
-    }
 
     struct AppAlert: Identifiable {
         let id = UUID()
@@ -204,9 +176,12 @@ final class AppState {
         let engines = EngineHost(modelsDirectory: Paths.models,
                                  preferNeuralVAD: settings.neuralVAD)
         self.engines = engines
-        self.queue = TranscriptionQueue(engines: engines)
+        let queue = TranscriptionQueue(engines: engines)
+        let writer = TranscriptWriter(modelContainer: container)
+        self.queue = queue
+        self.writer = writer
+        self.jobs = JobCoordinator(queue: queue, writer: writer)
         self.live = LiveSession(engines: engines, supportDirectory: Paths.support)
-        self.writer = TranscriptWriter(modelContainer: container)
         // The whole configuration, not four of its six fields: the launch
         // warm-up asks the session whether it decodes live, and a session
         // configured by hand once loaded a 1.6 GB model at every launch for
@@ -216,7 +191,7 @@ final class AppState {
         // not survive the last quit, so anything they still claim to be working
         // on is stranded.
         _ = try? RecordingStore.recoverInterrupted(in: container.mainContext)
-        startPump()
+        jobs.start()
     }
 
     /// Persists the gain and pushes it to a session already running, so moving

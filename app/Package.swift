@@ -6,6 +6,8 @@ import PackageDescription
 //   TranscriberCore    pure logic. No AV, no CoreML, no UI, no models.
 //   TranscriberStore   SwiftData schema + queries. No inference.
 //   TranscriberEngine  audio I/O and the ASR/VAD/diarization backends.
+//   TranscriberFlow    the app's decisions with no window: the job coordinator,
+//                      the display status of a recording, the stop plan.
 //   Transcriber        the SwiftUI app.
 //
 // The split is what keeps the commit policy, the merger and the exporters
@@ -44,9 +46,19 @@ let package = Package(
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
+        .target(
+            name: "TranscriberFlow",
+            dependencies: ["TranscriberCore", "TranscriberStore", "TranscriberEngine"],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+                // The same isolation as the app: what lives here drives the
+                // views and is observed by them.
+                .defaultIsolation(MainActor.self),
+            ]
+        ),
         .executableTarget(
             name: "Transcriber",
-            dependencies: ["TranscriberCore", "TranscriberStore", "TranscriberEngine"],
+            dependencies: ["TranscriberCore", "TranscriberStore", "TranscriberEngine", "TranscriberFlow"],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
                 // SwiftUI views, @Observable app state and SwiftData contexts are
@@ -72,6 +84,11 @@ let package = Package(
         .testTarget(
             name: "TranscriberStoreTests",
             dependencies: ["TranscriberStore", "TranscriberCore"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .testTarget(
+            name: "TranscriberFlowTests",
+            dependencies: ["TranscriberFlow", "TranscriberCore", "TranscriberStore", "TranscriberEngine"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
     ]

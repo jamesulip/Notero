@@ -421,7 +421,7 @@ struct RecordingDetailView: View {
     @ViewBuilder
     private var headerControls: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            if let progress = state.progress[recording.id] {
+            if let progress = state.jobs.progress(for: recording.id) {
                 StatusChip(status: progress.status, fraction: progress.fraction,
                            remaining: progress.remaining)
                 Button("Cancel") { state.cancelJob(recording.id) }
@@ -438,7 +438,7 @@ struct RecordingDetailView: View {
             } else if recording.status == .cancelled {
                 StatusChip(status: .cancelled)
                 if recording.hasAudio { rerun("Transcribe") }
-            } else if let warning = recording.warningMessage ?? state.warnings[recording.id] {
+            } else if let warning = recording.warningMessage ?? state.jobs.warning(for: recording.id) {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)

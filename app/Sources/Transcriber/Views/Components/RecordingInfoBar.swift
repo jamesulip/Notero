@@ -35,7 +35,7 @@ struct RecordingInfoBar: View {
          shown?.id.uuidString ?? "-",
          // Rows arrive in batches while a job runs; the word count follows
          // them. The tick moves with each batch, and it costs no query.
-         String(state.transcriptTicks[recording.id] ?? 0),
+         String(state.jobs.tick(for: recording.id)),
          String(recording.updatedAt.timeIntervalSinceReferenceDate),
          recording.statusRaw,
          String(recording.durationMs),

@@ -2,6 +2,7 @@ import OSLog
 import SwiftData
 import SwiftUI
 import TranscriberCore
+import TranscriberFlow
 import TranscriberStore
 
 /// The transcript, grouped into speaker turns, every row a seek target.
@@ -122,7 +123,7 @@ struct TranscriptView: View {
 
     /// No edits while rows are still arriving or an older revision is open.
     private var isReadOnly: Bool {
-        isViewingOlderRevision || state.progress[recording.id] != nil
+        isViewingOlderRevision || state.jobs.isBusy(recording.id)
     }
 
     /// Changes exactly when the rows do: a new revision, an edit, a batch of
@@ -133,7 +134,7 @@ struct TranscriptView: View {
         let transcript = transcript
         return [transcript?.id.uuidString ?? "-",
                 String(recording.updatedAt.timeIntervalSinceReferenceDate),
-                String(state.transcriptTicks[recording.id] ?? 0),
+                String(state.jobs.tick(for: recording.id)),
                 String(editVersion)].joined(separator: "|")
     }
 
@@ -181,7 +182,7 @@ struct TranscriptView: View {
 
     private var list: some View {
         VStack(spacing: 0) {
-            if let progress = state.progress[recording.id] {
+            if let progress = state.jobs.progress(for: recording.id) {
                 // Rows are arriving under this. Without it a growing list with
                 // no status reads as a finished transcript that is oddly short.
                 TranscriptProgressBanner(progress: progress, durationMs: recording.durationMs) {
@@ -376,9 +377,9 @@ struct TranscriptView: View {
         } description: {
             Text(detail)
         } actions: {
-            if recording.hasAudio, state.progress[recording.id] == nil {
+            if recording.hasAudio, !state.jobs.isBusy(recording.id) {
                 Button("Transcribe") { state.retranscribe(recording) }
-            } else if !recording.hasAudio, state.progress[recording.id] == nil {
+            } else if !recording.hasAudio, !state.jobs.isBusy(recording.id) {
                 // Without this the row is a dead end: no audio means nothing to
                 // transcribe, and the only way out was to find it in the
                 // sidebar and work out that it should be deleted.
@@ -389,7 +390,7 @@ struct TranscriptView: View {
     }
 
     private var label: String {
-        if state.progress[recording.id] != nil { return "Work in progress" }
+        if state.jobs.isBusy(recording.id) { return "Work in progress" }
         if recording.status == .cancelled { return "Transcription cancelled" }
         guard recording.status == .failed else { return "No transcript yet" }
         // "Transcription failed" is wrong for a recording that never captured
@@ -403,7 +404,7 @@ struct TranscriptView: View {
     }
 
     private var detail: String {
-        if let progress = state.progress[recording.id] {
+        if let progress = state.jobs.progress(for: recording.id) {
             guard let remaining = progress.remaining else { return progress.status.label }
             return "\(progress.status.label) · \(TimeFormat.remaining(seconds: remaining)) left"
         }
@@ -454,7 +455,7 @@ private struct PlaybackFollower: View {
 
 /// "Transcription · 42% · about 14 min left", over a transcript still arriving.
 struct TranscriptProgressBanner: View {
-    let progress: AppState.JobProgress
+    let progress: JobProgress
     let durationMs: Int
     let onCancel: () -> Void
 

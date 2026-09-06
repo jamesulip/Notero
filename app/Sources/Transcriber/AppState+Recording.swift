@@ -111,12 +111,13 @@ extension AppState {
         // every hop produces a completed recording with an empty transcript.
         if decodedLive, result.stats.failedHops > 0 {
             let detail = result.stats.lastError.map { " Last error: \($0)" } ?? ""
-            warnings[result.recordingId] = result.stats.hops == 0
+            await jobs.addWarning(result.stats.hops == 0
                 ? "Live transcription failed for this entire recording "
                   + "(\(result.stats.failedHops) decode errors).\(detail) "
-                  + "The audio was saved -- use Transcribe Again to recover it."
+                  + "The audio was saved. Use Transcribe Again to recover it."
                 : "\(result.stats.failedHops) decode(s) failed during this "
-                  + "recording, so some words may be missing.\(detail)"
+                  + "recording, so some words may be missing.\(detail)",
+                for: result.recordingId)
         }
 
         if decodedLive {
@@ -168,8 +169,7 @@ extension AppState {
                 discardCacheWhenDone: !settings.keepWorkingCopy,
                 expectedSpeakers: recording(result.recordingId)?.expectedSpeakers
             )
-            queuedJobs[job.id] = job
-            await queue.enqueue(job)
+            jobs.enqueue(job)
         } else {
             try? await writer.updateStatus(.completed, progress: 1, for: result.recordingId)
             if !settings.keepWorkingCopy {
@@ -184,11 +184,8 @@ extension AppState {
         // it starts; the job's own warnings are added to this one, not put in
         // its place.
         if !result.notices.isEmpty {
-            let changes = result.notices.map(\.message).joined(separator: " ")
-            let combined = [warnings[result.recordingId], changes]
-                .compactMap { $0 }.joined(separator: " ")
-            warnings[result.recordingId] = combined
-            try? await writer.setWarning(combined, for: result.recordingId)
+            await jobs.addWarning(result.notices.map(\.message).joined(separator: " "),
+                                  for: result.recordingId)
         }
         await queue.setLiveActive(false)
 

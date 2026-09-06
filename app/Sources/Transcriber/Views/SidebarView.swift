@@ -106,7 +106,7 @@ struct SidebarView: View {
         switch filter {
         case .all: return recordings
         case .active:
-            return recordings.filter { state.progress[$0.id] != nil || $0.status.isBusy }
+            return recordings.filter { state.jobs.isBusy($0.id) || $0.status.isBusy }
         case .favorites: return recordings.filter(\.isFavorite)
         case .meetings: return recordings.filter { $0.kind == .meeting }
         }
@@ -349,7 +349,7 @@ struct HistoryRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                if let progress = state.progress[recording.id] {
+                if let progress = state.jobs.progress(for: recording.id) {
                     StatusChip(status: progress.status, fraction: progress.fraction,
                                remaining: progress.remaining)
                 } else if state.isLive(recording.id), state.isPaused {
