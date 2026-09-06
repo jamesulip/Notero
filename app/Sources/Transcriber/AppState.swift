@@ -253,6 +253,13 @@ final class AppState {
 
     // MARK: - Creating
 
+    /// What Record makes. Simple mode makes a meeting, which opens with the
+    /// notes beside the transcript; Advanced mode makes a plain recording and
+    /// offers the meeting as its own command.
+    var newRecordingKind: RecordingKind {
+        settings.isAdvanced ? .recording : .meeting
+    }
+
     @discardableResult
     func newItem(_ kind: RecordingKind) -> StoredRecording? {
         do {

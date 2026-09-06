@@ -5,6 +5,7 @@ import TranscriberStore
 
 struct SidebarView: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
     @Environment(\.modelContext) private var context
     @Query(sort: \StoredRecording.createdAt, order: .reverse)
     private var recordings: [StoredRecording]
@@ -35,7 +36,7 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             // The filter is an Advanced control. Simple mode shows the whole
             // library, newest first, and nothing to select before the list.
-            if state.settings.isAdvanced {
+            if mode == .advanced {
                 filterBar
             } else {
                 simpleTopBar
@@ -54,8 +55,8 @@ struct SidebarView: View {
             if let route, !selection.contains(route) { selection = [route] }
             if route == nil { selection = [] }
         }
-        .onChange(of: state.settings.isAdvanced) { _, advanced in
-            if !advanced { filter = .all }
+        .onChange(of: mode) { _, mode in
+            if mode == .simple { filter = .all }
         }
         .onDeleteCommand { pendingDelete = selectedRecordings }
         .confirmationDialog(
@@ -212,24 +213,22 @@ struct SidebarView: View {
                 Button {
                     withAnimation(.snappy) { state.settings.isAdvanced.toggle() }
                 } label: {
-                    Label(state.settings.isAdvanced ? "Advanced" : "Simple",
-                          systemImage: "slider.horizontal.3")
+                    Label(mode.label, systemImage: "slider.horizontal.3")
                         .font(.caption)
                 }
-                .help(state.settings.isAdvanced
+                .help(mode == .advanced
                       ? "Advanced mode. Click to change to Simple mode, which has fewer controls."
                       : "Simple mode. Click to change to Advanced mode, which shows all controls.")
 
                 Spacer()
-                if state.settings.isAdvanced {
-                    Button {
-                        state.route = .benchmark
-                    } label: {
-                        Label("Benchmark", systemImage: "speedometer")
-                    }
-                    .help("Measure the model tiers on this Mac (⇧⌘K)")
-                    .labelStyle(.iconOnly)
+                Button {
+                    state.route = .benchmark
+                } label: {
+                    Label("Benchmark", systemImage: "speedometer")
                 }
+                .help("Measure the model tiers on this Mac (⇧⌘K)")
+                .labelStyle(.iconOnly)
+                .advancedOnly()
                 SettingsLink {
                     Label("Settings", systemImage: "gearshape")
                 }
@@ -252,7 +251,7 @@ struct SidebarView: View {
             try? context.save()
         }
         if recording.hasAudio {
-            if state.settings.isAdvanced {
+            if mode == .advanced {
                 RerunItems(recording: recording)
             } else {
                 Button("Transcribe Again", systemImage: "arrow.clockwise") {
@@ -263,7 +262,7 @@ struct SidebarView: View {
                 if let url = recording.audioURL { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             }
         }
-        if recording.kind == .recording, state.settings.isAdvanced {
+        if recording.kind == .recording, mode == .advanced {
             Button("Make This a Meeting", systemImage: RecordingKind.meeting.symbol) {
                 recording.kind = .meeting
                 try? context.save()

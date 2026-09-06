@@ -85,6 +85,8 @@ development workflow.
 ```
 SwiftUI              the window, the library and the transcript view
   ↓
+TranscriberFlow      the decisions of the app: jobs, status, the stop of a recording
+  ↓
 TranscriberStore     the SwiftData schema and the queries
   ↓
 TranscriberCore      the commit policy, the merger, the exports and the search
@@ -94,7 +96,7 @@ TranscriberEngine    the audio, the models and the job queue
   └── FluidAudio     voice activity detection and speaker identification
 ```
 
-There are four layers. Each layer builds and tests without the layer above it.
+There are five layers. Each layer builds and tests without the layer above it.
 Three protocols hide the engines, thus you can replace a backend without a
 change to the user interface.
 
@@ -140,7 +142,7 @@ encryption of its own, thus FileVault is the only protection.
 | Document | Contents |
 | --- | --- |
 | [docs/USAGE.md](docs/USAGE.md) | What each part of the app does, and the keyboard |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The four layers, the pipelines and the algorithms |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The five layers, the pipelines and the algorithms |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Build, tests, CI, scripts and the workflow |
 | [docs/MODELS.md](docs/MODELS.md) | The three tiers, the model IDs and the naming trap |
 | [docs/CLI.md](docs/CLI.md) | The `transcribe` command-line tool |

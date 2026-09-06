@@ -46,6 +46,7 @@ struct DetailView: View {
 /// that a drop is possible at all.
 struct HomeView: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
 
     var body: some View {
         VStack(spacing: 24) {
@@ -72,7 +73,7 @@ struct HomeView: View {
                 .keyboardShortcut(.defaultAction)
 
                 Button {
-                    state.newItem(state.settings.isAdvanced ? .recording : .meeting)
+                    state.newItem(state.newRecordingKind)
                 } label: {
                     Label("Record", systemImage: "record.circle")
                         .frame(minWidth: 130)
@@ -80,7 +81,7 @@ struct HomeView: View {
                 .controlSize(.large)
             }
 
-            if state.settings.isAdvanced {
+            if mode == .advanced {
                 HStack(spacing: 16) {
                     Button("New Meeting") { state.newItem(.meeting) }
                     Button("New Note") { state.newItem(.note) }
@@ -145,6 +146,7 @@ struct HomeView: View {
 /// files is never asked.
 struct WelcomeCard: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
 
     /// Called when a button has answered the card. Recording that it was seen
     /// is the card's; taking it off the screen is the caller's.
@@ -168,7 +170,7 @@ struct WelcomeCard: View {
 
             GroupBox {
                 VStack(alignment: .leading, spacing: 14) {
-                    if state.settings.isAdvanced {
+                    if mode == .advanced {
                         MicrophonePermissionRow()
                         Divider()
                     }
@@ -208,7 +210,7 @@ struct WelcomeCard: View {
                     .help("Close this card. Everything on it is also in Settings.")
                 Button("Record") {
                     answered()
-                    state.newItem(state.settings.isAdvanced ? .recording : .meeting)
+                    state.newItem(state.newRecordingKind)
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
@@ -277,6 +279,7 @@ struct WelcomeCard: View {
 /// meeting workspace on the right when there is one.
 struct RecordingDetailView: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
     @Environment(\.modelContext) private var context
     let recording: StoredRecording
 
@@ -471,7 +474,7 @@ struct RecordingDetailView: View {
     /// one button that uses the tier from Settings.
     @ViewBuilder
     private func rerun(_ label: String) -> some View {
-        if state.settings.isAdvanced {
+        if mode == .advanced {
             RerunButton(recording: recording, label: label)
                 .help("Transcribe again on another tier, or identify the speakers again")
         } else {

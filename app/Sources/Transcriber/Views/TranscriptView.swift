@@ -556,6 +556,7 @@ struct TranscriptFindBar: View {
 
 struct TranscriptBlockRow: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
     @Environment(\.modelContext) private var context
 
     let recording: StoredRecording
@@ -669,7 +670,7 @@ struct TranscriptBlockRow: View {
                     // The one bad window in a long meeting, without the other
                     // four hours. Advanced offers the tiers; Simple takes the
                     // Accurate one, which is why anyone redoes a turn.
-                    if state.settings.isAdvanced {
+                    if mode == .advanced {
                         Menu("Transcribe This Turn Again", systemImage: "arrow.clockwise") {
                             ForEach(ModelTier.allCases) { tier in
                                 Button("\(tier.label) · \(ModelCatalogue.option(state.settings.modelId(for: tier))?.label ?? "")") {

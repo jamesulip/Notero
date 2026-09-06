@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     /// What the user last chose while there was room, restored on widening.
     @State private var wideVisibility = NavigationSplitViewVisibility.all
@@ -210,7 +211,7 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        if state.settings.isAdvanced {
+        if mode == .advanced {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button("Recording", systemImage: RecordingKind.recording.symbol) {

@@ -1,5 +1,6 @@
 import SwiftUI
 import TranscriberCore
+import TranscriberEngine
 import TranscriberStore
 
 /// Transport, scrubber and waveform for a finished recording.
@@ -15,7 +16,7 @@ struct PlayerBar: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            PlayheadWaveform(recording: recording, durationMs: duration,
+            PlayheadWaveform(player: state.player, recording: recording, durationMs: duration,
                              bookmarks: sortedBookmarks)
                 .frame(height: 52)
 
@@ -76,7 +77,7 @@ struct PlayerBar: View {
                 .help("Forward 10 seconds")
             }
 
-            PlaybackClock(durationMs: duration)
+            PlaybackClock(player: state.player, durationMs: duration)
         }
         .fixedSize()
     }
@@ -139,11 +140,11 @@ struct PlayerBar: View {
 
 /// "0:42 / 1:15". The one text that changes with every tick.
 private struct PlaybackClock: View {
-    @Environment(AppState.self) private var state
+    let player: AudioPlayer
     let durationMs: Int
 
     var body: some View {
-        Text("\(TimeFormat.short(ms: state.player.currentMs)) / \(TimeFormat.short(ms: durationMs))")
+        Text("\(TimeFormat.short(ms: player.currentMs)) / \(TimeFormat.short(ms: durationMs))")
             .font(.system(.caption, design: .monospaced))
             .foregroundStyle(.secondary)
             .monospacedDigit()
@@ -155,6 +156,7 @@ private struct PlaybackClock: View {
 /// targets are a separate view again so their layout does not re-run with it.
 private struct PlayheadWaveform: View {
     @Environment(AppState.self) private var state
+    let player: AudioPlayer
     let recording: StoredRecording
     let durationMs: Int
     let bookmarks: [StoredBookmark]
@@ -162,7 +164,7 @@ private struct PlayheadWaveform: View {
     var body: some View {
         WaveformView(
             samples: recording.waveform ?? [],
-            progress: durationMs > 0 ? Double(state.player.currentMs) / Double(durationMs) : 0,
+            progress: durationMs > 0 ? Double(player.currentMs) / Double(durationMs) : 0,
             bookmarks: bookmarks.map { Double($0.atMs) / Double(max(1, durationMs)) },
             showsPlayhead: true,
             onScrub: { value in
