@@ -20,6 +20,23 @@ public struct LiveSessionResult: Sendable {
     /// What changed under the recording, in order: a replaced microphone, a
     /// moved default input, a capture that could not be restarted.
     public var notices: [CaptureNotice]
+
+    public init(recordingId: UUID, segments: [Segment], durationMs: Int, archiveFileName: String?,
+                archiveSampleRate: Int, cacheURL: URL, waveform: [Float], stats: SessionStats,
+                modelId: String, language: String, lanes: [CaptureLane], notices: [CaptureNotice]) {
+        self.recordingId = recordingId
+        self.segments = segments
+        self.durationMs = durationMs
+        self.archiveFileName = archiveFileName
+        self.archiveSampleRate = archiveSampleRate
+        self.cacheURL = cacheURL
+        self.waveform = waveform
+        self.stats = stats
+        self.modelId = modelId
+        self.language = language
+        self.lanes = lanes
+        self.notices = notices
+    }
 }
 
 /// Everything a live session needs to know before it starts, in one value.
