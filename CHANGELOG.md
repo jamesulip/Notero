@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### Automatic notes
+
+- On macOS 26 with Apple Intelligence on, the notes pane has **Draft Notes
+  from the Transcript** (⇧⌘D). The Apple Intelligence model on this Mac reads
+  the transcript in parts and proposes a summary and notes of the five kinds,
+  each with the line it came from. A sheet shows the draft with a checkbox on
+  each note. The app writes nothing until you select it, and it does not
+  replace a summary that you wrote unless you select that. Nothing leaves the
+  Mac. **Settings › General › Automatic notes** selects English or the mix of
+  languages that the speakers used.
+- **The Apple model refuses Tagalog.** Measured on a 93-minute Taglish meeting
+  from the library: a part with 28 % Tagalog words was accepted, and parts with
+  50 % and 92 % were refused before any generation. The app says so instead of
+  showing a draft made from the parts that passed. Finding 13 in
+  `docs/FINDINGS.md` gives the measurement, and the measurement of the MLX
+  models (Qwen, Gemma) that do accept Taglish, on the same meeting against the
+  notes that were written by hand.
+- `transcribe --notes EXPORT.json` drafts the notes for an exported recording
+  and scores the draft: how much of each note is in the transcript near its
+  timestamp, which language the notes lean to, and how many of the hand-written
+  notes in the export the draft also has. `eval/notes_eval.py` does the same
+  with an MLX model, thus a candidate model can be measured before it is wired
+  into the app.
+- The pipeline is behind a fourth engine protocol, `NotesGenerating`, beside
+  the three for speech, voice activity and speakers. A second backend is a new
+  conformance.
+
 ### Simple mode
 
 - The app has two modes. **Simple** is the default. It shows the recordings, a

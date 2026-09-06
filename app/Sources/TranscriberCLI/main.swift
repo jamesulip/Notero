@@ -58,6 +58,10 @@ struct Options {
     /// the other.
     var lane: CaptureLane?
     var logFile: URL?
+    // Automatic notes from an exported recording.
+    var notesDocument: URL?
+    var notesStyle: NotesStyle = .english
+    var notesCharacters = NotesChunker.defaultMaxCharacters
 }
 
 func parse() -> Options {
@@ -102,6 +106,11 @@ func parse() -> Options {
         case "--hop": options.hopMs = value().flatMap(Int.init) ?? options.hopMs
         case "--pre-roll": options.preRollMs = value().flatMap(Int.init) ?? options.preRollMs
         case "--context": options.contextMs = value().flatMap(Int.init) ?? options.contextMs
+        case "--notes": options.notesDocument = value().map { URL(fileURLWithPath: $0) }
+        case "--notes-style":
+            options.notesStyle = value().flatMap { $0 == "spoken" ? .asSpoken : NotesStyle(rawValue: $0) }
+                ?? options.notesStyle
+        case "--notes-chars": options.notesCharacters = value().flatMap(Int.init) ?? options.notesCharacters
         case "--help", "-h":
             print("""
             transcribe --audio FILE [--reference FILE] [--models DIR]
@@ -113,6 +122,8 @@ func parse() -> Options {
             transcribe --record [--source microphone|systemAudio|both] [--device UID]
                        [--seconds N] [--out FILE.m4a] [--gui]
             transcribe --audio FILE --lane room|remote   # one channel of a two-lane file
+            transcribe --notes EXPORT.json [--notes-style english|spoken] [--notes-chars N]
+                       [--out DRAFT.md] [--json REPORT.json]   # automatic notes, scored
             transcribe --devices
             """)
             exit(0)
@@ -184,6 +195,12 @@ if options.channelScan {
 if options.record {
     runRecord(source: options.captureSource, deviceUID: options.deviceUID,
               seconds: options.seconds, out: options.output, gui: options.gui)
+}
+
+// Also before it: this reads an export, not audio.
+if let document = options.notesDocument {
+    await runNotes(documentURL: document, style: options.notesStyle,
+                   maxCharacters: options.notesCharacters, output: options.output, json: options.json)
 }
 
 guard let audioURL = options.audio else {

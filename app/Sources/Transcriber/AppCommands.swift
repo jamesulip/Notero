@@ -96,6 +96,16 @@ struct AppCommands: Commands {
                 .keyboardShortcut(shortcut(for: kind), modifiers: [.command, .control])
                 .disabled(state.selectedSegmentId == nil)
             }
+
+            if state.canDraftNotes {
+                Divider()
+                Button("Draft Notes from the Transcript") {
+                    if let recording = state.selectedRecording { state.draftNotes(for: recording) }
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+                .disabled(state.selectedRecording?.transcript == nil
+                          || state.selectedRecording.map { state.notes.isBusy($0.id) } ?? true)
+            }
         }
 
         CommandMenu("Playback") {

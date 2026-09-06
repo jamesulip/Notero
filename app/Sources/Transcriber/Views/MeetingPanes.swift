@@ -21,10 +21,14 @@ struct NotesPane: View {
     @State private var quickKind: MeetingItemKind = .keyPoint
     @State private var quickText = ""
     @FocusState private var quickFocused: Bool
+    /// Whether the notes model can run on this Mac today. Asked once per
+    /// pane; nil until the answer is in.
+    @State private var availability: NotesAvailability?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                draftRow
                 quickAdd
 
                 section("Summary") {
@@ -71,6 +75,68 @@ struct NotesPane: View {
             .padding(14)
         }
         .onDisappear { save() }
+        .task { availability = await state.notesAvailability() }
+        // The review of a draft, up while the coordinator holds one for this
+        // recording. Closing it any way other than a button is a dismiss.
+        .sheet(isPresented: Binding(
+            get: { state.notes.draft(for: recording.id) != nil },
+            set: { if !$0 { state.notes.dismiss(recording.id) } }
+        )) {
+            if let draft = state.notes.draft(for: recording.id) {
+                NotesDraftSheet(recording: recording, draft: draft)
+            }
+        }
+    }
+
+    /// The model's offer, above the hand-written notes: one button, the
+    /// progress while it reads, or the reason it stopped. Nothing at all on a
+    /// macOS that has no model; the pane is the same as before then.
+    @ViewBuilder
+    private var draftRow: some View {
+        if let progress = state.notes.progress(for: recording.id) {
+            HStack(spacing: 8) {
+                ProgressView(value: progress.fraction)
+                Text(progress.label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .fixedSize()
+                Button("Cancel") { state.notes.cancel(recording.id) }
+                    .controlSize(.small)
+            }
+        } else if let failure = state.notes.failure(for: recording.id) {
+            VStack(alignment: .leading, spacing: 6) {
+                Label(failure, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("OK") { state.notes.dismiss(recording.id) }
+                    .controlSize(.small)
+            }
+        } else if state.canDraftNotes {
+            Button {
+                state.draftNotes(for: recording)
+            } label: {
+                Label("Draft Notes from the Transcript", systemImage: "sparkles")
+                    .font(.callout)
+            }
+            .controlSize(.small)
+            .disabled(!draftEnabled)
+            .help(draftHelp)
+        }
+    }
+
+    private var draftEnabled: Bool {
+        (availability?.isAvailable ?? false) && recording.transcript != nil
+            && !state.jobs.isBusy(recording.id)
+    }
+
+    private var draftHelp: String {
+        if let availability, !availability.isAvailable { return availability.message }
+        if recording.transcript == nil { return "Transcribe the recording first." }
+        if state.jobs.isBusy(recording.id) { return "Wait for the transcription to complete." }
+        return "The Apple Intelligence model on this Mac reads the transcript and proposes a "
+             + "summary and notes. You select what to keep. Nothing leaves the Mac."
     }
 
     /// Kind on the left, text on the right, ↩ to add. The kind menu shows the

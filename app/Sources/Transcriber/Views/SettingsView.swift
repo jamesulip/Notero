@@ -99,6 +99,7 @@ struct InterfaceModeSection: View {
 struct GeneralSettings: View {
     @Environment(AppState.self) private var state
     @Environment(\.interfaceMode) private var mode
+    @State private var notesAvailability: NotesAvailability?
 
     var body: some View {
         @Bindable var settings = state.settings
@@ -193,8 +194,43 @@ struct GeneralSettings: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
+            if state.canDraftNotes {
+                Section {
+                    Picker("Language of the notes", selection: $settings.notesStyle) {
+                        ForEach(NotesStyle.allCases) { style in
+                            Text(style.label).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text(settings.notesStyle.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } header: {
+                    Text("Automatic notes")
+                } footer: {
+                    Text(notesFooter)
+                        .font(.caption)
+                        .foregroundStyle(notesAvailability?.isAvailable == false ? .orange : .secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .task { notesAvailability = await state.notesAvailability() }
+            }
         }
         .formStyle(.grouped)
+    }
+
+    /// What the button in the notes pane does, and whether it can run today.
+    /// The language limit is stated here because a Taglish meeting is the
+    /// normal case for this app, and the model refuses it.
+    private var notesFooter: String {
+        let what = "Draft Notes in the notes pane reads the transcript with the Apple Intelligence "
+                 + "model on this Mac and proposes a summary and notes. You select what to keep. "
+                 + "Nothing leaves the Mac. The model does not accept a transcript that is mostly "
+                 + "Tagalog."
+        guard let notesAvailability, !notesAvailability.isAvailable else { return what }
+        return what + " " + notesAvailability.message
     }
 
     private func liveDetail(advanced: Bool) -> String {

@@ -64,6 +64,7 @@ final class AppSettings {
         static let hasSeenWelcome = "ui.hasSeenWelcome"
         static let interfaceMode = "ui.interfaceMode"
         static let menuBarItem = "ui.menuBarItem"
+        static let notesStyle = "notes.style"
     }
 
     private let defaults: UserDefaults
@@ -100,6 +101,7 @@ final class AppSettings {
         interfaceMode = InterfaceMode(rawValue: defaults.string(forKey: Key.interfaceMode) ?? "")
             ?? .simple
         menuBarItem = defaults.object(forKey: Key.menuBarItem) as? Bool ?? true
+        notesStyle = NotesStyle(rawValue: defaults.string(forKey: Key.notesStyle) ?? "") ?? .english
     }
 
     // MARK: - Interface
@@ -120,6 +122,11 @@ final class AppSettings {
 
     /// Show transcript times as time of day ("9:47:12 PM") rather than offsets.
     var clockTimestamps: Bool { didSet { defaults.set(clockTimestamps, forKey: Key.clockTimestamps) } }
+
+    /// The language the notes model writes in. English by default: the one
+    /// hand-written set of notes in the library is English with Taglish
+    /// quotes, and that is what the drafts are measured against.
+    var notesStyle: NotesStyle { didSet { defaults.set(notesStyle.rawValue, forKey: Key.notesStyle) } }
 
     /// The first-run card has been dismissed.
     var hasSeenWelcome: Bool { didSet { defaults.set(hasSeenWelcome, forKey: Key.hasSeenWelcome) } }

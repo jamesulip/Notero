@@ -36,6 +36,9 @@ final class AppState {
     let queue: TranscriptionQueue
     /// Consumes the queue's events; owns what the views read about jobs.
     let jobs: JobCoordinator
+    /// One draft of automatic notes per recording, from the request to the
+    /// review. Refer to `AppState+Notes`.
+    let notes = NotesCoordinator()
     let live: LiveSession
     let player = AudioPlayer()
     let writer: TranscriptWriter
