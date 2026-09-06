@@ -5,7 +5,7 @@ import TranscriberEngine
 import TranscriberStore
 
 /// Per-recording progress of a job in the queue, as the views show it.
-public struct JobProgress: Equatable, Sendable {
+nonisolated public struct JobProgress: Equatable, Sendable {
     public var status: TranscriptionStatus
     public var fraction: Double
     /// Seconds left in this stage, once enough of it has run to say.

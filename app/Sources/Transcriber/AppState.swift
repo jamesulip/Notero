@@ -220,6 +220,22 @@ final class AppState {
     /// Pending questions, asked one at a time.
     var duplicateImports: [DuplicateImport] = []
 
+    // MARK: - Display status
+
+    /// The one ladder for a recording's row, header and empty transcript. The
+    /// warning has one source here: the stored one, else the coordinator's.
+    func displayStatus(for recording: StoredRecording) -> RecordingDisplayStatus {
+        RecordingDisplayStatus.make(
+            status: recording.status,
+            progress: jobs.progress(for: recording.id),
+            isLive: isLive(recording.id),
+            isPaused: isPaused,
+            warning: recording.warningMessage ?? jobs.warning(for: recording.id),
+            hasAudio: recording.hasAudio,
+            errorMessage: recording.errorMessage
+        )
+    }
+
     // MARK: - Lookup
 
     func recording(_ id: UUID) -> StoredRecording? {

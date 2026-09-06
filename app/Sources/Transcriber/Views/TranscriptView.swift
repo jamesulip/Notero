@@ -372,47 +372,25 @@ struct TranscriptView: View {
     // MARK: - Empty
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label(label, systemImage: icon)
+        let display = state.displayStatus(for: recording)
+        return ContentUnavailableView {
+            Label(display.emptyState.title, systemImage: display.emptyState.symbol)
         } description: {
-            Text(detail)
+            Text(display.emptyState.detail)
         } actions: {
-            if recording.hasAudio, !state.jobs.isBusy(recording.id) {
+            switch display.action {
+            case .retry, .transcribe, .transcribeAgain:
                 Button("Transcribe") { state.retranscribe(recording) }
-            } else if !recording.hasAudio, !state.jobs.isBusy(recording.id) {
+            case nil where !recording.hasAudio && !display.isBusy:
                 // Without this the row is a dead end: no audio means nothing to
                 // transcribe, and the only way out was to find it in the
                 // sidebar and work out that it should be deleted.
                 Button("Delete This Recording", role: .destructive) { state.delete(recording) }
                 Button("Transcribe a File…") { state.isImporting = true }
+            default:
+                EmptyView()
             }
         }
-    }
-
-    private var label: String {
-        if state.jobs.isBusy(recording.id) { return "Work in progress" }
-        if recording.status == .cancelled { return "Transcription cancelled" }
-        guard recording.status == .failed else { return "No transcript yet" }
-        // "Transcription failed" is wrong for a recording that never captured
-        // anything -- nothing got as far as being transcribed.
-        return recording.hasAudio ? "Transcription failed" : "The recording stopped early"
-    }
-
-    private var icon: String {
-        if recording.status == .cancelled { return "xmark.circle" }
-        return recording.status == .failed ? "exclamationmark.triangle" : "text.alignleft"
-    }
-
-    private var detail: String {
-        if let progress = state.jobs.progress(for: recording.id) {
-            guard let remaining = progress.remaining else { return progress.status.label }
-            return "\(progress.status.label) · \(TimeFormat.remaining(seconds: remaining)) left"
-        }
-        if let error = recording.errorMessage, recording.status == .failed { return error }
-        return recording.hasAudio
-            ? "The audio is on this Mac. It has no transcript yet."
-            : "The app captured no audio, thus there is nothing to transcribe. "
-              + "A file that you import becomes a new recording. You can delete this one."
     }
 
     // MARK: - Speakers

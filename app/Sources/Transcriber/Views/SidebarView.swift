@@ -297,6 +297,7 @@ struct HistoryRow: View {
     private var isRenaming: Bool { renaming == recording.id }
 
     var body: some View {
+        let display = state.displayStatus(for: recording)
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: recording.kind.symbol)
                 .font(.system(size: 13))
@@ -340,7 +341,7 @@ struct HistoryRow: View {
                     if (recording.items?.isEmpty == false) {
                         Image(systemName: "note.text")
                     }
-                    if let warning = recording.warningMessage {
+                    if let warning = display.warning {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                             .help(warning)
@@ -349,21 +350,12 @@ struct HistoryRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-                if let progress = state.jobs.progress(for: recording.id) {
-                    StatusChip(status: progress.status, fraction: progress.fraction,
-                               remaining: progress.remaining)
-                } else if state.isLive(recording.id), state.isPaused {
+                if display.isPaused {
                     Label("Paused", systemImage: "pause.circle.fill")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                } else if recording.status.isBusy {
-                    // Preparing and recording are live-path states; they never
-                    // get a queue entry, so they need the stored status.
-                    StatusChip(status: recording.status, fraction: 0)
-                } else if recording.status == .failed {
-                    StatusChip(status: .failed, fraction: 0)
-                } else if recording.status == .cancelled {
-                    StatusChip(status: .cancelled, fraction: 0)
+                } else if let chip = display.chip {
+                    StatusChip(status: chip.status, fraction: chip.fraction, remaining: chip.remaining)
                 }
             }
             Spacer(minLength: 0)

@@ -420,33 +420,27 @@ struct RecordingDetailView: View {
 
     @ViewBuilder
     private var headerControls: some View {
+        let display = state.displayStatus(for: recording)
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            if let progress = state.jobs.progress(for: recording.id) {
-                StatusChip(status: progress.status, fraction: progress.fraction,
-                           remaining: progress.remaining)
-                Button("Cancel") { state.cancelJob(recording.id) }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-            } else if recording.status.isBusy {
-                // Live work never reaches the queue, so it has no progress
-                // entry. Without this fallback the preparing and recording
-                // phases show no chip at all.
-                StatusChip(status: recording.status)
-            } else if recording.status == .failed {
-                StatusChip(status: .failed)
-                if recording.hasAudio { rerun("Retry") }
-            } else if recording.status == .cancelled {
-                StatusChip(status: .cancelled)
-                if recording.hasAudio { rerun("Transcribe") }
-            } else if let warning = recording.warningMessage ?? state.jobs.warning(for: recording.id) {
+            if let chip = display.chip {
+                StatusChip(status: chip.status, fraction: chip.fraction, remaining: chip.remaining)
+            }
+            if let warning = display.warning, !display.isBusy {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .lineLimit(2)
                     .help(warning)
-                if recording.hasAudio { rerun("Transcribe Again") }
-            } else if recording.hasAudio {
-                rerun("Transcribe Again")
+            }
+            switch display.action {
+            case .cancel:
+                Button("Cancel") { state.cancelJob(recording.id) }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+            case .retry: rerun("Retry")
+            case .transcribe: rerun("Transcribe")
+            case .transcribeAgain: rerun("Transcribe Again")
+            case nil: EmptyView()
             }
 
             // Click exports; the arrow offers the clipboard. Copy is the more
