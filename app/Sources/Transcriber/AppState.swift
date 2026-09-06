@@ -194,6 +194,8 @@ final class AppState {
         // not survive the last quit, so anything they still claim to be working
         // on is stranded.
         _ = try? RecordingStore.recoverInterrupted(in: container.mainContext)
+        // Before the pump starts, so no finished job is missed.
+        jobs.onFinished = { [weak self] id in self?.autoDraftNotes(for: id) }
         jobs.start()
     }
 

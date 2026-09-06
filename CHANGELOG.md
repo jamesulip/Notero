@@ -16,15 +16,27 @@
   from the library: a part with 28 % Tagalog words was accepted, and parts with
   50 % and 92 % were refused before any generation. The app says so instead of
   showing a draft made from the parts that passed. Finding 13 in
-  `docs/FINDINGS.md` gives the measurement, and the measurement of the MLX
-  models (Qwen, Gemma) that do accept Taglish, on the same meeting against the
-  notes that were written by hand.
+  `docs/FINDINGS.md` gives the measurement, and the measurement of the local
+  models that do accept Taglish, on the same meeting against the notes that
+  were written by hand. **None of those is in the app**, so automatic notes do
+  nothing for a Taglish meeting yet.
 - `transcribe --notes EXPORT.json` drafts the notes for an exported recording
   and scores the draft: how much of each note is in the transcript near its
   timestamp, which language the notes lean to, and how many of the hand-written
   notes in the export the draft also has. `eval/notes_eval.py` does the same
-  with an MLX model, thus a candidate model can be measured before it is wired
-  into the app.
+  with a local model through `mlx_lm`, thus a candidate can be measured before
+  it is wired into the app.
+- **Settings › General › Automatic notes › Draft the notes when a recording is
+  complete** drafts with no button, as soon as a transcript is ready. Off
+  unless you turn it on. **The model never runs during a recording:** an
+  automatic draft waits for the recording to stop, and a draft that is running
+  stops when you press Record, because the speech model and the notes model
+  would share one chip and a late decode is missing words. `AutoDraft` in
+  `TranscriberFlow` is that decision, with a test for each way it can be
+  refused.
+- The review sheet belongs to the recording rather than to the notes pane. An
+  automatic draft finishes whether or not that pane is open, and while the
+  sheet hung off the pane a draft made with it closed was invisible.
 - The pipeline is behind a fourth engine protocol, `NotesGenerating`, beside
   the three for speech, voice activity and speakers. A second backend is a new
   conformance.

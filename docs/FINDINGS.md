@@ -645,13 +645,28 @@ What the reading says:
   are wrong. Its first score, with the strict parser, was 31 notes and
   0 of 41 covered.
 
-What follows. English notes are the default. A Taglish meeting needs an MLX
-backend, which is a new `NotesGenerating` conformance and a 2.1 GB download;
-Qwen3-4B-Instruct-2507 is the candidate; the 8B row above rules out the
-larger one. Before either ships as a default, the kind
-classification needs a second pass or a sharper prompt, and the per-part cap
-should drop to five, as the variant row shows. The harness and the CLI report the same scores,
-so the next candidate is one command on the same meeting.
+**Measured and not shipped.** A working MLX backend was built against these
+numbers -- `MLXNotesEngine` over `mlx-swift-lm`, a picker, a downloader, and
+the Metal shader step that `swift build` cannot do -- and driven through the
+app: Qwen3 4B drafted 120 notes from the whole reference meeting in 1 min
+46 s. It is not in this change. Shipping it costs two Swift dependencies, a
+2.1 GB download per user, an app binary that grows from 41 MB to 107 MB, and
+a build that needs Xcode's separately-downloaded Metal Toolchain. The
+maintainer's judgement is that a hosted model is the better route for the
+notes, so the local one was left out rather than carried.
+
+That decision has a price this file should state. **Apple's model is the only
+backend in the app, and it refuses Taglish**, so automatic notes do nothing
+for the meetings this project exists for until another backend lands. And a
+hosted model would send the transcript off the machine, which every other
+part of this project promises not to do; whatever ships next has to answer
+that in the README, in SECURITY.md and at the point of use, not quietly.
+
+What the numbers say about any future backend, hosted or not: notes in
+English, a cap of five a part rather than ten, and a second pass on the kind
+of each note, which is the weak part of every model measured here. The
+harness and the CLI report the same scores, so the next candidate is one
+command on the same meeting.
 
 ## Caveat: the audio was synthetic
 

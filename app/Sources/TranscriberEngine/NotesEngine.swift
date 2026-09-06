@@ -5,7 +5,7 @@ import TranscriberCore
 //
 // The fourth seam beside the three in `Protocols.swift`. Everything above
 // talks to `NotesGenerating` and never to a model framework directly, so a
-// second backend -- an MLX model for a language Apple's model refuses -- is
+// second backend -- for a language Apple's model refuses -- is
 // a new conformance and one line where the app picks one.
 
 // MARK: - The seam

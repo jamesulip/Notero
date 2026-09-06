@@ -185,7 +185,7 @@ The tool reports:
 - The parts that the model skipped, and why.
 
 `--json FILE` writes the `NotesRunReport` structure with these scores and the
-draft. `eval/notes_eval.py` writes the same scores for an MLX model, thus the
+draft. `eval/notes_eval.py` writes the same scores for a candidate model, thus the
 two can be compared.
 
 ## Live mode

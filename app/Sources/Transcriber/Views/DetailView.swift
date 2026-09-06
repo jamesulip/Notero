@@ -365,6 +365,18 @@ struct RecordingDetailView: View {
         .onChange(of: showInspector) { _, shown in
             if let shown { state.settings.setInspectorShown(shown, for: recording.kind) }
         }
+        // The review of a draft, on the recording and not on the notes pane.
+        // An automatic draft finishes whether or not that pane is open, and a
+        // draft nobody is shown is two minutes of the GPU for nothing.
+        // Closing the sheet any way other than a button is a dismiss.
+        .sheet(isPresented: Binding(
+            get: { state.notes.draft(for: recording.id) != nil },
+            set: { if !$0 { state.notes.dismiss(recording.id) } }
+        )) {
+            if let draft = state.notes.draft(for: recording.id) {
+                NotesDraftSheet(recording: recording, draft: draft)
+            }
+        }
         .toolbar {
             ToolbarItem {
                 Button {

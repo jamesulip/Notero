@@ -407,8 +407,19 @@ on 2026-09-06 on a 93-minute Taglish meeting, a part with 28 % Tagalog words
 was accepted and parts with 50 % and 92 % were refused before any generation,
 with the default and the permissive guardrails alike. Finding 13 in
 [FINDINGS.md](FINDINGS.md) gives the measurement, and the measurement of the
-MLX models on the same meeting. A second backend for those models is a new
-conformance to `NotesGenerating` and one line in `AppState+Notes`.
+models that do accept it, none of which is in the app. A second backend is a
+new conformance to `NotesGenerating` and one line in `AppState+Notes`.
+
+`AutoDraft` in `TranscriberFlow` decides whether a finished transcription
+drafts its own notes. Six inputs, one of which is the point: **the notes model
+never runs while a recording does.** A draft is minutes of the chip and the
+live decoder shares it, so a hop that arrives late is dropped and a dropped
+hop is missing words. The whole-file queue already refuses to start during a
+recording; this is that rule for the notes, in both directions -- a draft does
+not start during a recording, and one that is running is cancelled when a
+recording starts. The status it reads comes from a context of its own: the
+queue emits `.completed` and then `.finished`, and the main context has not
+always merged the writer actor's save by then.
 
 `NotesCoordinator` in `TranscriberFlow` holds one state per recording:
 running with the progress, ready with the draft, or failed with the message.
@@ -420,5 +431,5 @@ framework, and the pane shows no button there.
 trusted: grounding (the content words of a note that occur in the transcript
 near its timestamp), the language mix of the transcript against the notes, and
 the coverage of the hand-written notes by the draft. `transcribe --notes`
-reports the three for the Apple model and `eval/notes_eval.py` for an MLX model,
+reports the three for the Apple model and `eval/notes_eval.py` for a candidate,
 on the app's JSON export of a recording.

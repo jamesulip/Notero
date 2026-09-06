@@ -73,6 +73,34 @@ final class JobCoordinatorTests: XCTestCase {
         XCTAssertNil(coordinator.warning(for: id))
     }
 
+    /// The hook the automatic draft hangs on. It fires after the job's own
+    /// bookkeeping, so a handler that asks `isBusy` is told the truth.
+    func testFinishedCallsBackOnceTheJobIsNoLongerBusy() async throws {
+        let coordinator = makeCoordinator()
+        let id = try recording().id
+        let seen = Box()
+        coordinator.onFinished = { finished in seen.record(finished, busy: coordinator.isBusy(finished)) }
+
+        coordinator.enqueue(job(id))
+        XCTAssertTrue(coordinator.isBusy(id))
+        XCTAssertTrue(seen.ids.isEmpty, "nothing yet")
+
+        await coordinator.handle(.finished(id: id))
+        XCTAssertEqual(seen.ids, [id])
+        XCTAssertEqual(seen.busyWhenCalled, [false])
+        XCTAssertFalse(coordinator.isBusy(id))
+    }
+
+    @MainActor
+    final class Box {
+        var ids: [UUID] = []
+        var busyWhenCalled: [Bool] = []
+        func record(_ id: UUID, busy: Bool) {
+            ids.append(id)
+            busyWhenCalled.append(busy)
+        }
+    }
+
     func testStageWritesTheStatusOnceAndTheFractionNever() async throws {
         let coordinator = makeCoordinator()
         let id = try recording().id

@@ -197,6 +197,22 @@ struct GeneralSettings: View {
 
             if state.canDraftNotes {
                 Section {
+                    Toggle("Draft the notes when a recording is complete",
+                           isOn: $settings.autoDraftNotes)
+                    // A plain string, not a literal, so SwiftUI does not read
+                    // markdown here. Emphasis has to be carried by the words.
+                    Text(settings.autoDraftNotes
+                         ? "The app drafts the notes as soon as the transcript is ready, and "
+                         + "shows them for you to select. It never runs during a recording, "
+                         + "and a draft that is running stops when you record: the two would "
+                         + "share one chip."
+                         : "The app drafts the notes only when you click Draft Notes. Turn "
+                         + "this on and it drafts them after every recording instead. Either "
+                         + "way it never runs during a recording.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     Picker("Language of the notes", selection: $settings.notesStyle) {
                         ForEach(NotesStyle.allCases) { style in
                             Text(style.label).tag(style)

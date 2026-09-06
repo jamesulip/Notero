@@ -47,6 +47,10 @@ extension AppState {
             )
             return
         }
+        // A draft that is running would compete with the live decoder for the
+        // GPU, and a late hop is dropped words. Refer to `AutoDraft`.
+        stopNotesForRecording()
+
         let id = recording.id
         activeRecordingId = id
         let name = Paths.newRecordingName(id: id, ext: "m4a", on: recording.createdAt)

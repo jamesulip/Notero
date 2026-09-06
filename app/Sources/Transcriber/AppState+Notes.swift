@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import TranscriberCore
 import TranscriberEngine
 import TranscriberFlow
@@ -56,6 +57,61 @@ extension AppState {
                              message: error.localizedDescription)
         }
         notes.dismiss(recording.id)
+    }
+
+    // MARK: - Drafting by itself
+
+    /// A transcription job left the queue. Draft the notes if everything
+    /// `AutoDraft` asks for is true.
+    ///
+    /// Availability is awaited first, so "Apple Intelligence is off" skips
+    /// quietly here rather than posting a failure into the pane of every
+    /// recording the user makes.
+    func autoDraftNotes(for id: UUID) {
+        guard settings.autoDraftNotes, let engine = Self.notesEngine else { return }
+        Task {
+            let ready = await engine.availability().isAvailable
+            // The status and the rows are read from a context of their own.
+            // The queue emits `.completed` and then `.finished`, and the
+            // status is written by the writer actor on its own context; the
+            // main context has not necessarily merged that by the time this
+            // runs, and a stale read here skips the draft on every recording.
+            let state = committedState(of: id)
+            let decision = AutoDraft.decide(
+                enabled: settings.autoDraftNotes,
+                hasModel: ready,
+                status: state.status,
+                hasTranscript: state.hasTranscript,
+                isRecording: isLiveBusy,
+                hasDraft: notes.state(for: id) != nil
+            )
+            guard decision.isDraft, let recording = recording(id) else { return }
+            draftNotes(for: recording)
+        }
+    }
+
+    /// The recording's status and whether it has any transcript rows, read
+    /// from a fresh context so the values are the ones on disk.
+    private func committedState(of id: UUID) -> (status: TranscriptionStatus, hasTranscript: Bool) {
+        let context = ModelContext(container)
+        var descriptor = FetchDescriptor<StoredRecording>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        guard let row = try? context.fetch(descriptor).first else { return (.failed, false) }
+        let hasRows = row.transcript.map { transcript in
+            ((try? TranscriptReader.segmentRows(ofTranscript: transcript.id, in: context)) ?? []).isEmpty == false
+        } ?? false
+        return (row.status, hasRows)
+    }
+
+    /// Stops any draft when a recording starts.
+    ///
+    /// The decision above keeps a draft from starting during a recording. This
+    /// is the other order: a draft already running when the user hits Record.
+    /// The live decoder needs the chip more, and a draft is cheap to repeat.
+    func stopNotesForRecording() {
+        for (id, state) in notes.states {
+            if case .running = state { notes.cancel(id) }
+        }
     }
 
     /// What the review sheet and the settings call the backend.

@@ -12,7 +12,7 @@ import TranscriberEngine
 // written by hand is therefore a scored pair with no extra work.
 
 /// One run, machine-readable. `eval/notes_eval.py` writes the same fields
-/// for an MLX model, so the two can be put side by side.
+/// for a candidate model, so the two can be put side by side.
 struct NotesRunReport: Codable {
     var document: String
     var model: String

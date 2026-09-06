@@ -58,6 +58,11 @@ public final class JobCoordinator {
         var remaining: TimeInterval?
     }
 
+    /// Called when a job leaves the queue, whatever became of it. The app
+    /// reads the recording's own status to find out which. Set once, at
+    /// launch; `AutoDraft` decides what happens next.
+    public var onFinished: ((UUID) -> Void)?
+
     private let queue: TranscriptionQueue
     private let writer: TranscriptWriter
     private let now: @Sendable () -> Date
@@ -208,6 +213,9 @@ public final class JobCoordinator {
             stageClock[id] = nil
             queuedJobs[id] = nil
             openTranscripts[id] = nil
+            // After the bookkeeping, so a handler that reads `isBusy` sees
+            // the job gone rather than still running.
+            onFinished?(id)
         }
     }
 

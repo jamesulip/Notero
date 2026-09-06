@@ -76,16 +76,6 @@ struct NotesPane: View {
         }
         .onDisappear { save() }
         .task { availability = await state.notesAvailability() }
-        // The review of a draft, up while the coordinator holds one for this
-        // recording. Closing it any way other than a button is a dismiss.
-        .sheet(isPresented: Binding(
-            get: { state.notes.draft(for: recording.id) != nil },
-            set: { if !$0 { state.notes.dismiss(recording.id) } }
-        )) {
-            if let draft = state.notes.draft(for: recording.id) {
-                NotesDraftSheet(recording: recording, draft: draft)
-            }
-        }
     }
 
     /// The model's offer, above the hand-written notes: one button, the

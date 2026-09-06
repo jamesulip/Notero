@@ -65,6 +65,7 @@ final class AppSettings {
         static let interfaceMode = "ui.interfaceMode"
         static let menuBarItem = "ui.menuBarItem"
         static let notesStyle = "notes.style"
+        static let autoDraftNotes = "notes.auto"
     }
 
     private let defaults: UserDefaults
@@ -102,6 +103,7 @@ final class AppSettings {
             ?? .simple
         menuBarItem = defaults.object(forKey: Key.menuBarItem) as? Bool ?? true
         notesStyle = NotesStyle(rawValue: defaults.string(forKey: Key.notesStyle) ?? "") ?? .english
+        autoDraftNotes = defaults.object(forKey: Key.autoDraftNotes) as? Bool ?? false
     }
 
     // MARK: - Interface
@@ -127,6 +129,13 @@ final class AppSettings {
     /// hand-written set of notes in the library is English with Taglish
     /// quotes, and that is what the drafts are measured against.
     var notesStyle: NotesStyle { didSet { defaults.set(notesStyle.rawValue, forKey: Key.notesStyle) } }
+
+    /// Draft the notes as soon as a transcription finishes, with no button.
+    ///
+    /// Off unless asked for, as live text is: it is a minute or two of the
+    /// chip after every recording. It never runs during a recording -- refer
+    /// to `AutoDraft`.
+    var autoDraftNotes: Bool { didSet { defaults.set(autoDraftNotes, forKey: Key.autoDraftNotes) } }
 
     /// The first-run card has been dismissed.
     var hasSeenWelcome: Bool { didSet { defaults.set(hasSeenWelcome, forKey: Key.hasSeenWelcome) } }
