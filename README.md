@@ -13,14 +13,25 @@ No recording, no transcript and no note goes off your Mac.
 
 ## Features
 
-- Record from the microphone, or import an MP3, WAV, M4A, MP4 or MOV file.
-- Live transcription while you record, and whole-file transcription after.
+- Drop an MP3, WAV, M4A, AIFF, MP4 or MOV file on the window or on the Dock
+  icon, or record from the microphone.
+- Whole-file transcription after a recording or an import. Live text during a
+  recording is optional, and off by default.
+- Pause and resume a recording. The break is not in the file.
+- A menu bar item with Record, Pause and Stop, and two shortcuts that work in
+  every application.
+- Two modes. Simple shows the transcript, the notes and two buttons. Advanced
+  shows every control.
 - 15 languages and automatic detection. Tagalog and Taglish are the default.
 - Speaker identification, with manual merge and reassignment.
 - Meeting notes: a summary and five lists, which are key points, decisions,
   action items, questions and follow-ups. Each item keeps the timestamp and the
   transcript line that it came from.
-- Transcript editing, with revisions and one-step undo for each turn.
+- Transcript editing, with revisions and one-step undo for each turn. One
+  turn can be transcribed again on another tier, without the rest of the
+  meeting.
+- Your corrections export as a reference set, thus the evaluation harness can
+  score each change on your own meetings.
 - Synchronized transcript and audio playback, with bookmarks.
 - Full-text search across each transcript, note, action item and bookmark.
 - Export to TXT, Markdown, SRT, VTT and JSON.

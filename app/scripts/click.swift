@@ -35,7 +35,7 @@ switch mode {
 case "right":
     post(.rightMouseDown, .right); usleep(40_000); post(.rightMouseUp, .right)
 case "double":
-    post(.leftMouseDown, .left); usleep(30_000); post(.leftMouseUp, .left); usleep(60_000)
+    post(.leftMouseDown, .left); usleep(30_000); post(.leftMouseUp, .left); usleep(140_000)
     post(.leftMouseDown, .left, clicks: 2); usleep(30_000); post(.leftMouseUp, .left, clicks: 2)
 default:
     post(.leftMouseDown, .left); usleep(40_000); post(.leftMouseUp, .left)

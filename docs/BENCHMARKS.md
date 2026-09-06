@@ -134,6 +134,37 @@ a 15-second context, scored with the command-line scorer:
 each commit boundary was costing six WER points. Real-time pacing dropped 4 of
 38 hops, which is 11%.
 
+### The pause filter
+
+The paused synthetic clip (87 s, 25 pauses of 1.2 s) exercises the utterance
+boundary. On 2026-09-06 the decoder started to drop, from each hypothesis, a
+word that starts inside a pause that the voice detector found. Every decode
+awaited, Balanced tier:
+
+| Paused clip, live replay | WER | Words | Tail words committed unagreed | Deduplicated by text |
+| --- | ---: | ---: | ---: | ---: |
+| before the filter | 51.6% | 122 | 59 | 14 |
+| **with the filter** | **39.1%** | 127 | 46 | 17 |
+
+The clips with no pause of 700 ms do not change. Finding 12 in
+[FINDINGS.md](FINDINGS.md) gives the mechanism.
+
+### A style primer in the prompt
+
+A sentence of Taglish before each window, as a hint for the spelling. Measured
+on 2026-09-06 with `transcribe --style-hint`, Balanced tier:
+
+| Clip | Path | No primer | Primer |
+| --- | --- | ---: | ---: |
+| synthetic | offline | 24.2% | 44.5% |
+| synthetic | live | 27.3% | 96.1% |
+| meeting01 | offline | 71.7% | 65.0% |
+| meeting01 | live | 63.3% | 280.0% |
+
+**The app does not send the primer.** On the live path the model repeats the
+primer instead of the room. The Names and terms field of the app is a short
+list, and this measurement does not cover short prompts.
+
 ### The adaptive hop
 
 Under real-time pacing:
@@ -246,6 +277,19 @@ of commits for each stream falls by approximately one third.
    recordings.
 
 ## Measure your own audio
+
+**Your corrections are the best references you have.** In Advanced mode,
+**File › Export Corrections as References…** writes a folder with a copy of
+each recording that has edits, the edited transcript as the reference, and a
+`manifest.json`. Point the harness at it:
+
+```bash
+python3 eval/compare_language.py --manifest FOLDER/manifest.json \
+    --bin app/.build/release/transcribe --models models --arms tl
+```
+
+The folder's `summary.md` also gives the raw model text scored against your
+corrections, with no new decode. That number is the error rate you experience.
 
 In the app, press ⇧⌘K for the model benchmark. It measures the three tiers on
 your own audio and recommends the slowest tier that stays at real-time speed.

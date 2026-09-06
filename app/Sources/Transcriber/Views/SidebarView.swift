@@ -33,7 +33,13 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            filterBar
+            // The filter is an Advanced control. Simple mode shows the whole
+            // library, newest first, and nothing to select before the list.
+            if state.settings.isAdvanced {
+                filterBar
+            } else {
+                simpleTopBar
+            }
             list
             footer
         }
@@ -48,6 +54,9 @@ struct SidebarView: View {
             if let route, !selection.contains(route) { selection = [route] }
             if route == nil { selection = [] }
         }
+        .onChange(of: state.settings.isAdvanced) { _, advanced in
+            if !advanced { filter = .all }
+        }
         .onDeleteCommand { pendingDelete = selectedRecordings }
         .confirmationDialog(
             deleteTitle, isPresented: Binding(
@@ -61,7 +70,7 @@ struct SidebarView: View {
                 pendingDelete = []
             }
         } message: {
-            Text("The audio and transcript are removed from this Mac. This cannot be undone.")
+            Text("The app removes the audio and the transcript from this Mac. You cannot undo this.")
         }
     }
 
@@ -79,13 +88,13 @@ struct SidebarView: View {
 
             if filtered.isEmpty {
                 ContentUnavailableView {
-                    Label(filter == .all ? "No recordings yet" : "Nothing here",
+                    Label(filter == .all ? "No recordings yet" : "No recordings match",
                           systemImage: filter == .active ? "hourglass" : "waveform")
                 } description: {
                     Text(filter == .all
-                         ? "Press ⌘R to record, or drop an audio file onto the window."
-                         : (filter == .active ? "Nothing is recording or being transcribed."
-                            : "Nothing matches this filter."))
+                         ? "Click Record, or drop an audio or video file on the window."
+                         : (filter == .active ? "No recording or transcription is in progress."
+                            : "No recording matches this filter."))
                 }
                 .listRowSeparator(.hidden)
             }
@@ -142,10 +151,36 @@ struct SidebarView: View {
                 filterPicker.pickerStyle(.menu)
             }
             .labelsHidden()
-            .help("Active: recording, queued or being transcribed right now")
+            .help("Active: the recordings in progress or in the queue")
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity)
+            Divider()
+        }
+        .background {
+            Rectangle().fill(.bar).ignoresSafeArea(edges: .top)
+        }
+    }
+
+    /// The same strip in Simple mode, with a title instead of a filter. It
+    /// exists for the same reason: it is what keeps rows out from under the
+    /// window controls.
+    private var simpleTopBar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Recordings")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if !recordings.isEmpty {
+                    Text("\(recordings.count)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .monospacedDigit()
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             Divider()
         }
         .background {
@@ -169,19 +204,38 @@ struct SidebarView: View {
                 } label: {
                     Label("Search", systemImage: "magnifyingglass")
                 }
-                Spacer()
+                .help("Search all recordings (⇧⌘F)")
+                .labelStyle(.iconOnly)
+
+                // The one switch between the two modes that is always on
+                // screen. Settings and the View menu have the same switch.
                 Button {
-                    state.route = .benchmark
+                    withAnimation(.snappy) { state.settings.isAdvanced.toggle() }
                 } label: {
-                    Label("Benchmark", systemImage: "speedometer")
+                    Label(state.settings.isAdvanced ? "Advanced" : "Simple",
+                          systemImage: "slider.horizontal.3")
+                        .font(.caption)
                 }
-                .help("Measure the model tiers on this Mac (⇧⌘K)")
+                .help(state.settings.isAdvanced
+                      ? "Advanced mode. Click to change to Simple mode, which has fewer controls."
+                      : "Simple mode. Click to change to Advanced mode, which shows all controls.")
+
+                Spacer()
+                if state.settings.isAdvanced {
+                    Button {
+                        state.route = .benchmark
+                    } label: {
+                        Label("Benchmark", systemImage: "speedometer")
+                    }
+                    .help("Measure the model tiers on this Mac (⇧⌘K)")
+                    .labelStyle(.iconOnly)
+                }
                 SettingsLink {
                     Label("Settings", systemImage: "gearshape")
                 }
                 .help("Settings (⌘,)")
+                .labelStyle(.iconOnly)
             }
-            .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -198,13 +252,19 @@ struct SidebarView: View {
             try? context.save()
         }
         if recording.hasAudio {
-            RerunItems(recording: recording)
-            Button("Show Audio in Finder", systemImage: "folder") {
+            if state.settings.isAdvanced {
+                RerunItems(recording: recording)
+            } else {
+                Button("Transcribe Again", systemImage: "arrow.clockwise") {
+                    state.retranscribe(recording)
+                }
+            }
+            Button("Show the Audio in Finder", systemImage: "folder") {
                 if let url = recording.audioURL { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             }
         }
-        if recording.kind == .recording {
-            Button("Turn into a Meeting", systemImage: RecordingKind.meeting.symbol) {
+        if recording.kind == .recording, state.settings.isAdvanced {
+            Button("Make This a Meeting", systemImage: RecordingKind.meeting.symbol) {
                 recording.kind = .meeting
                 try? context.save()
             }
@@ -292,6 +352,10 @@ struct HistoryRow: View {
                 if let progress = state.progress[recording.id] {
                     StatusChip(status: progress.status, fraction: progress.fraction,
                                remaining: progress.remaining)
+                } else if state.isLive(recording.id), state.isPaused {
+                    Label("Paused", systemImage: "pause.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 } else if recording.status.isBusy {
                     // Preparing and recording are live-path states; they never
                     // get a queue entry, so they need the stored status.

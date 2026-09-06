@@ -100,6 +100,22 @@ public final class LiveSession {
     public var config = SessionConfig()
     public var isMuted = false { didSet { capture?.isMuted = isMuted } }
 
+    /// Paused: the clock, the file and the live text all stop, and resume
+    /// continues on the same timeline with no gap. Refer to
+    /// `AudioCapture.isPaused`. Cleared at `start` and at `stop`, so a
+    /// recording never begins paused because the last one ended that way.
+    public var isPaused = false {
+        didSet {
+            capture?.isPaused = isPaused
+            if isPaused {
+                // The meter would otherwise hold the last level for the
+                // length of the break.
+                level = 0
+                laneLevels = [:]
+            }
+        }
+    }
+
     /// Which lanes to record. Read at `start`; changing it mid-session does
     /// nothing, because the archive's channel count is fixed when the file is
     /// created.
@@ -232,6 +248,7 @@ public final class LiveSession {
 
         recordingId = id
         self.archiveFileName = archiveFileName
+        isPaused = false
         segments = []
         partial = ""
         lanes = captureSource.lanes
@@ -371,6 +388,7 @@ public final class LiveSession {
             notices: notices
         )
         recordingId = nil
+        isPaused = false
         state = .ready
         return result
     }

@@ -59,13 +59,13 @@ public enum CaptureSource: String, Sendable, CaseIterable, Codable {
     public var detail: String {
         switch self {
         case .microphone:
-            return "People in the room. What an in-person meeting needs."
+            return "The persons in the room. What an in-person meeting needs."
         case .systemAudio:
-            return "People on the call, captured before the speakers. Nothing in "
-                 + "the room is recorded."
+            return "The persons on the call, captured before the speaker. The app "
+                 + "records nothing from the room."
         case .both:
-            return "Both, kept as separate tracks so the transcript can tell the "
-                 + "room from the call."
+            return "Both, in separate tracks, thus the transcript can tell the room "
+                 + "from the call."
         }
     }
 }

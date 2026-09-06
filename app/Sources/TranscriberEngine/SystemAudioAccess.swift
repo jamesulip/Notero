@@ -76,18 +76,18 @@ public enum SystemAudioAccess: String, Sendable, CaseIterable {
     public var detail: String {
         switch self {
         case .granted:
-            return "Recording will capture what this Mac plays."
+            return "A recording captures what this Mac plays."
         case .notDetermined:
-            return "macOS will ask the first time you record this Mac's audio. "
-                 + "Granting it here instead means a meeting never starts with a "
+            return "macOS asks the first time you record the audio of this Mac. "
+                 + "Give the permission here, and a meeting never starts with a "
                  + "permission dialog."
         case .denied:
-            return "The call side of a meeting will be missing, and nothing will "
-                 + "say so while recording. macOS only asks once, so this has to "
-                 + "be changed in System Settings."
+            return "The call side of a meeting is missing, and nothing says so "
+                 + "during the recording. macOS asks one time only, thus you must "
+                 + "change this in System Settings."
         case .unknown:
-            return "This version of macOS does not report the answer. Recording "
-                 + "will ask if it needs to."
+            return "This version of macOS does not report the answer. The recording "
+                 + "asks when necessary."
         }
     }
 

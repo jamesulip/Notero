@@ -25,7 +25,8 @@ The binary is at `app/.build/release/transcribe`.
 ```
 transcribe --audio FILE [--reference FILE] [--models DIR]
            [--model ID | --tier fast|balanced|accurate]
-           [--language tl] [--fast-diarize | --no-diarize] [--room-mode]
+           [--language tl] [--prompt "Maria, Jose"] [--style-hint]
+           [--fast-diarize | --no-diarize] [--room-mode]
            [--format txt|markdown|srt|vtt|json] [--out FILE] [--json FILE]
            [--live [--realtime] [--hop MS] [--pre-roll MS] [--context MS] [--adaptive-hop]]
 transcribe --audio FILE --lane room|remote
@@ -77,6 +78,8 @@ Replay a file through the live path at wall-clock speed:
 | `--model ID` | Use this WhisperKit model. It overrides `--tier`. [MODELS.md](MODELS.md) lists the ids. |
 | `--tier fast\|balanced\|accurate` | Use the default model for this tier. The default is `balanced`. |
 | `--language CODE` | Force this language. The default is `tl`. `auto` selects automatic detection. |
+| `--prompt TEXT` | Names and terms for the decoder, as the Names and terms field of the app. |
+| `--style-hint` | Put the Taglish style primer of `TranscriptionPrompt` in front of the prompt. **The app does not do this.** Finding 12 in [FINDINGS.md](FINDINGS.md) gives the measurement: the primer made the live path worse. The flag exists to repeat that measurement. |
 | `--fast-diarize` | Do one speaker pass only. |
 | `--no-diarize` | Do no speaker identification. |
 | `--room-mode` | Apply the high-pass filter for far-field room audio. |

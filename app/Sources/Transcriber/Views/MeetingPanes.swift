@@ -39,7 +39,7 @@ struct NotesPane: View {
                     .background(RoundedRectangle(cornerRadius: 6).fill(.background))
                     .overlay(alignment: .topLeading) {
                         if recording.summary.isEmpty {
-                            Text("What was this about?")
+                            Text("What was the meeting about?")
                                 .foregroundStyle(.tertiary)
                                 .font(.callout)
                                 .padding(.horizontal, 11)
@@ -92,7 +92,7 @@ struct NotesPane: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .help("What kind of note this is")
+            .help("The kind of note")
 
             TextField("Add a \(quickKind.label.lowercased())…", text: $quickText)
                 .textFieldStyle(.roundedBorder)
@@ -202,7 +202,7 @@ struct ItemRow: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.tint)
-                    .help("Jump to where this came from")
+                    .help("Go to the line this came from")
                 }
             }
             Spacer(minLength: 0)
@@ -239,7 +239,7 @@ struct BookmarksPane: View {
                 ContentUnavailableView {
                     Label("No bookmarks", systemImage: "bookmark")
                 } description: {
-                    Text("Press ⌘B while recording or playing to mark the moment.")
+                    Text("Press ⌘B during a recording or during playback to mark the moment.")
                 }
             } else {
                 List {
@@ -310,8 +310,8 @@ struct SpeakersPane: View {
                     Label("No speakers yet", systemImage: "person.2")
                 } description: {
                     Text(state.progress[recording.id]?.status == .diarizing
-                         ? "Identifying speakers…"
-                         : "Speakers are identified after transcription finishes.")
+                         ? "Speaker identification in progress…"
+                         : "The app identifies the speakers after the transcription.")
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -325,9 +325,9 @@ struct SpeakersPane: View {
                 }
                 .listStyle(.inset)
                 .safeAreaInset(edge: .bottom) {
-                    Text("Rename here and every line follows. Right-click a speaker to "
-                         + "merge it into another; right-click a transcript line to move "
-                         + "just that line.")
+                    Text("Rename a speaker here, and every line follows. Right-click a "
+                         + "speaker to merge it into another one. Right-click a transcript "
+                         + "line to move only that line.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(12)
@@ -351,7 +351,7 @@ struct SpeakersPane: View {
                     }
                 ), in: 0...30) {
                     HStack(spacing: 6) {
-                        Text("People in the room")
+                        Text("Persons in the room")
                         Text(recording.expectedSpeakers.map(String.init) ?? "Any")
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
@@ -363,19 +363,19 @@ struct SpeakersPane: View {
                 if recording.hasAudio, state.progress[recording.id] == nil {
                     Button("Identify Again") { state.rediarize(recording) }
                         .controlSize(.small)
-                        .help("Run speaker identification again, aiming at this count")
+                        .help("Run the speaker identification again, with this count as the target")
                 }
             }
             if speakers.count > 1, let expected = recording.expectedSpeakers,
                speakers.count > expected {
-                Text("\(speakers.count) found for \(expected) people. Merge the fragments "
-                     + "below, or Identify Again to let the count guide the pass.")
+                Text("The app found \(speakers.count) speakers for \(expected) persons. Merge "
+                     + "the fragments below, or click Identify Again.")
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                Text("A target for speaker identification, not a limit. Voices the "
-                     + "model hears as clearly different stay separate.")
+                Text("A target for the speaker identification, and not a limit. Voices "
+                     + "that the model hears as different stay separate.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

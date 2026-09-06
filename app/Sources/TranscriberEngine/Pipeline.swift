@@ -315,6 +315,69 @@ public enum OfflinePipeline {
         )
     }
 
+    /// What a second pass over one stretch of the recording produced.
+    public struct RangeDecodeReport: Sendable {
+        /// Words inside the range, on the file's timeline.
+        public var tokens: [Token]
+        public var windowCount: Int
+        public var retriedWindows: Int
+        public var droppedWindows: Int
+    }
+
+    /// Decodes one stretch of a recording again, for the one turn the model
+    /// got wrong in a long meeting. Four hours of audio must not be decoded
+    /// again to fix forty seconds of it.
+    ///
+    /// The range is the caller's word that speech is there, so its edges are
+    /// the edges of the decode: the first window starts at the start of the
+    /// range and the last ends at its end, whatever the voice detector heard.
+    /// Measured on a real turn, the detector placed the first region 600 ms
+    /// after the turn began and the first word of the turn was lost. The
+    /// detector still chooses the cut points inside a range longer than one
+    /// window, so those fall in pauses as they do for the whole file. The
+    /// windows reach `padMs` past each edge so an onset is not clipped, and
+    /// the model stamps the first word of a window at the window's start:
+    /// with the floor at the turn's own start, that word was dropped every
+    /// time. A word therefore stays when its midpoint is inside the range. A
+    /// word that lies mostly before the range belongs to the neighbour, which
+    /// already has it.
+    public static func transcribeRange(
+        _ range: SpeechRegion,
+        in source: any PCMSource,
+        using vad: any VoiceActivityDetecting,
+        asr: any SpeechRecognizing,
+        language: String,
+        prompt: String?,
+        progress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> RangeDecodeReport {
+        let from = max(0, range.startMs)
+        let to = min(source.durationMs, range.endMs)
+        guard to > from else {
+            return RangeDecodeReport(tokens: [], windowCount: 0, retriedWindows: 0, droppedWindows: 0)
+        }
+        var regions = try await vad.regions(in: source.floats(msRange: from..<to)).map {
+            SpeechRegion(startMs: $0.startMs + from, endMs: $0.endMs + from)
+        }
+        if regions.isEmpty {
+            regions = [SpeechRegion(startMs: from, endMs: to)]
+        } else {
+            regions[0].startMs = from
+            regions[regions.count - 1].endMs = to
+        }
+        let decodeWindows = windows(for: regions, durationMs: source.durationMs)
+        let report = try await transcribe(
+            source: source, windows: decodeWindows, using: asr,
+            language: language, prompt: prompt, progress: progress,
+            initialFloorMs: max(0, from - padMs)
+        )
+        return RangeDecodeReport(
+            tokens: report.tokens.filter { ($0.startMs + $0.endMs) / 2 >= from && $0.startMs < to },
+            windowCount: decodeWindows.count,
+            retriedWindows: report.retriedWindows,
+            droppedWindows: report.droppedWindows
+        )
+    }
+
     struct Outcome {
         var tokens: [Token]
         var language: String?

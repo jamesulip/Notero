@@ -1,3 +1,4 @@
+import OSLog
 import SwiftData
 import SwiftUI
 import TranscriberCore
@@ -8,6 +9,13 @@ import TranscriberStore
 /// Also where the transcript gets fixed: a turn opens for editing on
 /// double-click, ⌘F finds within it, and playback keeps the current turn in
 /// view until the reader scrolls away.
+///
+/// The rows are read once per change, off the main actor, through
+/// `TranscriptReader`: one query, in time order, grouped into blocks before
+/// they reach the view. The view itself never walks the relationship. On a
+/// four-hour meeting the old walk was thousands of faults on the main thread,
+/// and it ran again on every redraw, because the empty-state check sorted
+/// every row to ask whether there were any.
 struct TranscriptView: View {
     @Environment(AppState.self) private var state
     @Environment(\.modelContext) private var context
@@ -23,6 +31,11 @@ struct TranscriptView: View {
     /// playhead moves. The player ticks 20 times a second; regrouping tens of
     /// thousands of segments at that rate would make a long meeting unscrollable.
     @State private var blocks: [TranscriptBlock] = []
+    /// False until the first read returns. The empty state waits for it, or a
+    /// long transcript would show "No transcript yet" for the length of the read.
+    @State private var loaded = false
+    /// Shown only when a read takes long enough to notice.
+    @State private var showSpinner = false
     /// Bumped when an edit session ends, so the signature changes and the
     /// blocks pick up the new text.
     @State private var editVersion = 0
@@ -50,7 +63,9 @@ struct TranscriptView: View {
 
     var body: some View {
         Group {
-            if segments.isEmpty {
+            if !loaded {
+                loadingState
+            } else if blocks.isEmpty {
                 emptyState
             } else {
                 list
@@ -75,7 +90,7 @@ struct TranscriptView: View {
             // context holds; the window's is the one ⌘Z reaches.
             if context.undoManager == nil { context.undoManager = undoManager }
         }
-        .task(id: transcriptSignature) { regroup() }
+        .task(id: transcriptSignature) { await regroup() }
         .onChange(of: state.turnStep) { _, step in
             guard let step else { return }
             moveSelection(by: step.delta)
@@ -110,27 +125,59 @@ struct TranscriptView: View {
         isViewingOlderRevision || state.progress[recording.id] != nil
     }
 
-    private var segments: [StoredSegment] {
-        transcript?.orderedSegments ?? []
-    }
-
-    /// Changes exactly when the rows do: a new revision, edits, or an append.
+    /// Changes exactly when the rows do: a new revision, an edit, a batch of
+    /// rows from a job, a speaker moved. None of these counts the rows.
+    /// `updatedAt` moves on every write the UI makes to the recording, and the
+    /// tick moves on every write a job makes.
     private var transcriptSignature: String {
         let transcript = transcript
-        return "\(transcript?.id.uuidString ?? "-")-\(transcript?.segments?.count ?? 0)-\(editVersion)"
+        return [transcript?.id.uuidString ?? "-",
+                String(recording.updatedAt.timeIntervalSinceReferenceDate),
+                String(state.transcriptTicks[recording.id] ?? 0),
+                String(editVersion)].joined(separator: "|")
     }
 
-    private func regroup() {
-        blocks = TranscriptGrouping.blocks(from: segments.map(value(of:)))
+    /// Reads and groups the rows off the main actor, then publishes the
+    /// blocks. A new reader for each read, on a fresh context, so an edit
+    /// saved a moment ago is what comes back.
+    private func regroup() async {
+        guard let transcript else {
+            blocks = []
+            loaded = true
+            return
+        }
+        let id = transcript.id
+        let started = ContinuousClock.now
+        let reader = state.makeReader()
+        let grouped = try? await reader.blocks(ofTranscript: id)
+        guard !Task.isCancelled else { return }
+        blocks = grouped ?? []
+        loaded = true
+        // `log stream --info --predicate 'subsystem == "local.notero"'` reads
+        // this while the app runs. It is how the load of a long transcript is
+        // measured against the real store rather than a fixture.
+        Self.log.info("transcript \(id.uuidString, privacy: .public): \(blocks.count) turns from \(blocks.reduce(0) { $0 + $1.segments.count }) rows in \((ContinuousClock.now - started).formatted(.units(allowed: [.milliseconds])), privacy: .public)")
     }
 
-    private func value(of row: StoredSegment) -> Segment {
-        Segment(id: row.id, index: row.index, startMs: row.startMs, endMs: row.endMs,
-                text: row.text, textClean: row.textClean, speakerId: row.speakerId,
-                confidence: row.confidence)
-    }
+    private static let log = Logger(subsystem: "local.notero", category: "transcript")
 
     // MARK: - Layout
+
+    private var loadingState: some View {
+        VStack(spacing: 10) {
+            if showSpinner {
+                ProgressView()
+                Text("The app reads the transcript.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task {
+            try? await Task.sleep(for: .milliseconds(400))
+            if !loaded { showSpinner = true }
+        }
+    }
 
     private var list: some View {
         VStack(spacing: 0) {
@@ -215,7 +262,7 @@ struct TranscriptView: View {
                             request(blocks[index].id, anchor: .center)
                         }
                     } label: {
-                        Label("Follow playback", systemImage: "arrow.down.to.line")
+                        Label("Follow the playback", systemImage: "arrow.down.to.line")
                             .font(.caption.weight(.medium))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -333,19 +380,19 @@ struct TranscriptView: View {
                 // Without this the row is a dead end: no audio means nothing to
                 // transcribe, and the only way out was to find it in the
                 // sidebar and work out that it should be deleted.
-                Button("Delete Recording", role: .destructive) { state.delete(recording) }
-                Button("Import Audio…") { state.isImporting = true }
+                Button("Delete This Recording", role: .destructive) { state.delete(recording) }
+                Button("Transcribe a File…") { state.isImporting = true }
             }
         }
     }
 
     private var label: String {
-        if state.progress[recording.id] != nil { return "Working on it" }
+        if state.progress[recording.id] != nil { return "Work in progress" }
         if recording.status == .cancelled { return "Transcription cancelled" }
         guard recording.status == .failed else { return "No transcript yet" }
         // "Transcription failed" is wrong for a recording that never captured
         // anything -- nothing got as far as being transcribed.
-        return recording.hasAudio ? "Transcription failed" : "Recording interrupted"
+        return recording.hasAudio ? "Transcription failed" : "The recording stopped early"
     }
 
     private var icon: String {
@@ -360,9 +407,9 @@ struct TranscriptView: View {
         }
         if let error = recording.errorMessage, recording.status == .failed { return error }
         return recording.hasAudio
-            ? "The audio is here but has not been transcribed."
-            : "No audio was captured, so there is nothing to transcribe. "
-              + "Importing a file makes a new recording; this one can be deleted."
+            ? "The audio is on this Mac. It has no transcript yet."
+            : "The app captured no audio, thus there is nothing to transcribe. "
+              + "A file that you import becomes a new recording. You can delete this one."
     }
 
     // MARK: - Speakers
@@ -398,7 +445,7 @@ private struct PlaybackFollower: View {
     }
 }
 
-/// "Transcribing · 42% · about 14 min left", over a transcript still arriving.
+/// "Transcription · 42% · about 14 min left", over a transcript still arriving.
 struct TranscriptProgressBanner: View {
     let progress: AppState.JobProgress
     let durationMs: Int
@@ -421,12 +468,12 @@ struct TranscriptProgressBanner: View {
                     .font(.system(.caption, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
-                    .help("How far into the audio the decode has reached")
+                    .help("The point in the audio that the decode has reached")
             }
             if progress.status != .cancelled {
                 Button("Cancel", role: .destructive, action: onCancel)
                     .buttonStyle(.borderless)
-                    .help("Stop this transcription and keep any transcript already produced")
+                    .help("Stop the transcription. The app keeps the lines it has.")
             }
         }
         .padding(.horizontal, 16)
@@ -448,7 +495,7 @@ struct TranscriptProgressBanner: View {
     }
 }
 
-/// "Viewing revision 1 of 3 · read-only". The way back is in the info bar.
+/// "Revision 1 of 3 · read-only". The way back is in the info bar.
 private struct RevisionBanner: View {
     let shown: StoredTranscript
     let latest: StoredTranscript
@@ -456,7 +503,7 @@ private struct RevisionBanner: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "clock.arrow.circlepath")
-            Text("Viewing revision \(shown.revision) of \(latest.revision) · "
+            Text("Revision \(shown.revision) of \(latest.revision) · "
                  + "\(ModelCatalogue.option(shown.modelId)?.label ?? shown.modelId) · "
                  + "\(shown.createdAt.formatted(date: .abbreviated, time: .shortened))")
             Text("Read-only")
@@ -483,7 +530,7 @@ struct TranscriptFindBar: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField("Find in transcript", text: $find.text)
+            TextField("Find in this transcript", text: $find.text)
                 .textFieldStyle(.plain)
                 .focused($focused)
                 .onSubmit { onStep(1) }
@@ -516,7 +563,7 @@ struct TranscriptFindBar: View {
 
     private var count: String {
         if find.text.isEmpty { return "" }
-        if find.hits.isEmpty { return "No matches" }
+        if find.hits.isEmpty { return "No match" }
         return "\(find.current + 1) of \(find.hits.count)"
     }
 }
@@ -569,6 +616,11 @@ struct TranscriptBlockRow: View {
                 }
             }
 
+            // Not selectable. With selection on, a double-click on the words
+            // selected a word instead of opening the editor, and a right-click
+            // on them showed the text menu of macOS instead of the turn's
+            // menu: the gestures worked only on the time and the speaker name.
+            // The turn's menu has Copy, and the editor has the text.
             Group {
                 if highlights.isEmpty {
                     Text(block.text)
@@ -576,7 +628,6 @@ struct TranscriptBlockRow: View {
                     HighlightedText(text: block.text, highlights: highlights)
                 }
             }
-            .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
@@ -627,8 +678,26 @@ struct TranscriptBlockRow: View {
             }
             if let onEdit {
                 Divider()
-                Button("Edit Text…", systemImage: "pencil") { onEdit() }
+                Button("Edit the Text…", systemImage: "pencil") { onEdit() }
                 speakerMenu
+                if recording.hasAudio {
+                    // The one bad window in a long meeting, without the other
+                    // four hours. Advanced offers the tiers; Simple takes the
+                    // Accurate one, which is why anyone redoes a turn.
+                    if state.settings.isAdvanced {
+                        Menu("Transcribe This Turn Again", systemImage: "arrow.clockwise") {
+                            ForEach(ModelTier.allCases) { tier in
+                                Button("\(tier.label) · \(ModelCatalogue.option(state.settings.modelId(for: tier))?.label ?? "")") {
+                                    state.retranscribe(recording, turn: block, tier: tier)
+                                }
+                            }
+                        }
+                    } else {
+                        Button("Transcribe This Turn Again", systemImage: "arrow.clockwise") {
+                            state.retranscribe(recording, turn: block)
+                        }
+                    }
+                }
             }
             Divider()
             Button("Copy", systemImage: "doc.on.doc") {
@@ -672,16 +741,18 @@ struct TranscriptBlockRow: View {
         }
     }
 
+    /// The rows of this turn, by id: one query, not a walk of the transcript.
+    private var rows: [StoredSegment] {
+        (try? TranscriptReader.segmentRows(ids: block.segments.map(\.id), in: context)) ?? []
+    }
+
     private func assign(to speaker: StoredSpeaker?) {
-        let ids = Set(block.segments.map(\.id))
-        let rows = (recording.transcript?.orderedSegments ?? []).filter { ids.contains($0.id) }
         try? RecordingStore.assign(rows, to: speaker, on: recording, in: context)
     }
 
     private func add(_ kind: MeetingItemKind) {
         guard let first = block.segments.first,
-              let row = (recording.transcript?.orderedSegments ?? [])
-                  .first(where: { $0.id == first.id })
+              let row = try? TranscriptReader.segmentRow(id: first.id, in: context)
         else { return }
         _ = try? RecordingStore.addItem(kind, text: block.text, source: row,
                                         to: recording, in: context)
@@ -724,11 +795,10 @@ struct TranscriptBlockEditor: View {
     let onDone: () -> Void
 
     @FocusState private var focusedRow: UUID?
-
-    private var rows: [StoredSegment] {
-        let ids = Set(block.segments.map(\.id))
-        return (recording.transcript?.orderedSegments ?? []).filter { ids.contains($0.id) }
-    }
+    /// Fetched once by id when the editor opens. Filtering the whole
+    /// transcript on every keystroke, which is what a computed property did,
+    /// walked every row of a long meeting for each character typed.
+    @State private var rows: [StoredSegment] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -744,7 +814,7 @@ struct TranscriptBlockEditor: View {
                         .foregroundStyle(speakerColor)
                 }
                 Spacer()
-                Text("Editing · ↩ or Esc when done")
+                Text("Edit mode · Press ↩ or Esc to finish")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                 Button("Done") { onDone() }
@@ -789,7 +859,10 @@ struct TranscriptBlockEditor: View {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Color.accentColor.opacity(0.45), lineWidth: 1)
         }
-        .onAppear { focusedRow = rows.first?.id }
+        .onAppear {
+            rows = (try? TranscriptReader.segmentRows(ids: block.segments.map(\.id), in: context)) ?? []
+            focusedRow = rows.first?.id
+        }
         .onExitCommand { onDone() }
     }
 
@@ -814,12 +887,12 @@ struct TranscriptBlockEditor: View {
             }
         }
         if row.textClean != nil {
-            Button("Restore Original Text", systemImage: "arrow.uturn.backward") {
+            Button("Restore the Original Text", systemImage: "arrow.uturn.backward") {
                 row.textClean = nil
             }
         }
         Divider()
-        Button("Delete Line", systemImage: "trash", role: .destructive) {
+        Button("Delete This Line", systemImage: "trash", role: .destructive) {
             context.delete(row)
             onDone()
         }

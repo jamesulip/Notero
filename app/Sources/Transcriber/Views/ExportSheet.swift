@@ -85,7 +85,7 @@ struct ExportSheet: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
                         .background(Capsule().fill(.quaternary))
-                        .help("Only the ticked speakers and the time range are exported")
+                        .help("The export contains only the ticked speakers and the time range")
                 }
                 Spacer()
                 Button("Cancel") { dismiss() }
@@ -109,7 +109,7 @@ struct ExportSheet: View {
             )
         ) { result in
             if case .failure(let error) = result {
-                state.alert = AppState.AppAlert(title: "Export failed",
+                state.alert = AppState.AppAlert(title: "The export failed",
                                                 message: error.localizedDescription)
             }
             dismiss()
@@ -161,7 +161,7 @@ struct ExportSheet: View {
             }
             .textFieldStyle(.roundedBorder)
             .font(.system(.callout, design: .monospaced))
-            .help("Lines starting inside this range. Type times as 12:34 or 1:02:03.")
+            .help("Lines that start inside this range. Type a time as 12:34 or 1:02:03.")
         }
         .frame(minWidth: 200, alignment: .leading)
     }

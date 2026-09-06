@@ -252,6 +252,41 @@ final class LiveDecoderTests: XCTestCase {
         XCTAssertEqual(decoder.stats.unagreedTailCommits, 2, "\"na ulit\" against a stale \"???\"")
     }
 
+    /// The phrase Whisper reads out of a pause used to survive one way: a hop
+    /// heard it, the final decode dropped it, speech resumed before that final
+    /// returned so the boundary was abandoned, and the next two hops -- which
+    /// still covered the pause -- agreed on it. Now the confirmed pause itself
+    /// is what drops it, on every hop.
+    func testAWordReadOutOfAConfirmedPauseNeverCommitsEvenWhenTheFinalIsAbandoned() async throws {
+        let (decoder, asr, _, out) = make(
+            words: [word("sige", 200, 600), word("na", 600, 1_000),
+                    word("ulit", 2_500, 2_900), word("po", 2_900, 3_300)],
+            speech: [200..<1_000, 2_500..<3_300]
+        )
+        await asr.setPhantoms([word("thank", 1_300, 1_500)])
+        var clock = 0
+        await feed(decoder, &clock, to: 1_500)                       // hop: "sige na thank"
+        await asr.hold()
+        await feed(decoder, &clock, to: 1_800, settle: .vadOnly)     // final starts, hangs
+        // The VAD is batched about every 300 ms, so the speech at 2.5 s is
+        // heard by the 2.7 s batch; the final returns to a room that is
+        // talking again.
+        await feed(decoder, &clock, to: 2_800, settle: .vadOnly)
+        await asr.release()
+        await decoder.drain()
+        XCTAssertEqual(decoder.stats.finalizationsAbandoned, 1)
+        XCTAssertEqual(out.committed.joinedText, "sige na")
+        let partialsBefore = out.partials.count
+
+        // Two more hops cover the pause. Without the filter they agree on
+        // "thank" and commit it; the final pause then closes the utterance.
+        await feed(decoder, &clock, to: 5_000)
+        XCTAssertEqual(out.committed.joinedText, "sige na ulit po")
+        XCTAssertFalse(out.partials.dropFirst(partialsBefore).joined().contains("thank"),
+                       "the phantom must not even be shown as provisional once the pause is confirmed")
+        XCTAssertGreaterThanOrEqual(decoder.stats.hallucinationsDropped, 2)
+    }
+
     func testAContinuedPauseIsNotFinalizedTwice() async throws {
         let (decoder, asr, _, _) = make(words: [word("sige", 200, 600)], speech: [200..<600])
         var clock = 0

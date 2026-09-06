@@ -171,7 +171,9 @@ public enum WordErrorRate {
         return Double(previous[target.count]) / Double(source.count)
     }
 
-    static func words(_ text: String) -> [String] {
+    /// The tokens the score counts: lower case, no diacritics, letters and
+    /// digits only.
+    public static func words(_ text: String) -> [String] {
         text.lowercased()
             .folding(options: .diacriticInsensitive, locale: nil)
             .components(separatedBy: CharacterSet.alphanumerics.inverted)

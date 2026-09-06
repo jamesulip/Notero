@@ -5,12 +5,42 @@ What each part of the app does. For the build, read
 [ARCHITECTURE.md](ARCHITECTURE.md). For the command-line tool, read
 [CLI.md](CLI.md).
 
+## Simple and Advanced
+
+The app has two modes. **Simple** is the default. It shows the recordings, a
+button to record, a button to transcribe a file, the transcript and the notes.
+The app selects the model and the audio settings. **Advanced** adds the model
+tiers, the audio controls, the benchmark, the decode statistics and the
+transcript revisions.
+
+To change the mode, click the mode name at the bottom of the sidebar, or
+select **View › Advanced Mode** (⌥⌘A), or go to **Settings › General › Mode**.
+The two modes use the same library and the same pipeline.
+
+This document describes the Advanced mode. A setting that this document names
+is not on the screen in Simple mode.
+
 ## Record or import
 
-**Record.** The app records from the microphone and writes two files from one
-audio tap. The first file is a 64 kbps AAC archive at the hardware sample rate.
+**Record.** Click **Record** in the toolbar, or press ⌘R. The app asks for the
+microphone permission at the first recording, and not before. The app records
+from the microphone and writes two files from one audio tap. The first file is a 64 kbps AAC archive at the hardware sample rate.
 The second file is a 16 kHz mono working copy for the models. Both files come
 from the same tap, thus their samples stay aligned.
+
+**Pause.** Click **Pause** (⇧⌘P) to stop the clock and the file during a
+break. Click **Resume** to continue. The break is not in the recording, and
+the transcript continues with no gap. **Mute** is different: the clock
+continues, and the file gets silence for the length of the mute. A time of day
+in the transcript does not count the paused time.
+
+**The menu bar.** Notero puts an item in the menu bar. Click it to record,
+pause, resume or stop from any application, and to add a bookmark. During a
+recording, macOS draws its orange microphone indicator on the item. Open the
+menu to see the clock and the paused state. Two shortcuts work in every application
+while the item is on: ⌃⌥R starts or stops a recording, and ⌃⌥P pauses or
+resumes it. To hide the item, turn off **Settings › General › Show Notero in
+the menu bar**. This also removes the two shortcuts.
 
 **Select the input.** Go to **Settings › Audio › Record**. There are three
 inputs:
@@ -41,17 +71,27 @@ device disconnects during a recording, the recording continues on the default
 input of macOS and shows a message. The recording keeps the message as a
 warning.
 
-**Import.** Drop an MP3, WAV, M4A, MP4 or MOV file on the window, or on the
-Dock icon. The app copies the file into the library and adds it to the queue.
+**Transcribe a file.** Drop an MP3, WAV, M4A, AIFF, MP4 or MOV file on the
+window or on the Dock icon. You can also click **Transcribe a File** (⌘O), or
+select **Open With › Notero** in the Finder. The window shows a frame while a
+file is over it. The app copies the file into the library and adds it to the
+queue. If a file with the same size is already in the library, the app asks
+before it imports a second copy.
 
 ## Transcribe
 
-**Live transcription** runs while you record. It decodes a 15-second context
-every 1.5 seconds and applies LocalAgreement-2. **Committed text never changes
-later.** Each decode also reads 1.5 seconds of committed audio in front of the
-active region, thus the model does not start cold at a commit boundary. When
-the voice detector hears 700 ms of silence, the app decodes the audio up to
-that pause and closes the utterance.
+**Live text is off by default.** The app records only, and it makes the
+transcript when you stop. Nothing runs on the Mac during the meeting, and the
+app loads no model at the start. To see text during a recording, turn on
+**Settings › General › Show text while you record**.
+
+**Live text**, when it is on, decodes a 15-second context every 1.5 seconds and
+applies LocalAgreement-2. **Committed text never changes later.** Each decode
+also reads 1.5 seconds of committed audio in front of the active region, thus
+the model does not start cold at a commit boundary. When the voice detector
+hears 700 ms of silence, the app decodes the audio up to that pause and closes
+the utterance. The app drops a word that the model places inside such a pause,
+because the model read it out of silence.
 
 **Whole-file transcription** runs after a recording, and on each import. It
 finds the speech, packs it into windows that end in silence, and decodes each
@@ -105,12 +145,39 @@ Press ⌘B to bookmark the moment during a recording or during playback.
 
 ## Edit the transcript
 
+**Transcribe one turn again.** Right-click a turn and select **Transcribe
+This Turn Again**. The app decodes only that turn, on the Accurate tier in
+Simple mode and on the tier that you select in Advanced mode, and replaces the
+lines of the turn. The rest of the transcript does not change, and the turn
+keeps its speaker. A four-hour meeting with one bad window is therefore fixed
+in seconds. The first run on the Accurate tier downloads its model.
+
 Double-click a turn to edit it line by line. The app keeps the raw model output
 below your edit. The search index and the exports read the edited text.
 
 You can restore a line, delete it, or move it to a different speaker. Press ⌘Z
 to undo all edits to one turn in one step. A menu in the info bar shows the
 earlier revisions.
+
+## Your corrections as references
+
+Each edit that you make is stored beside the raw model text. A recording with
+edits is therefore a scored pair: the raw text is the hypothesis, and your
+edited transcript is the reference. In Advanced mode, select **File › Export
+Corrections as References…** and select a folder. The app writes a dated
+folder with a copy of each corrected recording, its reference text, the raw
+text, the corrected lines with the raw text beside each, `manifest.json` for
+the evaluation harness, and `summary.md`. The summary scores the raw text
+against your corrections with no new decode.
+
+To score a configuration against the folder, from the repository root:
+
+```bash
+python3 eval/compare_language.py --manifest FOLDER/manifest.json \
+    --bin app/.build/release/transcribe --models models --arms tl
+```
+
+**The folder holds real meetings.** Do not attach it to a public issue.
 
 ## Find it again
 
@@ -134,9 +201,14 @@ You can also export selected speakers only, or one time range only.
 
 | Keys | Function |
 | --- | --- |
-| ⌘R, ⇧⌘M, ⌘N | New recording, meeting or note |
+| ⌘R | Record. In Advanced mode, ⇧⌘M makes a meeting and ⌘N makes a note |
+| ⇧⌘P | Pause or resume the recording |
 | ⌘. | Stop the recording |
-| ⌘O, ⌘E | Import, export |
+| ⌃⌥R | Start or stop a recording, from any application |
+| ⌃⌥P | Pause or resume the recording, from any application |
+| ⌘O | Transcribe a file |
+| ⌘E | Export |
+| ⌥⌘A | Advanced mode on or off |
 | ⌘F | Find in this transcript |
 | ⇧⌘F | Search all recordings |
 | ⌘B | Bookmark this moment |

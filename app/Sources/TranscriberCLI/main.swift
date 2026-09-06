@@ -29,6 +29,11 @@ struct Options {
     var modelId: String?
     var tier: ModelTier = .balanced
     var language = LanguageCatalogue.defaultLanguage
+    /// Names and terms for the decoder, as the app's Vocabulary field.
+    var vocabulary: String?
+    /// Put the built-in style primer for the language in front of the prompt,
+    /// as the app does by default.
+    var styleHint = false
     var diarizationMode: DiarizationMode = .accurate
     var roomMode = false
     var format: ExportFormat = .txt
@@ -72,6 +77,8 @@ func parse() -> Options {
         case "--model": options.modelId = value()
         case "--tier": options.tier = value().flatMap(ModelTier.init(rawValue:)) ?? options.tier
         case "--language": options.language = value() ?? options.language
+        case "--prompt": options.vocabulary = value()
+        case "--style-hint": options.styleHint = true
         case "--format": options.format = value().flatMap(ExportFormat.init(rawValue:)) ?? options.format
         case "--out": options.output = value().map { URL(fileURLWithPath: $0) }
         case "--json": options.json = value().map { URL(fileURLWithPath: $0) }
@@ -99,7 +106,8 @@ func parse() -> Options {
             print("""
             transcribe --audio FILE [--reference FILE] [--models DIR]
                        [--model ID | --tier fast|balanced|accurate]
-                       [--language tl] [--fast-diarize | --no-diarize] [--room-mode]
+                       [--language tl] [--prompt "Maria, Jose"] [--style-hint]
+                       [--fast-diarize | --no-diarize] [--room-mode]
                        [--format txt|markdown|srt|vtt|json] [--out FILE] [--json FILE]
                        [--live [--realtime] [--hop MS] [--pre-roll MS] [--context MS] [--adaptive-hop]]
             transcribe --record [--source microphone|systemAudio|both] [--device UID]
@@ -223,6 +231,10 @@ log("audio: \(TimeFormat.short(ms: source.durationMs)) (\(source.sampleCount) sa
 let engines = EngineHost(modelsDirectory: options.models)
 let modelId = options.modelId ?? options.tier.defaultModelId
 log("model: \(modelId)")
+let prompt = TranscriptionPrompt.compose(language: options.language,
+                                         usePrimer: options.styleHint,
+                                         vocabulary: options.vocabulary)
+if let prompt { log("prompt: \(prompt)") }
 
 do {
     try await engines.loadModel(modelId) { message, _ in log("  \(message)") }
@@ -247,7 +259,7 @@ if options.live {
     // commit policy as a recording -- minus the microphone.
     let config = SessionConfig(
         contextMs: options.contextMs, hopMs: options.hopMs, language: options.language,
-        preRollMs: options.preRollMs, adaptiveHop: options.adaptiveHop
+        prompt: prompt, preRollMs: options.preRollMs, adaptiveHop: options.adaptiveHop
     )
     liveConfig = config
     await vad.reset()
@@ -305,7 +317,7 @@ if options.live {
     do {
         decoded = try await OfflinePipeline.transcribe(
             source: source, windows: windows, using: asr,
-            language: options.language, prompt: nil
+            language: options.language, prompt: prompt
         )
     } catch {
         log("error: transcription failed: \(error.localizedDescription)")

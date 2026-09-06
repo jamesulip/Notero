@@ -166,8 +166,24 @@ public final class StoredTranscript {
     /// Deleted rows drop out at once rather than at the next save: a line the
     /// user just removed must not reappear in the reindex or the export that
     /// follows in the same breath.
+    ///
+    /// One indexed fetch rather than a walk of the relationship. The
+    /// relationship hands back a fault for each row and the sort fires every
+    /// one of them, which on a long meeting is thousands of round trips to
+    /// SQLite. The relationship is the fallback for a row that has no context
+    /// yet, which only a test constructs.
     public var orderedSegments: [StoredSegment] {
-        (segments ?? []).filter { !$0.isDeleted }.sorted { $0.startMs < $1.startMs }
+        if let context = modelContext {
+            let id = self.id
+            let descriptor = FetchDescriptor<StoredSegment>(
+                predicate: #Predicate { $0.transcript?.id == id },
+                sortBy: [SortDescriptor(\.startMs)]
+            )
+            if let rows = try? context.fetch(descriptor) {
+                return rows.filter { !$0.isDeleted }
+            }
+        }
+        return (segments ?? []).filter { !$0.isDeleted }.sorted { $0.startMs < $1.startMs }
     }
 }
 

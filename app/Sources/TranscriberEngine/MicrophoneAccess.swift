@@ -58,16 +58,16 @@ public enum MicrophoneAccess: String, Sendable, CaseIterable {
     public var detail: String {
         switch self {
         case .granted:
-            return "Recording will capture audio."
+            return "A recording captures audio."
         case .notDetermined:
-            return "macOS will ask the first time you record. Granting it here "
-                 + "instead means a meeting never starts with a permission dialog."
+            return "macOS asks the first time you record. Give the permission here, "
+                 + "and a meeting never starts with a permission dialog."
         case .denied:
-            return "Recording will produce silence rather than an error. macOS only "
-                 + "asks once, so this has to be changed in System Settings."
+            return "A recording gives silence and no error. macOS asks one time only, "
+                 + "thus you must change this in System Settings."
         case .restricted:
-            return "A configuration profile or parental controls prevent microphone "
-                 + "access. Recording will produce silence."
+            return "A configuration profile or parental controls block the microphone. "
+                 + "A recording gives silence."
         }
     }
 

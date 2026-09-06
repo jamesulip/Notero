@@ -109,7 +109,7 @@ public struct LanguageOption: Identifiable, Hashable, Sendable {
 public enum LanguageCatalogue {
     public static let all: [LanguageOption] = [
         LanguageOption(id: "tl", label: "Tagalog / Taglish",
-                       note: "Forced Tagalog. Code-switched English is transcribed as spoken.",
+                       note: "Forced Tagalog. The app writes code-switched English as the speaker said it.",
                        isAutoDetect: false),
         LanguageOption(id: "en", label: "English", note: "", isAutoDetect: false),
         LanguageOption(id: "id", label: "Indonesian", note: "", isAutoDetect: false),
@@ -126,9 +126,9 @@ public enum LanguageCatalogue {
         LanguageOption(id: "vi", label: "Vietnamese", note: "", isAutoDetect: false),
         LanguageOption(id: "th", label: "Thai", note: "", isAutoDetect: false),
         LanguageOption(id: "auto", label: "Auto-detect",
-                       note: "Not recommended for Taglish: the decoder picks a "
-                           + "language per window and may translate instead of "
-                           + "transcribe.",
+                       note: "Not recommended for Taglish. The decoder selects a "
+                           + "language for each window, and it can translate "
+                           + "instead of transcribe.",
                        isAutoDetect: true),
     ]
 
@@ -162,16 +162,16 @@ public enum ModelTier: String, CaseIterable, Identifiable, Sendable, Codable {
     public var summary: String {
         switch self {
         case .fast:
-            return "Quantized turbo. Lowest latency and the smallest memory "
-                 + "footprint; the accuracy cost on Taglish is unmeasured."
+            return "Quantized turbo. The lowest latency and the smallest memory "
+                 + "use. The accuracy cost on Taglish is not measured."
         case .balanced:
-            return "large-v3-turbo. The default: full large-v3 encoder with a "
-                 + "4-layer decoder, which is what keeps live transcription real-time."
+            return "large-v3-turbo. The default: the full large-v3 encoder with a "
+                 + "4-layer decoder, which keeps live transcription in real time."
         case .accurate:
             return "Full large-v3. Expected to give the best transcript, at "
-                 + "roughly 5x the decode cost per window — meant for "
-                 + "re-transcribing a finished recording, not for the live path. "
-                 + "This project has not measured its accuracy."
+                 + "about 5 times the decode cost per window. For a second "
+                 + "transcription of a finished recording, and not for the live "
+                 + "path. This project has not measured its accuracy."
         }
     }
 
@@ -223,11 +223,11 @@ public enum DiarizationMode: String, CaseIterable, Identifiable, Sendable, Codab
     public var summary: String {
         switch self {
         case .off:
-            return "Skip speaker identification. The transcript finishes as soon as speech recognition does."
+            return "No speaker identification. The transcript is ready as soon as the speech recognition is complete."
         case .fast:
-            return "One speaker pass. Much shorter on long recordings, but similar voices may be merged."
+            return "One speaker pass. Much shorter on a long recording, but the app can merge similar voices."
         case .accurate:
-            return "Rechecks every speaker turn. Best labels, with a longer post-transcription pass."
+            return "Checks each speaker turn a second time. The best labels, with a longer pass after the transcription."
         }
     }
 

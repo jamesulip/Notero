@@ -159,6 +159,37 @@ public actor TranscriptWriter {
         return transcript.revision
     }
 
+    /// Replaces the rows of the latest transcript that start inside a range
+    /// with new rows, in place. For one turn decoded again on another model:
+    /// a new revision for forty seconds of a four-hour meeting would copy
+    /// every row and break every note that points at one.
+    ///
+    /// The rows are renumbered afterwards, so `index` stays the order.
+    /// Returns how many rows went out.
+    @discardableResult
+    public func replaceSegments(fromMs: Int, toMs: Int, with segments: [Segment],
+                                for id: UUID) throws -> Int {
+        guard let recording = try find(id), let transcript = recording.transcript else { return 0 }
+        let rows = try TranscriptReader.segmentRows(ofTranscript: transcript.id, in: modelContext)
+        var removed = 0
+        for row in rows where row.startMs >= fromMs && row.startMs < toMs {
+            modelContext.delete(row)
+            removed += 1
+        }
+        // Saved before the inserts, so the renumbering below walks only the
+        // rows that stay.
+        try modelContext.save()
+        insert(segments, into: transcript)
+        for (index, row) in try TranscriptReader.segmentRows(ofTranscript: transcript.id,
+                                                              in: modelContext).enumerated() {
+            row.index = index
+        }
+        recording.updatedAt = Date()
+        RecordingStore.reindexOffMain(recording)
+        try modelContext.save()
+        return removed
+    }
+
     private func insert(_ segments: [Segment], into transcript: StoredTranscript) {
         for segment in segments {
             let row = StoredSegment(

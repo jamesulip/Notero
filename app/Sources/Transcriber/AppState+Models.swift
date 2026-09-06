@@ -33,7 +33,7 @@ extension AppState {
                     Task { @MainActor in self.modelDownloads[id] = fraction }
                 }
             } catch {
-                alert = AppAlert(title: "Download failed", message: error.localizedDescription)
+                alert = AppAlert(title: "The download failed", message: error.localizedDescription)
             }
             modelDownloads[id] = nil
             modelsRevision += 1
@@ -48,7 +48,7 @@ extension AppState {
             do {
                 try await engines.removeModel(id)
             } catch {
-                alert = AppAlert(title: "Could not remove the model",
+                alert = AppAlert(title: "The app could not remove the model",
                                  message: error.localizedDescription)
             }
             modelsRevision += 1
@@ -71,6 +71,9 @@ extension AppState {
     /// 1.6 GB download at launch that nobody asked for.
     func warmUpEngines() {
         guard warmup == nil, live.state == .idle else { return }
+        // Only for the live path. With live transcription off, the model is
+        // loaded when a whole-file job needs it, and the launch costs nothing.
+        guard settings.liveTranscription else { return }
         guard ModelCatalogue.isDownloaded(settings.liveModelId,
                                           modelsDirectory: Paths.models) else { return }
         warmup = Task { [weak self] in
