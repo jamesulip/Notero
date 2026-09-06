@@ -12,6 +12,7 @@ app/            Swift 6 and SwiftUI. The product.
 ├── Sources/TranscriberCore/     pure logic: commit policy, merger, exports, search
 ├── Sources/TranscriberStore/    SwiftData schema and queries
 ├── Sources/TranscriberEngine/   audio, WhisperKit, FluidAudio VAD and speaker models
+├── Sources/TranscriberFlow/     the app's decisions with no window
 ├── Sources/Transcriber/         the SwiftUI app
 └── Sources/TranscriberCLI/      the same pipeline, with no window
 ```
@@ -21,7 +22,7 @@ Transcriber, which the app had through its private builds. The data directory
 holds the recordings that those builds wrote, thus a rename there hides them.
 The module names are internal, and a rename gives the user nothing.
 
-## The four layers
+## The five layers
 
 Each layer builds and tests without the layer above it:
 
@@ -30,17 +31,18 @@ Each layer builds and tests without the layer above it:
 | `TranscriberCore` | nothing | AVFoundation, CoreML, SwiftUI, SwiftData, models |
 | `TranscriberStore` | Core | inference of any kind |
 | `TranscriberEngine` | Core | SwiftUI |
-| `Transcriber` | Core, Store, Engine | — |
+| `TranscriberFlow` | Core, Store, Engine | SwiftUI, AppKit |
+| `Transcriber` | Core, Store, Engine, Flow | — |
 
 This split lets you test the commit policy, the segment merger, the exporters
 and the search index on a Mac that has no microphone and no model weights. That
 property is what keeps the CI job free of secrets and free of model downloads.
 
-The diagram in the [README](../README.md) shows the same four layers as a
-stack, from the user interface down to the models. The table above is the
-dependency rule. `TranscriberStore` and `TranscriberEngine` both depend on
-`TranscriberCore` and not on each other. The SwiftUI app is the only layer that
-sees all three.
+The diagram in the [README](../README.md) shows the same layers as a stack,
+from the user interface down to the models. The table above is the dependency
+rule. `TranscriberStore` and `TranscriberEngine` both depend on
+`TranscriberCore` and not on each other. `TranscriberFlow` and the SwiftUI app
+see all three.
 
 ### `TranscriberCore`
 
@@ -67,6 +69,22 @@ the microphone, the audio of this Mac through `SystemAudioTap`, or both.
 run the live path. `OfflinePipeline` runs the whole-file path.
 `TranscriptionQueue` runs the background jobs. `EngineHost` owns the models.
 `BenchmarkRunner` measures the tiers.
+
+### `TranscriberFlow`
+
+The decisions of the app, with no window and no AppKit, so a test can make
+them. `JobCoordinator` consumes the events of the transcription queue, writes
+to the store through `TranscriptWriter`, and holds the three values the views
+read about a job: the progress, the warning and the transcript tick. It also
+takes the three commands: enqueue, cancel and add a warning.
+`RecordingDisplayStatus` is the one ladder from the stored status, the job
+progress, the live session and the warning to what a row, a header and an
+empty transcript show. `StopPlan` decides what a stop of the live session does:
+the failure warning, where the live transcript goes, the follow-up job, the
+device-notice warning and the short-take question. The app executes the plan.
+
+Before this layer existed, these three lived on the app state as private
+methods and internal dictionaries, and no test reached them.
 
 ### `Transcriber`
 

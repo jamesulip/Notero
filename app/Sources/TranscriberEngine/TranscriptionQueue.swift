@@ -109,6 +109,20 @@ public struct TranscriptionPayload: Sendable {
     public var didDiarize: Bool
     public var waveform: [Float]
     public var metrics: TranscriptionMetrics
+
+    public init(segments: [Segment], roster: [SpeakerLabel], durationMs: Int, processMs: Int,
+                modelId: String, language: String, didDiarize: Bool, waveform: [Float],
+                metrics: TranscriptionMetrics) {
+        self.segments = segments
+        self.roster = roster
+        self.durationMs = durationMs
+        self.processMs = processMs
+        self.modelId = modelId
+        self.language = language
+        self.didDiarize = didDiarize
+        self.waveform = waveform
+        self.metrics = metrics
+    }
 }
 
 public enum JobEvent: Sendable {

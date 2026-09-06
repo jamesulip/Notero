@@ -309,7 +309,7 @@ struct SpeakersPane: View {
                 ContentUnavailableView {
                     Label("No speakers yet", systemImage: "person.2")
                 } description: {
-                    Text(state.progress[recording.id]?.status == .diarizing
+                    Text(state.jobs.progress(for: recording.id)?.status == .diarizing
                          ? "Speaker identification in progress…"
                          : "The app identifies the speakers after the transcription.")
                 }
@@ -360,7 +360,7 @@ struct SpeakersPane: View {
                 }
                 .font(.callout)
                 Spacer()
-                if recording.hasAudio, state.progress[recording.id] == nil {
+                if recording.hasAudio, !state.jobs.isBusy(recording.id) {
                     Button("Identify Again") { state.rediarize(recording) }
                         .controlSize(.small)
                         .help("Run the speaker identification again, with this count as the target")

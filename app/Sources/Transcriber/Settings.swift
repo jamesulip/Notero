@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import TranscriberCore
+import TranscriberEngine
 
 /// How much of the app is on show.
 ///
@@ -215,6 +216,14 @@ final class AppSettings {
 
     var sessionConfig: SessionConfig {
         SessionConfig(language: language, prompt: promptOrNil, useNeuralVAD: neuralVAD)
+    }
+
+    /// Everything the live session reads from Settings, in one value. The one
+    /// place the six fields meet; the session takes it whole.
+    var liveConfiguration: LiveConfiguration {
+        LiveConfiguration(session: sessionConfig, decodeLive: liveTranscription,
+                          captureSource: captureSource, microphoneUID: microphoneUID,
+                          inputGainDb: inputGainDb, isRoomMode: roomMode)
     }
 
     // MARK: - Benchmark

@@ -12,6 +12,7 @@ import TranscriberStore
 /// Models and Storage, and more rows in the first two.
 struct SettingsView: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
     @State private var pane: Pane? = .general
 
     enum Pane: String, CaseIterable, Identifiable {
@@ -39,7 +40,7 @@ struct SettingsView: View {
     }
 
     private var panes: [Pane] {
-        Pane.allCases.filter { state.settings.isAdvanced || !$0.isAdvanced }
+        Pane.allCases.filter { mode == .advanced || !$0.isAdvanced }
     }
 
     var body: some View {
@@ -61,9 +62,9 @@ struct SettingsView: View {
         }
         .navigationTitle((pane ?? .general).label)
         .frame(minWidth: 700, idealWidth: 760, minHeight: 500, idealHeight: 580)
-        .onChange(of: state.settings.isAdvanced) { _, advanced in
+        .onChange(of: mode) { _, mode in
             // A pane that just left the list must not stay on show.
-            if !advanced, pane?.isAdvanced == true { pane = .general }
+            if mode == .simple, pane?.isAdvanced == true { pane = .general }
         }
     }
 }
@@ -97,10 +98,11 @@ struct InterfaceModeSection: View {
 
 struct GeneralSettings: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
 
     var body: some View {
         @Bindable var settings = state.settings
-        let advanced = settings.isAdvanced
+        let advanced = mode == .advanced
 
         Form {
             InterfaceModeSection()
@@ -215,6 +217,7 @@ struct GeneralSettings: View {
 
 struct AudioSettings: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
 
     var body: some View {
         @Bindable var settings = state.settings
@@ -245,7 +248,7 @@ struct AudioSettings: View {
                 }
             }
 
-            if settings.isAdvanced {
+            if mode == .advanced {
                 Section("Input") {
                     InputGainSlider(gainDb: $settings.inputGainDb)
                     Text("The microphone in a laptop is 15 to 20 dB quieter than a headset at "

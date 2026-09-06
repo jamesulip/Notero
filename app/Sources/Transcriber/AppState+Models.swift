@@ -78,6 +78,7 @@ extension AppState {
                                           modelsDirectory: Paths.models) else { return }
         warmup = Task { [weak self] in
             guard let self else { return }
+            live.configure(settings.liveConfiguration)
             await live.prepare(model: settings.liveModelId)
         }
     }

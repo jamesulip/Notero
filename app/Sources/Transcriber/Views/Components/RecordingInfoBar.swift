@@ -11,6 +11,7 @@ import TranscriberStore
 /// out is an expensive way to answer it.
 struct RecordingInfoBar: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
     let recording: StoredRecording
     /// The revision on show in the transcript. Nil is the latest.
     @Binding var revision: Int?
@@ -35,17 +36,17 @@ struct RecordingInfoBar: View {
          shown?.id.uuidString ?? "-",
          // Rows arrive in batches while a job runs; the word count follows
          // them. The tick moves with each batch, and it costs no query.
-         String(state.transcriptTicks[recording.id] ?? 0),
+         String(state.jobs.tick(for: recording.id)),
          String(recording.updatedAt.timeIntervalSinceReferenceDate),
          recording.statusRaw,
          String(recording.durationMs),
-         state.settings.interfaceMode.rawValue].joined(separator: "|")
+         mode.rawValue].joined(separator: "|")
     }
 
     /// The model, the decode cost and the revisions are for the Advanced
     /// mode. In Simple mode the bar gives the date, the length, the language
     /// and the word count.
-    private var technical: Bool { state.settings.isAdvanced }
+    private var technical: Bool { mode == .advanced }
 
     var body: some View {
         HStack(spacing: 6) {

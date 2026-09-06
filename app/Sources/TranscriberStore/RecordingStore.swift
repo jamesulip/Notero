@@ -29,10 +29,16 @@ public enum RecordingStore {
     }
 
     public static func defaultTitle(for kind: RecordingKind, at date: Date) -> String {
+        "\(kind.label) \(titleFormatter.string(from: date))"
+    }
+
+    /// One formatter for the life of the process. `DateFormatter` is costly
+    /// to make and this is a static helper, so a fresh one per call was waste.
+    private static let titleFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMM, HH:mm"
-        return "\(kind.label) \(formatter.string(from: date))"
-    }
+        return formatter
+    }()
 
     // MARK: - Deleting
 
@@ -159,31 +165,11 @@ public enum RecordingStore {
 
     // MARK: - Speakers
 
-    /// Ensures a `StoredSpeaker` row exists for every label the diarizer used,
-    /// leaving names the user already chose alone.
+    /// The main-actor entry to `SpeakerSync.apply`.
     public static func syncSpeakers(_ roster: [SpeakerLabel],
                                     on recording: StoredRecording,
                                     in context: ModelContext) {
-        var existing = Dictionary(
-            (recording.speakers ?? []).map { ($0.speakerId, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        for (offset, label) in roster.enumerated() {
-            if let row = existing.removeValue(forKey: label.id) {
-                row.speechMs = label.speechMs
-                row.colorIndex = offset
-            } else {
-                let row = StoredSpeaker(speakerId: label.id,
-                                        displayName: label.displayName,
-                                        speechMs: label.speechMs,
-                                        colorIndex: offset)
-                row.recording = recording
-                context.insert(row)
-            }
-        }
-        // Labels no longer produced by the current transcript: drop them, or a
-        // re-run with fewer speakers leaves ghosts in the roster.
-        for orphan in existing.values { context.delete(orphan) }
+        SpeakerSync.apply(roster, to: recording, in: context)
     }
 
     public static func rename(_ speaker: StoredSpeaker, to name: String,
@@ -364,12 +350,9 @@ public enum RecordingStore {
         )
     }
 
-    /// Rebuilds the flattened search text. Called after any transcript or note edit.
+    /// The main-actor entry to `SearchIndex.rebuild`. Called after any
+    /// transcript or note edit.
     public static func reindex(_ recording: StoredRecording) {
-        var parts = [recording.title, recording.summary, recording.body]
-        parts.append(contentsOf: (recording.transcript?.orderedSegments ?? []).map(\.displayText))
-        parts.append(contentsOf: (recording.items ?? []).map(\.text))
-        parts.append(contentsOf: (recording.bookmarks ?? []).map(\.label))
-        recording.searchText = parts.filter { !$0.isEmpty }.joined(separator: "\n")
+        SearchIndex.rebuild(recording)
     }
 }

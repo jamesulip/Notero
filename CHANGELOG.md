@@ -80,6 +80,24 @@
   path repeat the primer (27% to 96% WER), and `suppressBlank` was noise.
   `transcribe --style-hint` and `--prompt` repeat the measurement.
 
+### Under the hood
+
+- A new layer, `TranscriberFlow`, holds the decisions of the app with no
+  window: the job coordinator, the display status of a recording and the stop
+  plan. Each has tests. Before, these were private methods and internal
+  dictionaries on the app state, and no test reached them. The live session's
+  failure warning is now saved; before, it was in memory only unless a device
+  notice followed it.
+- The speaker roster sync and the search index exist one time each, for both
+  the main actor and the writer actor. They were byte-identical copies.
+- The live session takes its six settings as one value. Four call sites copied
+  them one by one, and the launch path copied four of the six.
+- The recording screen and the player bar are split by rate of change, thus a
+  meter tick or a playhead tick re-runs one small view and not the screen. The
+  transcript rows read one playing-turn value in place of the raw playhead.
+- The interface mode is an environment value with one `advancedOnly()`
+  modifier, in place of a read of the settings at each control.
+
 ### The audio input
 
 - When the room listens through speakers, the microphone also hears the persons

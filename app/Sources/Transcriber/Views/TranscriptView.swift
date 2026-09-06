@@ -2,6 +2,7 @@ import OSLog
 import SwiftData
 import SwiftUI
 import TranscriberCore
+import TranscriberFlow
 import TranscriberStore
 
 /// The transcript, grouped into speaker turns, every row a seek target.
@@ -122,7 +123,7 @@ struct TranscriptView: View {
 
     /// No edits while rows are still arriving or an older revision is open.
     private var isReadOnly: Bool {
-        isViewingOlderRevision || state.progress[recording.id] != nil
+        isViewingOlderRevision || state.jobs.isBusy(recording.id)
     }
 
     /// Changes exactly when the rows do: a new revision, an edit, a batch of
@@ -133,7 +134,7 @@ struct TranscriptView: View {
         let transcript = transcript
         return [transcript?.id.uuidString ?? "-",
                 String(recording.updatedAt.timeIntervalSinceReferenceDate),
-                String(state.transcriptTicks[recording.id] ?? 0),
+                String(state.jobs.tick(for: recording.id)),
                 String(editVersion)].joined(separator: "|")
     }
 
@@ -181,7 +182,7 @@ struct TranscriptView: View {
 
     private var list: some View {
         VStack(spacing: 0) {
-            if let progress = state.progress[recording.id] {
+            if let progress = state.jobs.progress(for: recording.id) {
                 // Rows are arriving under this. Without it a growing list with
                 // no status reads as a finished transcript that is oddly short.
                 TranscriptProgressBanner(progress: progress, durationMs: recording.durationMs) {
@@ -240,9 +241,11 @@ struct TranscriptView: View {
                 .frame(maxWidth: .infinity)
                 .background {
                     // Lives inside the scroll view so it re-renders per player
-                    // tick on its own, not the whole list with it.
+                    // tick on its own, not the whole list with it. It is the
+                    // one view here that reads the raw playhead; it publishes
+                    // the turn under it for the rows.
                     PlaybackFollower(blocks: blocks) { blockId in
-                        guard state.followPlayback, state.player.isPlaying else { return }
+                        guard let blockId, state.followPlayback, state.player.isPlaying else { return }
                         request(blockId, anchor: .center)
                     }
                 }
@@ -369,47 +372,25 @@ struct TranscriptView: View {
     // MARK: - Empty
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label(label, systemImage: icon)
+        let display = state.displayStatus(for: recording)
+        return ContentUnavailableView {
+            Label(display.emptyState.title, systemImage: display.emptyState.symbol)
         } description: {
-            Text(detail)
+            Text(display.emptyState.detail)
         } actions: {
-            if recording.hasAudio, state.progress[recording.id] == nil {
+            switch display.action {
+            case .retry, .transcribe, .transcribeAgain:
                 Button("Transcribe") { state.retranscribe(recording) }
-            } else if !recording.hasAudio, state.progress[recording.id] == nil {
+            case nil where !recording.hasAudio && !display.isBusy:
                 // Without this the row is a dead end: no audio means nothing to
                 // transcribe, and the only way out was to find it in the
                 // sidebar and work out that it should be deleted.
                 Button("Delete This Recording", role: .destructive) { state.delete(recording) }
                 Button("Transcribe a File…") { state.isImporting = true }
+            default:
+                EmptyView()
             }
         }
-    }
-
-    private var label: String {
-        if state.progress[recording.id] != nil { return "Work in progress" }
-        if recording.status == .cancelled { return "Transcription cancelled" }
-        guard recording.status == .failed else { return "No transcript yet" }
-        // "Transcription failed" is wrong for a recording that never captured
-        // anything -- nothing got as far as being transcribed.
-        return recording.hasAudio ? "Transcription failed" : "The recording stopped early"
-    }
-
-    private var icon: String {
-        if recording.status == .cancelled { return "xmark.circle" }
-        return recording.status == .failed ? "exclamationmark.triangle" : "text.alignleft"
-    }
-
-    private var detail: String {
-        if let progress = state.progress[recording.id] {
-            guard let remaining = progress.remaining else { return progress.status.label }
-            return "\(progress.status.label) · \(TimeFormat.remaining(seconds: remaining)) left"
-        }
-        if let error = recording.errorMessage, recording.status == .failed { return error }
-        return recording.hasAudio
-            ? "The audio is on this Mac. It has no transcript yet."
-            : "The app captured no audio, thus there is nothing to transcribe. "
-              + "A file that you import becomes a new recording. You can delete this one."
     }
 
     // MARK: - Speakers
@@ -429,25 +410,30 @@ struct TranscriptView: View {
 }
 
 /// Watches the playhead and names the block under it. Its body is the only
-/// thing that re-evaluates per tick.
+/// thing that re-evaluates per tick: a binary search over the blocks, and a
+/// write to `AppState.playingBlockId` that `@Observable` drops when the turn
+/// has not changed. Every visible row used to read the playhead itself and
+/// re-run its body twenty times a second; now only the row that gains or
+/// loses the highlight does.
 private struct PlaybackFollower: View {
     @Environment(AppState.self) private var state
     let blocks: [TranscriptBlock]
-    let onChange: (UUID) -> Void
+    let onChange: (UUID?) -> Void
 
     var body: some View {
         let current = TranscriptGrouping.blockIndex(at: state.player.currentMs, in: blocks)
             .map { blocks[$0].id }
         Color.clear
-            .onChange(of: current) { _, next in
-                if let next { onChange(next) }
+            .onChange(of: current, initial: true) { _, next in
+                state.playingBlockId = next
+                onChange(next)
             }
     }
 }
 
 /// "Transcription · 42% · about 14 min left", over a transcript still arriving.
 struct TranscriptProgressBanner: View {
-    let progress: AppState.JobProgress
+    let progress: JobProgress
     let durationMs: Int
     let onCancel: () -> Void
 
@@ -570,6 +556,7 @@ struct TranscriptFindBar: View {
 
 struct TranscriptBlockRow: View {
     @Environment(AppState.self) private var state
+    @Environment(\.interfaceMode) private var mode
     @Environment(\.modelContext) private var context
 
     let recording: StoredRecording
@@ -581,11 +568,10 @@ struct TranscriptBlockRow: View {
     /// Nil when the transcript cannot be edited right now.
     var onEdit: (() -> Void)?
 
-    /// Read here rather than passed in from the list. Observation then
-    /// invalidates only the rows, and `LazyVStack` only builds the visible
-    /// ones -- so a two-hour transcript costs the same per tick as a short one.
+    /// The coarse value from the follower, not the raw playhead: this row
+    /// invalidates when the highlight arrives or leaves, and at no other tick.
     private var isPlaying: Bool {
-        block.contains(ms: state.player.currentMs)
+        state.playingBlockId == block.id
     }
 
     private var isSelected: Bool {
@@ -684,7 +670,7 @@ struct TranscriptBlockRow: View {
                     // The one bad window in a long meeting, without the other
                     // four hours. Advanced offers the tiers; Simple takes the
                     // Accurate one, which is why anyone redoes a turn.
-                    if state.settings.isAdvanced {
+                    if mode == .advanced {
                         Menu("Transcribe This Turn Again", systemImage: "arrow.clockwise") {
                             ForEach(ModelTier.allCases) { tier in
                                 Button("\(tier.label) · \(ModelCatalogue.option(state.settings.modelId(for: tier))?.label ?? "")") {

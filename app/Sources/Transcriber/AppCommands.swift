@@ -25,7 +25,7 @@ struct AppCommands: Commands {
             // ⌘R records in both modes. Simple mode makes a meeting, which
             // opens with the notes beside the transcript.
             Button(state.settings.isAdvanced ? "New Recording" : "Record") {
-                state.newItem(state.settings.isAdvanced ? .recording : .meeting)
+                state.newItem(state.newRecordingKind)
             }
             .keyboardShortcut("r")
             if state.settings.isAdvanced {
