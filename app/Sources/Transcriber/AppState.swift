@@ -207,14 +207,11 @@ final class AppState {
         self.queue = TranscriptionQueue(engines: engines)
         self.live = LiveSession(engines: engines, supportDirectory: Paths.support)
         self.writer = TranscriptWriter(modelContainer: container)
-        live.config = settings.sessionConfig
-        live.inputGainDb = settings.inputGainDb
-        live.isRoomMode = settings.roomMode
-        // Read here, not only at the first recording: the launch warm-up asks
-        // the session whether it decodes live, and the session's own default
-        // is yes. With the setting off, a 1.6 GB model loaded at every launch
-        // for a path that was never going to run.
-        live.decodeLive = settings.liveTranscription
+        // The whole configuration, not four of its six fields: the launch
+        // warm-up asks the session whether it decodes live, and a session
+        // configured by hand once loaded a 1.6 GB model at every launch for
+        // a path that was never going to run.
+        live.configure(settings.liveConfiguration)
         // Before any view reads the store: the live session and the queue did
         // not survive the last quit, so anything they still claim to be working
         // on is stranded.

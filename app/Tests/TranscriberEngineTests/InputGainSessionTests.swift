@@ -52,6 +52,33 @@ final class InputGainSessionTests: XCTestCase {
         XCTAssertEqual(session.inputGainDb, InputGain.minDb)
     }
 
+    /// One value carries every setting the session reads. A caller cannot
+    /// forget a field, which is how the launch warm-up once prepared a
+    /// session with four of six.
+    func testConfigureSetsEveryField() {
+        let session = makeSession()
+        let configuration = LiveConfiguration(
+            session: SessionConfig(hopMs: 1_200, language: "en"),
+            decodeLive: false, captureSource: .both, microphoneUID: "mic-42",
+            inputGainDb: 9, isRoomMode: true
+        )
+        session.configure(configuration)
+        XCTAssertEqual(session.config.hopMs, 1_200)
+        XCTAssertEqual(session.config.language, "en")
+        XCTAssertFalse(session.decodeLive)
+        XCTAssertEqual(session.captureSource, .both)
+        XCTAssertEqual(session.microphoneUID, "mic-42")
+        XCTAssertEqual(session.inputGainDb, 9)
+        XCTAssertTrue(session.isRoomMode)
+
+        // The default value is the app's default too.
+        session.configure(LiveConfiguration())
+        XCTAssertTrue(session.decodeLive)
+        XCTAssertEqual(session.captureSource, .default)
+        XCTAssertNil(session.microphoneUID)
+        XCTAssertEqual(session.inputGainDb, InputGain.defaultDb)
+    }
+
     /// Pause is a flag the audio callback reads per buffer, like gain. A
     /// session that ends paused must not leave the next one paused.
     func testPauseRoundTripsAndClearsTheMeter() throws {

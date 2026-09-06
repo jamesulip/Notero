@@ -53,12 +53,7 @@ extension AppState {
         recording.status = .preparing
         try? context.save()
 
-        live.config = settings.sessionConfig
-        live.inputGainDb = settings.inputGainDb
-        live.isRoomMode = settings.roomMode
-        live.decodeLive = settings.liveTranscription
-        live.captureSource = settings.captureSource
-        live.microphoneUID = settings.microphoneUID
+        live.configure(settings.liveConfiguration)
 
         // The tap is global -- it has to be, or it stops delivering whenever
         // this app is the only thing playing -- so anything Notero plays goes
