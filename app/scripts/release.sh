@@ -86,7 +86,7 @@ printf '\n\nYour existing recordings and notes remain unchanged when updating.\n
 } > "$NOTES"
 
 # --- build and package -----------------------------------------------------
-say "building Notero $VERSION…"
+say "building Notero ${VERSION}…"
 ./build-app.sh release
 
 DIST="dist"
@@ -109,7 +109,7 @@ fi
 command -v gh >/dev/null || die "gh is not installed. brew install gh"
 gh auth status >/dev/null 2>&1 || die "gh is not logged in. gh auth login"
 
-say "publishing $TAG…"
+say "publishing ${TAG}…"
 git tag -a "$TAG" -m "Notero $VERSION"
 git push origin "$TAG"
 gh release create "$TAG" \
