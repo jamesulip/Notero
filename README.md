@@ -67,6 +67,21 @@ how to fill a demo library without a touch to your own recordings.
 - **Approximately 1.9 GB of free disk space** for the model weights.
 - **A network connection** for the first build and the first start.
 
+### Why only Mac
+
+Notero is a native macOS app. It uses SwiftUI, SwiftData, Core Audio and
+CoreML, so it does not run on Windows or Linux. It also needs Apple silicon,
+because it runs the speech models on the Apple Neural Engine (ANE).
+
+WhisperKit runs the Whisper encoder and decoder on the ANE, and FluidAudio
+runs the Silero speech detector there too. The mel-spectrogram step uses the
+GPU, and the speaker models let CoreML choose the unit. The app downloads the
+CoreML models that Argmax publishes as `argmaxinc/whisperkit-coreml`. It does
+not convert models itself.
+
+On an Intel Mac, Whisper would fall back to the CPU and the GPU. That path is
+not supported and not measured.
+
 ## Build
 
 ```bash
