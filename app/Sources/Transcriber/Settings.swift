@@ -194,7 +194,7 @@ final class AppSettings {
 
     /// The model used for the live path.
     ///
-    /// `accurate` is refused here rather than in the picker: the tier is a
+    /// `best` is refused here rather than in the picker: the tier is a
     /// perfectly good choice for re-transcribing a finished recording, it just
     /// cannot decode a 15 s window inside a 1.5 s hop, and silently falling
     /// back is better than a live session that commits nothing.

@@ -683,7 +683,7 @@ struct TranscriptBlockRow: View {
                 if recording.hasAudio {
                     // The one bad window in a long meeting, without the other
                     // four hours. Advanced offers the tiers; Simple takes the
-                    // Accurate one, which is why anyone redoes a turn.
+                    // Best one, which is why anyone redoes a turn.
                     if state.settings.isAdvanced {
                         Menu("Transcribe This Turn Again", systemImage: "arrow.clockwise") {
                             ForEach(ModelTier.allCases) { tier in

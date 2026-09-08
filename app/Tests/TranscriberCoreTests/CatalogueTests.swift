@@ -35,6 +35,20 @@ final class CatalogueTests: XCTestCase {
         XCTAssertEqual(ModelCatalogue.sizeOnDisk(id, modelsDirectory: base), 7)
     }
 
+    func testTheTierNamedAccurateStillReadsBackAsBest() throws {
+        // The raw value is stored in UserDefaults, in a saved BenchmarkReport
+        // and on the --tier flag. A Mac that wrote "accurate" before the
+        // rename must keep the tier it chose rather than fall back.
+        XCTAssertEqual(ModelTier(rawValue: "accurate"), .best)
+        XCTAssertEqual(ModelTier(rawValue: "best"), .best)
+        XCTAssertEqual(ModelTier.best.rawValue, "best")
+        XCTAssertNil(ModelTier(rawValue: "unmeasured"))
+
+        let decoded = try JSONDecoder().decode([ModelTier].self,
+                                               from: Data(#"["fast","accurate"]"#.utf8))
+        XCTAssertEqual(decoded, [.fast, .best])
+    }
+
     func testEveryTierMapsToACataloguedModel() {
         for tier in ModelTier.allCases {
             XCTAssertNotNil(ModelCatalogue.option(tier.defaultModelId),

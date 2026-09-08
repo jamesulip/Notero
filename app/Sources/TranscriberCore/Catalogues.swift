@@ -147,7 +147,26 @@ public enum LanguageCatalogue {
 /// The recommendation selects a tier; it does not re-point a tier at a
 /// different model id.
 public enum ModelTier: String, CaseIterable, Identifiable, Sendable, Codable {
-    case fast, balanced, accurate
+    case fast, balanced, best
+
+    /// Accepts the name this tier had before it was called `best`.
+    ///
+    /// The raw value is what `UserDefaults`, a saved `BenchmarkReport` and the
+    /// `--tier` flag all carry, thus a Mac that stored `accurate` must still
+    /// read back as a tier rather than as nothing. `Codable` and
+    /// `AppSettings` both reach this initializer, so one line covers all of
+    /// them. It was renamed because "Accurate" states a property of the
+    /// transcript that this project has never measured; "Best" names a
+    /// position on the speed ladder instead. docs/MODELS.md holds the
+    /// measured-against-inferred table.
+    public init?(rawValue: String) {
+        switch rawValue {
+        case "fast": self = .fast
+        case "balanced": self = .balanced
+        case "best", "accurate": self = .best
+        default: return nil
+        }
+    }
 
     public var id: String { rawValue }
 
@@ -155,7 +174,7 @@ public enum ModelTier: String, CaseIterable, Identifiable, Sendable, Codable {
         switch self {
         case .fast: return "Fast"
         case .balanced: return "Balanced"
-        case .accurate: return "Accurate"
+        case .best: return "Best"
         }
     }
 
@@ -167,11 +186,11 @@ public enum ModelTier: String, CaseIterable, Identifiable, Sendable, Codable {
         case .balanced:
             return "large-v3-turbo. The default: the full large-v3 encoder with a "
                  + "4-layer decoder, which keeps live transcription in real time."
-        case .accurate:
-            return "Full large-v3. Expected to give the best transcript, at "
-                 + "about 5 times the decode cost per window. For a second "
-                 + "transcription of a finished recording, and not for the live "
-                 + "path. This project has not measured its accuracy."
+        case .best:
+            return "Full large-v3. The largest model here, at about 5 times the "
+                 + "decode cost per window. For a second transcription of a "
+                 + "finished recording, and not for the live path. This project "
+                 + "has not measured its accuracy against Balanced."
         }
     }
 
@@ -181,23 +200,23 @@ public enum ModelTier: String, CaseIterable, Identifiable, Sendable, Codable {
     /// per-tier id, but no code writes it: the benchmark recommends a tier and
     /// the user picks one, and neither re-points a tier at a different model.
     ///
-    /// The `accurate` weights are ~3.2 GB and are not part of the first-start
+    /// The `best` weights are ~3.2 GB and are not part of the first-start
     /// download, thus selecting that tier fetches them and pays the one-time
     /// CoreML compile that docs/BENCHMARKS.md records.
     public var defaultModelId: String {
         switch self {
         case .fast: return "openai_whisper-large-v3-v20240930_626MB"
         case .balanced: return ModelCatalogue.defaultModel
-        case .accurate: return "openai_whisper-large-v3_turbo"
+        case .best: return "openai_whisper-large-v3_turbo"
         }
     }
 
     /// Whether this tier is sane to run on the live path on an M2 Pro.
     ///
-    /// `accurate` is not: a 15 s window costs multiples of the 1.5 s hop, so
+    /// `best` is not: a 15 s window costs multiples of the 1.5 s hop, so
     /// every hop would be dropped and the commit policy would never see two
     /// consecutive passes.
-    public var suitableForLive: Bool { self != .accurate }
+    public var suitableForLive: Bool { self != .best }
 }
 
 /// How much speaker-identification work to do after transcription.

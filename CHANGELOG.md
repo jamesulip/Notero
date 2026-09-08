@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### The model tiers
+
+- **The Accurate tier is called Best.** The name stated a property of the
+  transcript that this project has not measured. "Best" names a position on
+  the speed ladder instead. The tier, its model and its behaviour do not
+  change. A stored `accurate` still selects the tier, and
+  `transcribe --tier accurate` still works. [docs/MODELS.md](docs/MODELS.md)
+  says which tier promises are measured, and which ones are inferred.
+
 ### Simple mode
 
 - The app has two modes. **Simple** is the default. It shows the recordings, a
@@ -38,7 +47,7 @@
 ### One turn again, and your corrections as references
 
 - Right-click a turn and select **Transcribe This Turn Again**. The app
-  decodes only that turn, on the Accurate tier in Simple mode or on the tier
+  decodes only that turn, on the Best tier in Simple mode or on the tier
   you select in Advanced mode, and replaces its lines in place. The turn keeps
   its speaker. Before this change, one bad window in a four-hour meeting cost a
   second decode of the four hours.

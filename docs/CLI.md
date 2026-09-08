@@ -24,7 +24,7 @@ The binary is at `app/.build/release/transcribe`.
 
 ```
 transcribe --audio FILE [--reference FILE] [--models DIR]
-           [--model ID | --tier fast|balanced|accurate]
+           [--model ID | --tier fast|balanced|best]
            [--language tl] [--prompt "Maria, Jose"] [--style-hint]
            [--fast-diarize | --no-diarize] [--room-mode]
            [--format txt|markdown|srt|vtt|json] [--out FILE] [--json FILE]
@@ -76,7 +76,7 @@ Replay a file through the live path at wall-clock speed:
 | `--reference FILE` | A reference transcript. The tool then reports the WER. |
 | `--models DIR` | Read the model weights from this directory. The default is `~/Library/Application Support/Transcriber/Models`. |
 | `--model ID` | Use this WhisperKit model. It overrides `--tier`. [MODELS.md](MODELS.md) lists the ids. |
-| `--tier fast\|balanced\|accurate` | Use the default model for this tier. The default is `balanced`. |
+| `--tier fast\|balanced\|best` | Use the default model for this tier. The default is `balanced`. The flag also accepts `accurate`, which is the name that the `best` tier had before. |
 | `--language CODE` | Force this language. The default is `tl`. `auto` selects automatic detection. |
 | `--prompt TEXT` | Names and terms for the decoder, as the Names and terms field of the app. |
 | `--style-hint` | Put the Taglish style primer of `TranscriptionPrompt` in front of the prompt. **The app does not do this.** Finding 12 in [FINDINGS.md](FINDINGS.md) gives the measurement: the primer made the live path worse. The flag exists to repeat that measurement. |

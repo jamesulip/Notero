@@ -268,7 +268,7 @@ of commits for each stream falls by approximately one third.
    one a number came from before you compare it to another number.
 6. **Each accuracy number is the Balanced tier.** No measurement compares one
    model against another model. Therefore this file cannot tell you if the
-   Accurate tier or the Fast tier gives a better or a worse transcript.
+   Best tier or the Fast tier gives a better or a worse transcript.
    [MODELS.md](MODELS.md) lists which tier promises this project measured,
    and which ones it infers.
 7. **The findings are engineering results and not product guarantees.** The

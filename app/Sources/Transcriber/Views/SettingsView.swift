@@ -305,7 +305,7 @@ struct ModelSettings: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if !settings.tier.suitableForLive {
-                    Label("A live recording uses Balanced. Accurate cannot decode a window "
+                    Label("A live recording uses Balanced. Best cannot decode a window "
                           + "inside the hop interval, thus nothing would commit.",
                           systemImage: "info.circle")
                         .font(.caption)

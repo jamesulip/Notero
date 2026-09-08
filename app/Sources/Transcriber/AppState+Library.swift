@@ -130,12 +130,12 @@ extension AppState {
                              modelId: tier.map { settings.modelId(for: $0) })
     }
 
-    /// One turn again, on a tier, without the rest of the meeting. Accurate
+    /// One turn again, on a tier, without the rest of the meeting. Best
     /// unless another tier is named: the turn is being redone because the
     /// first model got it wrong. The rows of the turn are replaced in place,
     /// with the turn's speaker on them.
     func retranscribe(_ recording: StoredRecording, turn block: TranscriptBlock,
-                      tier: ModelTier = .accurate) {
+                      tier: ModelTier = .best) {
         guard let name = recording.audioFileName, progress[recording.id] == nil else { return }
         let job = TranscriptionJob(
             id: recording.id,

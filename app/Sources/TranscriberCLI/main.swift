@@ -105,7 +105,7 @@ func parse() -> Options {
         case "--help", "-h":
             print("""
             transcribe --audio FILE [--reference FILE] [--models DIR]
-                       [--model ID | --tier fast|balanced|accurate]
+                       [--model ID | --tier fast|balanced|best]
                        [--language tl] [--prompt "Maria, Jose"] [--style-hint]
                        [--fast-diarize | --no-diarize] [--room-mode]
                        [--format txt|markdown|srt|vtt|json] [--out FILE] [--json FILE]
