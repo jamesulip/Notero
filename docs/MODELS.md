@@ -15,9 +15,15 @@ speed and not a model name.
 | --- | --- | --- |
 | **Fast** | `openai_whisper-large-v3-v20240930_626MB` | The quantized turbo model. The lowest latency and the smallest memory footprint. It gives up some accuracy on Taglish, and the amount is unmeasured. |
 | **Balanced** | `openai_whisper-large-v3-v20240930_turbo` | **The default.** The full large-v3 encoder with a 4-layer decoder. This is what keeps live transcription at real-time speed. |
-| **Accurate** | `openai_whisper-large-v3_turbo` | The full large-v3. The decode cost is approximately 5 times the cost for each window. Use it to transcribe a finished recording again, and not for the live path. **This project has not measured its accuracy.** Read [Measured and inferred](#measured-and-inferred). |
+| **Best** | `openai_whisper-large-v3_turbo` | The full large-v3, and the largest model here. The decode cost is approximately 5 times the cost for each window. Use it to transcribe a finished recording again, and not for the live path. **This project has not measured its accuracy.** Read [Measured and inferred](#measured-and-inferred). |
 
-**Accurate is not suitable for the live path.** A 15-second window costs
+**The Best tier was named Accurate before.** The app reads a stored
+`accurate` and gives you the Best tier, and `transcribe --tier accurate` also
+still works. The name changed because "Accurate" states a property of the
+transcript that this project has not measured, and "Best" names a position on
+the speed ladder.
+
+**Best is not suitable for the live path.** A 15-second window costs
 multiples of the 1.5-second hop. Each hop would be dropped, and the commit
 policy would never see two consecutive passes. `ModelTier.suitableForLive`
 returns false for it.
@@ -37,7 +43,7 @@ reference transcript, and the app has no reference transcript to give. The rule
 "the slowest tier is the most accurate tier" comes from the model sizes. It is
 an assumption. `BenchmarkReport.recommendedTier` records this.
 
-The benchmark measures the Accurate tier if you select that tier. The weights
+The benchmark measures the Best tier if you select that tier. The weights
 are approximately 3.2 GB, and the first start does not download them.
 Therefore the first measurement downloads them, and it also pays the one-time
 CoreML compile that [BENCHMARKS.md](BENCHMARKS.md) records.
@@ -51,12 +57,13 @@ measurement compares one model against another model.
 | --- | --- |
 | Balanced keeps live transcription at real-time speed | Measured. [BENCHMARKS.md](BENCHMARKS.md) gives the numbers. |
 | Balanced is the model behind the offline Tagalog word error rate | Measured. Finding 1 in [FINDINGS.md](FINDINGS.md) records it. |
-| Accurate gives a better transcript than Balanced | **Not measured.** The weights are not in `models/`, thus this project has never run the model. |
+| Best gives a better transcript than Balanced | **Not measured.** The weights are not in `models/`, thus this project has never run the model. |
 | Fast gives up some accuracy against Balanced | **Not measured.** |
 | The full large-v3 costs approximately 5 times the decode | Inferred from the decoder sizes in [The `_turbo` trap](#the-_turbo-trap), and not timed. |
 
-**Do not treat the Accurate tier as a known-better transcript.** To make it
-one, measure it against the Balanced tier on a real recording with a correct
+**Do not treat the Best tier as a known-better transcript.** The tier names a
+position on the speed ladder, and not a measured result. To make it a measured
+result, compare it against the Balanced tier on a real recording with a correct
 reference transcript. The two clips that [BENCHMARKS.md](BENCHMARKS.md)
 describes cannot answer this question. One clip uses an Indonesian voice, and
 the reference transcript of the other clip is too poor.

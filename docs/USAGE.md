@@ -106,7 +106,7 @@ writes code-switched English inside another language as the speaker said it.
 [MODELS.md](MODELS.md) lists the languages and explains why automatic detection
 carries a risk.
 
-**Select the speed tier in Settings.** Fast, Balanced and Accurate.
+**Select the speed tier in Settings.** Fast, Balanced and Best.
 [MODELS.md](MODELS.md) gives the model behind each tier. Press ⇧⌘K to measure
 all three on your own audio.
 
@@ -146,11 +146,11 @@ Press ⌘B to bookmark the moment during a recording or during playback.
 ## Edit the transcript
 
 **Transcribe one turn again.** Right-click a turn and select **Transcribe
-This Turn Again**. The app decodes only that turn, on the Accurate tier in
+This Turn Again**. The app decodes only that turn, on the Best tier in
 Simple mode and on the tier that you select in Advanced mode, and replaces the
 lines of the turn. The rest of the transcript does not change, and the turn
 keeps its speaker. A four-hour meeting with one bad window is therefore fixed
-in seconds. The first run on the Accurate tier downloads its model.
+in seconds. The first run on the Best tier downloads its model.
 
 Double-click a turn to edit it line by line. The app keeps the raw model output
 below your edit. The search index and the exports read the edited text.

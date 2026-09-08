@@ -7,7 +7,7 @@ import TranscriberStore
 ///
 /// Presented as items rather than a bare "Transcribe Again", which silently
 /// used whatever tier Settings held. Re-transcribing a meeting is almost always
-/// a request for the Accurate tier, and the diarize-only job existed with no
+/// a request for the Best tier, and the diarize-only job existed with no
 /// way to ask for it.
 struct RerunItems: View {
     @Environment(AppState.self) private var state
@@ -34,7 +34,7 @@ struct RerunItems: View {
         }
     }
 
-    /// "Accurate · large-v3": the tier is the choice, the model is what it
+    /// "Best · large-v3": the tier is the choice, the model is what it
     /// costs, and the two are shown together so the menu needs no footnote.
     private func title(_ tier: ModelTier) -> String {
         let id = state.settings.modelId(for: tier)

@@ -149,7 +149,6 @@ actor ScriptedVAD: VoiceActivityDetecting {
     private var speechMs = 0
     private var trailingSilenceMs = 0
     private var lastWasSpeech = false
-    private(set) var clears = 0
 
     init(speech: [Range<Int>]) {
         self.speech = speech
@@ -160,7 +159,6 @@ actor ScriptedVAD: VoiceActivityDetecting {
 
     func clearSpeechCounter() {
         speechMs = 0
-        clears += 1
     }
 
     func reset() {

@@ -66,21 +66,21 @@ final class BenchmarkMathTests: XCTestCase {
     }
 
     func testRecommendsTheSlowestTierThatStillKeepsUpLive() {
-        // Slowest-that-keeps-up is the most accurate one inside the budget.
+        // Slowest-that-keeps-up is the largest one inside the budget.
         let report = BenchmarkReport(
             runs: [run(.fast, rtf: 0.08), run(.balanced, rtf: 0.31),
-                   run(.accurate, rtf: 1.4)],
+                   run(.best, rtf: 1.4)],
             machine: "test", memoryGB: 16
         )
         XCTAssertEqual(report.recommendedTier, .balanced)
     }
 
-    func testAccurateTierIsNeverRecommendedEvenWhenItKeepsUp() {
-        // `accurate` re-decodes a 15 s window per hop; ModelTier declares it
+    func testTheBestTierIsNeverRecommendedEvenWhenItKeepsUp() {
+        // `best` re-decodes a 15 s window per hop; ModelTier declares it
         // unsuitable for live, so a fast measurement must not promote it.
         let report = BenchmarkReport(
             runs: [run(.fast, rtf: 0.08), run(.balanced, rtf: 0.12),
-                   run(.accurate, rtf: 0.5)],
+                   run(.best, rtf: 0.5)],
             machine: "test", memoryGB: 16
         )
         XCTAssertEqual(report.recommendedTier, .balanced)
@@ -88,7 +88,7 @@ final class BenchmarkMathTests: XCTestCase {
 
     func testFallsBackToTheFastestWhenNothingKeepsUp() {
         let report = BenchmarkReport(
-            runs: [run(.balanced, rtf: 0.9), run(.accurate, rtf: 2.2)],
+            runs: [run(.balanced, rtf: 0.9), run(.best, rtf: 2.2)],
             machine: "test", memoryGB: 16
         )
         XCTAssertEqual(report.recommendedTier, .balanced)
@@ -105,7 +105,7 @@ final class BenchmarkMathTests: XCTestCase {
     func testFastestTierUsesMeasuredTimeRatherThanTierName() {
         let report = BenchmarkReport(
             runs: [run(.fast, rtf: 0.12), run(.balanced, rtf: 0.08),
-                   run(.accurate, rtf: 0.5)],
+                   run(.best, rtf: 0.5)],
             machine: "test", memoryGB: 16
         )
         XCTAssertEqual(report.fastestTier, .balanced)
@@ -147,8 +147,8 @@ final class BenchmarkMathTests: XCTestCase {
                        0, accuracy: 0.0001)
     }
 
-    func testAccurateTierIsNotOfferedForTheLivePath() {
-        XCTAssertFalse(ModelTier.accurate.suitableForLive)
+    func testTheBestTierIsNotOfferedForTheLivePath() {
+        XCTAssertFalse(ModelTier.best.suitableForLive)
         XCTAssertTrue(ModelTier.balanced.suitableForLive)
     }
 }
