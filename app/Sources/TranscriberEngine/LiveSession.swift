@@ -310,9 +310,15 @@ public final class LiveSession {
         }
 
         do {
-            try capture.start(archiveURL: archiveURL) { [continuation] chunk in
-                continuation.yield(chunk)
-            }
+            // Off the main actor: opening the device goes through coreaudiod,
+            // and a Bluetooth profile switch or a slow HAL query can hold it
+            // for many seconds. On the main thread that is a hang report.
+            let sink: AsyncStream<CapturedAudio>.Continuation = continuation
+            try await Task.detached(priority: .userInitiated) { [capture, archiveURL, sink] in
+                try capture.start(archiveURL: archiveURL) { chunk in
+                    sink.yield(chunk)
+                }
+            }.value
         } catch {
             continuation.finish()
             ingestTask?.cancel()

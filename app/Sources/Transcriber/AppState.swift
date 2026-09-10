@@ -33,6 +33,7 @@ final class AppState {
     let queue: TranscriptionQueue
     let live: LiveSession
     let player = AudioPlayer()
+    let microphoneTakes = MicrophoneTakes()
     let writer: TranscriptWriter
     /// ⌃⌥R and ⌃⌥P in every application, while the menu bar item is on.
     let hotKeys = GlobalHotKeys()

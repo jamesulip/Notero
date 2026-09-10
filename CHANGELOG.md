@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Audio
+
+- **Test the microphone in Settings › Audio.** Click **Test Microphone**, speak,
+  then click **Stop**. The app plays back what the microphone heard, at the
+  quality the transcription gets. Each take stays in the list with the name of
+  its microphone, so you can change the microphone and compare. The same test
+  is `transcribe --mic-check` in the command line tool.
+  [docs/CLI.md](docs/CLI.md) describes it.
+- **A 16 kHz microphone can start a recording.** Bluetooth headsets in
+  hands-free mode and USB conference speakerphones deliver 16 kHz. The archive
+  asked the encoder for a bitrate it does not permit at this rate, and the
+  recording refused to start with a CoreAudio error. The app now asks the
+  encoder for the permitted range. [docs/FINDINGS.md](docs/FINDINGS.md) entry
+  13 gives the measurements.
+
 ## 1.1.0 — 2026-09-08
 
 ### The model tiers

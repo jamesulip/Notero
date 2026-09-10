@@ -233,6 +233,7 @@ struct AudioSettings: View {
 
                 if settings.captureSource.usesMicrophone {
                     InputDevicePicker(selection: $settings.microphoneUID)
+                    MicrophoneTestRow(microphoneUID: settings.microphoneUID)
                 }
             }
 

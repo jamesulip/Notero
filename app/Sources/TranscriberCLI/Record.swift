@@ -74,7 +74,7 @@ func runRecord(source: CaptureSource, deviceUID: String?, seconds: Double,
 /// `NSApplication` is main-actor state. Both probes are called from the top
 /// level of `main.swift`, which runs on the main thread, so this is a fact and
 /// not an assumption.
-private func becomeForegroundApplication() {
+func becomeForegroundApplication() {
     MainActor.assumeIsolated {
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
