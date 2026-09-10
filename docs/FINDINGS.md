@@ -542,6 +542,43 @@ and this measurement says nothing about short prompts. `suppressBlank` was
 measured in the same run (25.8% / 27.3% / 58.3% against 24.2% / 27.3% / 71.7%)
 and left at WhisperKit's default.
 
+## 13. A 16 kHz microphone could not start a recording (2026-09-10)
+
+Selecting a USB conference speakerphone as the microphone failed with
+"The operation couldn't be completed. (com.apple.coreaudio.avfaudio error
+560226676.)" over Bluetooth and over USB alike. The code is `'!dat'`,
+`kAudioDeviceUnsupportedFormatError`, and it names the wrong culprit: the
+device opened fine. A standalone `AVAudioEngine` pinned to either connection
+started and delivered buffers.
+
+The device offers one input format on each transport: 16 kHz mono over
+Bluetooth, 16 kHz stereo over USB (its 48 kHz side is the speaker). The
+archive writer then asked the AAC encoder for 64 kbps a channel at 16 kHz,
+and the encoder refused inside `AudioConverterSetProperty(...,
+kAudioConverterEncodeBitRate, ...)`. Apple's encoder caps the bitrate by
+sample rate, measured on this Mac with `kAudioConverterApplicableEncodeBitRates`:
+
+| Sample rate | Highest AAC bitrate |
+| --- | --- |
+| 8 kHz mono | 24 kbps |
+| 16 kHz mono | 48 kbps |
+| 16 kHz, 2 ch | 96 kbps |
+| 24 kHz mono | 64 kbps |
+| 32 kHz mono | 96 kbps |
+| 44.1 / 48 kHz mono | 256 kbps |
+
+Every Bluetooth headset in hands-free mode is 8 or 16 kHz, so the app refused
+the whole class of device the meeting-room use case is most likely to meet,
+before a frame was captured and with no message a user could act on.
+
+The fix asks the encoder for its applicable range at the archive format and
+clamps the 64 kbps request into it; when the encoder cannot be asked, the key
+is omitted. After the change the probe records from both connections at
+16 kHz (archive bit rates 44 and 51 kbps), and the offline pipeline reads the
+16 kHz archive and transcribes it. The archive stays at the device's rate on
+purpose: a 16 kHz microphone carries nothing above 8 kHz, and the model
+resamples to 16 kHz anyway.
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a
