@@ -32,6 +32,7 @@ transcribe --audio FILE [--reference FILE] [--models DIR]
 transcribe --audio FILE --lane room|remote
 transcribe --record [--source microphone|systemAudio|both] [--device UID]
            [--seconds N] [--out FILE.m4a] [--gui]
+transcribe --mic-check [--device UID] [--seconds N] [--gui]
 transcribe --devices
 transcribe --channels [--seconds N]
 ```
@@ -95,9 +96,10 @@ Replay a file through the live path at wall-clock speed:
 | `--lane room\|remote` | Read one channel of a two-lane recording. Channel 1 is `room` and channel 2 is `remote`. |
 | `--record` | Capture audio for `--seconds` and report the peak level of each lane. Refer to "Capture check". |
 | `--source microphone\|systemAudio\|both` | With `--record`, the lanes to capture. The default is `microphone`. |
-| `--device UID` | With `--record`, the microphone to use. `--devices` gives the UID. The default is the default input of macOS. |
-| `--seconds N` | With `--record` or `--channels`, the capture time in seconds. The default is 10. |
-| `--gui` | With `--record`, make the tool a foreground application, thus macOS can show the permission prompt. |
+| `--device UID` | With `--record` or `--mic-check`, the microphone to use. `--devices` gives the UID. The default is the default input of macOS. |
+| `--seconds N` | With `--record`, `--channels` or `--mic-check`, the capture time in seconds. The default is 10. |
+| `--gui` | With `--record` or `--mic-check`, make the tool a foreground application, thus macOS can show the permission prompt. |
+| `--mic-check` | Capture a take for `--seconds`, then play it back. Refer to "Microphone check". |
 | `--devices` | List each audio device with its channel counts and its UID, then stop. |
 | `--channels` | Capture the raw channels of the combined device and report the peak level of each channel. |
 | `--log FILE` | Write a copy of the stderr output to this file. |
@@ -211,6 +213,22 @@ room and the call come out in the wrong channels.
 
 `--record` exits with `0` when it heard audio, with `3` when no lane heard
 anything, and with `1` for a failure.
+
+## Microphone check
+
+`--mic-check` lets you hear what the model hears. Speak for `--seconds`. The
+tool then plays the take back through the default output and stops. Each
+second it reports the peak level.
+
+The take is the 16 kHz mono copy that goes to the model, not the archive. Use
+it to hear clipping, noise, or the gaps of a Bluetooth link.
+
+The check needs the microphone permission. Start it with
+`app/scripts/record-probe.sh --mic-check --device UID`, for the same reason as
+`--record`.
+
+`--mic-check` exits with `0` after the playback, with `3` when it heard
+nothing, and with `1` for a failure.
 
 ## Debugging
 

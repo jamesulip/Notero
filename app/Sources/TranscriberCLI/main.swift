@@ -48,9 +48,11 @@ struct Options {
     var adaptiveHop = false
     // Capture smoke test.
     var record = false
+    var micCheck = false
     var captureSource: CaptureSource = .microphone
     var deviceUID: String?
-    var seconds = 10.0
+    /// Capture time; each capture mode has its own default.
+    var seconds: Double?
     var gui = false
     var listDevices = false
     var channelScan = false
@@ -89,6 +91,7 @@ func parse() -> Options {
         case "--realtime": options.realtime = true
         case "--adaptive-hop": options.adaptiveHop = true
         case "--record": options.record = true
+        case "--mic-check": options.micCheck = true
         case "--source":
             options.captureSource = value().flatMap(CaptureSource.init(rawValue:))
                 ?? options.captureSource
@@ -98,7 +101,7 @@ func parse() -> Options {
         case "--channels": options.channelScan = true
         case "--lane": options.lane = value().flatMap(CaptureLane.init(rawValue:))
         case "--log": options.logFile = value().map { URL(fileURLWithPath: $0) }
-        case "--seconds": options.seconds = value().flatMap(Double.init) ?? options.seconds
+        case "--seconds": options.seconds = value().flatMap(Double.init)
         case "--hop": options.hopMs = value().flatMap(Int.init) ?? options.hopMs
         case "--pre-roll": options.preRollMs = value().flatMap(Int.init) ?? options.preRollMs
         case "--context": options.contextMs = value().flatMap(Int.init) ?? options.contextMs
@@ -112,6 +115,7 @@ func parse() -> Options {
                        [--live [--realtime] [--hop MS] [--pre-roll MS] [--context MS] [--adaptive-hop]]
             transcribe --record [--source microphone|systemAudio|both] [--device UID]
                        [--seconds N] [--out FILE.m4a] [--gui]
+            transcribe --mic-check [--device UID] [--seconds N] [--gui]
             transcribe --audio FILE --lane room|remote   # one channel of a two-lane file
             transcribe --devices
             """)
@@ -177,13 +181,16 @@ if options.listDevices {
 }
 
 if options.channelScan {
-    runChannelScan(seconds: options.seconds)
+    runChannelScan(seconds: options.seconds ?? 10)
 }
 
-// Before the --audio requirement: this captures rather than reads.
+// Before the --audio requirement: these capture rather than read.
+if options.micCheck {
+    runMicCheck(deviceUID: options.deviceUID, seconds: options.seconds ?? 10, gui: options.gui)
+}
 if options.record {
     runRecord(source: options.captureSource, deviceUID: options.deviceUID,
-              seconds: options.seconds, out: options.output, gui: options.gui)
+              seconds: options.seconds ?? 10, out: options.output, gui: options.gui)
 }
 
 guard let audioURL = options.audio else {

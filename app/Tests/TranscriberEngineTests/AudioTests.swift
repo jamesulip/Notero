@@ -65,6 +65,38 @@ final class AudioFileTests: XCTestCase {
         XCTAssertLessThan(bytes, 120_000)
     }
 
+    /// Bluetooth hands-free and the USB speakerphone deliver 16 kHz, where the
+    /// encoder refuses the 64 kbps the 48 kHz path asks for. The rate a device
+    /// offers must never decide whether a recording can start (finding 13).
+    func testArchiveWriterAcceptsLowSampleRates() throws {
+        for (rate, lanes) in [(8_000.0, [CaptureLane.room]),
+                              (16_000.0, [.room]),
+                              (16_000.0, [.room, .remote])] {
+            let url = scratch.appendingPathComponent("archive-\(Int(rate))-\(lanes.count).m4a")
+            let buffer = try tone(seconds: 1, rate: rate)
+            let writer = try ArchiveWriter(url: url, sampleRate: rate, lanes: lanes)
+            var frames: [CaptureLane: AVAudioPCMBuffer] = [:]
+            for lane in lanes { frames[lane] = buffer }
+            for _ in 0..<2 { writer.write(frames) }
+            writer.finish()
+
+            let readBack = try AVAudioFile(forReading: url)
+            XCTAssertEqual(readBack.fileFormat.sampleRate, rate, accuracy: 1, "\(rate) Hz")
+            XCTAssertEqual(Int(readBack.fileFormat.channelCount), lanes.count, "\(rate) Hz")
+            XCTAssertEqual(Double(readBack.length) / rate, 2.0, accuracy: 0.15, "\(rate) Hz")
+        }
+    }
+
+    func testArchiveBitRateIsClampedToWhatTheEncoderAllows() throws {
+        let wide = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1)!
+        XCTAssertEqual(ArchiveWriter.bitRate(target: 64_000, for: wide), 64_000)
+
+        let narrow = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1)!
+        let clamped = try XCTUnwrap(ArchiveWriter.bitRate(target: 64_000, for: narrow))
+        XCTAssertLessThan(clamped, 64_000)
+        XCTAssertGreaterThan(clamped, 0)
+    }
+
     func testArchiveWriterCopiesBuffersSoTheTapCanReuseThem() throws {
         // The tap hands back the same buffer every callback. Writing happens on
         // another queue, so anything not copied is a race with the next tap.

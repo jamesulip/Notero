@@ -29,12 +29,21 @@ final class ArchiveWriter: @unchecked Sendable {
 
         // 64 kbps a channel: transparent for speech, and about 28 MB an hour
         // mono against the 345 MB that raw 48 kHz float would cost.
-        let settings: [String: Any] = [
+        //
+        // Asked for, not demanded. The encoder caps the bitrate by sample rate
+        // -- 48 kbps for mono at 16 kHz, 24 kbps at 8 kHz -- and a request
+        // above the cap is refused with `'!dat'` before a frame is captured.
+        // Every Bluetooth headset in hands-free mode and many USB conference
+        // speakerphones deliver 16 kHz, so the request is clamped to what the
+        // encoder allows at this rate (finding 13).
+        var settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVSampleRateKey: sampleRate,
             AVNumberOfChannelsKey: lanes.count,
-            AVEncoderBitRateKey: 64_000 * lanes.count,
         ]
+        if let bitRate = Self.bitRate(target: 64_000 * lanes.count, for: format) {
+            settings[AVEncoderBitRateKey] = bitRate
+        }
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true
         )
@@ -44,6 +53,43 @@ final class ArchiveWriter: @unchecked Sendable {
 
     var frameCount: AVAudioFramePosition {
         lock.withLock { frames }
+    }
+
+    /// `target` clamped into the bitrates the AAC encoder accepts for `format`,
+    /// read from the encoder itself rather than from a table that goes stale.
+    /// Nil when the encoder cannot be asked; the caller then omits the key and
+    /// lets the encoder choose.
+    static func bitRate(target: Int, for format: AVAudioFormat) -> Int? {
+        var source = format.streamDescription.pointee
+        var aac = AudioStreamBasicDescription(
+            mSampleRate: format.sampleRate, mFormatID: kAudioFormatMPEG4AAC,
+            mFormatFlags: 0, mBytesPerPacket: 0, mFramesPerPacket: 1024,
+            mBytesPerFrame: 0, mChannelsPerFrame: format.channelCount,
+            mBitsPerChannel: 0, mReserved: 0
+        )
+        var converter: AudioConverterRef?
+        guard AudioConverterNew(&source, &aac, &converter) == noErr, let converter else {
+            return nil
+        }
+        defer { AudioConverterDispose(converter) }
+
+        var size = UInt32(0)
+        guard AudioConverterGetPropertyInfo(converter, kAudioConverterApplicableEncodeBitRates,
+                                            &size, nil) == noErr,
+              size >= UInt32(MemoryLayout<AudioValueRange>.size)
+        else { return nil }
+        var ranges = [AudioValueRange](
+            repeating: AudioValueRange(),
+            count: Int(size) / MemoryLayout<AudioValueRange>.size
+        )
+        guard AudioConverterGetProperty(converter, kAudioConverterApplicableEncodeBitRates,
+                                        &size, &ranges) == noErr
+        else { return nil }
+        // Zero is the encoder's "unconstrained" marker, not a real floor.
+        let floors = ranges.map(\.mMinimum).filter { $0 > 0 }
+        guard let highest = ranges.map(\.mMaximum).max(), highest > 0 else { return nil }
+        let lowest = floors.min() ?? highest
+        return Int(min(max(Double(target), lowest), highest))
     }
 
     /// Interleaves the lanes into one multi-channel buffer and hands it off.

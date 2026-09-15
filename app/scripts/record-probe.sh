@@ -12,6 +12,7 @@
 #   scripts/record-probe.sh --devices
 #   scripts/record-probe.sh --record --source both --seconds 20 --out /tmp/x.m4a
 #   scripts/record-probe.sh --channels --seconds 15
+#   scripts/record-probe.sh --mic-check --device UID      # record 10 s, then hear it back
 #
 # Output goes to a log file, because LaunchServices discards stderr.
 set -euo pipefail
