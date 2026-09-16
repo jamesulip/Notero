@@ -39,7 +39,13 @@ final class AppState {
     let hotKeys = GlobalHotKeys()
 
     /// Sidebar selection. Nil is the empty state.
-    var route: Route?
+    var route: Route? {
+        didSet { if route != oldValue { openRevision = nil } }
+    }
+    /// An earlier transcript revision open for reading in the selected
+    /// recording. Nil is the latest. Export and Copy use it, so the file
+    /// holds the revision on screen. Cleared when the selection changes.
+    var openRevision: Int?
     var searchText = ""
     /// Set when a search result or a note back-link asks the transcript to
     /// scroll somewhere.
@@ -287,8 +293,13 @@ final class AppState {
 
     func exportText(_ recording: StoredRecording, format: ExportFormat,
                     options: ExportOptions = .everything) -> String {
-        Exporter.render(format, document: RecordingStore.document(for: recording),
-                        options: options)
+        Exporter.render(format, document: exportDocument(recording), options: options)
+    }
+
+    /// The recording as the exporters see it: the open revision when one is,
+    /// else the latest.
+    func exportDocument(_ recording: StoredRecording) -> MeetingDocument {
+        RecordingStore.document(for: recording, revision: openRevision)
     }
 
     /// The transcript onto the clipboard, in the format the destination

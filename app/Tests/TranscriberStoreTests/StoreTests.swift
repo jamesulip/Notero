@@ -269,6 +269,31 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(recording.transcript?.modelId, "large-v3")
     }
 
+    func testExportDocumentCanSelectAnEarlierRevision() throws {
+        let context = try makeContext()
+        let recording = try seed(context)
+        let second = StoredTranscript(revision: 2, modelId: "large-v3", language: "tl")
+        second.recording = recording
+        context.insert(second)
+        let segment = StoredSegment(index: 0, startMs: 0, endMs: 2_000,
+                                    text: "Second revision text", speakerId: "S1")
+        segment.transcript = second
+        context.insert(segment)
+        try context.save()
+
+        let latest = RecordingStore.document(for: recording)
+        XCTAssertEqual(latest.modelId, "large-v3")
+        XCTAssertEqual(latest.segments.map(\.text), ["Second revision text"])
+
+        let older = RecordingStore.document(for: recording, revision: 1)
+        XCTAssertEqual(older.modelId, "turbo")
+        XCTAssertEqual(older.segments.count, 2)
+        XCTAssertTrue(Exporter.render(.txt, document: older).contains("September 15"))
+
+        let missing = RecordingStore.document(for: recording, revision: 9)
+        XCTAssertEqual(missing.modelId, "large-v3", "an unknown revision falls back to the latest")
+    }
+
     // MARK: - Bookmarks
 
     func testBookmarksKeepTimestampsNotAudio() throws {

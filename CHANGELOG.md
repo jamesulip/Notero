@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Export
+
+- **Export writes the revision on screen.** Open an earlier revision from the
+  info bar, then Export or Copy. The file contains that revision. Before, the
+  file always contained the latest revision, and no message said so. The
+  export sheet now shows which revision it writes.
+
 ### Audio
 
 - **Test the microphone in Settings › Audio.** Click **Test Microphone**, speak,
