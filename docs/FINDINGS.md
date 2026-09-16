@@ -579,6 +579,61 @@ is omitted. After the change the probe records from both connections at
 purpose: a 16 kHz microphone carries nothing above 8 kHz, and the model
 resamples to 16 kHz anyway.
 
+## 14. The same audio through WhisperKit and whisper.cpp (2026-09-14)
+
+The Tauri rewrite of Notero runs whisper.cpp (Metal) with the same OpenAI
+weights that this app runs through WhisperKit (CoreML). Both were given the
+same four files and scored with one word-error-rate script. Full tables and
+every transcript: [BENCHMARK-VS-WHISPER-CPP.md](BENCHMARK-VS-WHISPER-CPP.md).
+
+**Conditions.** M5 Pro, macOS 26.6.2. A 2:57 English interview with a child
+(the reference is this app's own export, which favours this app by a few
+points), a 34 s fast Tagalog vlog clip (no reference; word coverage only), a
+48 s Taglish meeting recording (no reference), and eight macOS-TTS sentences
+with exact ground truth. Offline path unless stated.
+
+**What was measured.**
+
+- *Same model, same files, different runtime.* With `small` in both,
+  WhisperKit scored 15.9% WER on the interview against whisper.cpp's 30.6%
+  when whisper.cpp decodes each VAD utterance on its own -- and 19.2% when the
+  utterances are packed into 28 s windows as this app's offline path does.
+  Roughly half of the whisper.cpp gap is therefore the feeding strategy, not
+  the weights. Whisper pads every input to 30 s, so a two-word reply decoded
+  alone costs a full encoder pass and gets no context.
+- *The default tier holds.* large-v3-turbo: this app 8.4% offline; whisper.cpp
+  17.1% per utterance, 12.0% windowed. Speed for the turbo class: this app
+  8.7 s for the interview, whisper.cpp 26.6 s per utterance and 5.1 s windowed.
+  The Neural Engine is ~3x faster than Metal for this model when the encoder
+  count is equal.
+- *The Best tier is not better.* Full large-v3: this app 12.6%, whisper.cpp
+  11.4% windowed, both about three times slower than turbo. On the Tagalog
+  clip both runtimes kept only ~31 words of the ~75 that turbo produces: the
+  32-layer decoder emits end-of-text early on fast Tagalog inside one
+  utterance, and neither runtime's segmentation saves it. This app's large-v3
+  pass also appended "Thank you for watching!" on the trailing silence of the
+  Taglish recording. The catalogue's "expected to be more accurate; unmeasured
+  on Taglish" is now measured, and the answer is no.
+- *The live path costs six points.* Replaying the interview at real time,
+  this app's live path (1.5 s hop, LocalAgreement) scored 15.0% with 116
+  decodes, 3 dropped hops and 10 abandoned finals, against 8.4% for its own
+  offline pass. The Tauri live path decodes once per VAD utterance and scored
+  17.1%, identical to its offline per-utterance run. On the Taglish recording
+  the stored live transcript of this app had "Divorse", "Puliying", "sorry
+  sira" and a doubled "explaining first" where both offline passes were clean.
+- *The offline path dropped 60% of the Tagalog clip with turbo.* Two windows
+  were built from 29 s of detected speech; the first window's decode returned
+  only its opening sentence (25 of ~75 words). The live path recovered the clip
+  at 12x the decode cost. whisper.cpp's per-utterance decoding, capped at 25 s
+  by its VAD, lost nothing here.
+
+**What it changes.** Keep large-v3-turbo as the default. Treat a decode that
+returns far fewer words than its window's speech duration predicts as a
+failure to retry, rather than a result. The gap the Tauri side found for
+itself -- decode each utterance with preceding audio as context -- is the same
+argument that this app's windowing already makes; the live path's six-point
+cost against offline is the number to work on here.
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a
@@ -605,3 +660,75 @@ must be re-derived against your own recordings.
 ./.venv/bin/python eval/score.py /tmp/off  --label offline
 ./.venv/bin/python eval/score.py /tmp/live --label live
 ```
+
+## 15. A human reference changes the answer (2026-09-15)
+
+Finding 14 scored the English interview against a reference that this app
+exported itself. That was the only reference available for `F_1211_11y3m_1`.
+UCLASS, the archive that supplies both interview clips, publishes a time-aligned
+human transcript for four of its monologues. `M_1017_11y8m_1` is one of them: a
+boy of 11y8m who stutters, 2:29 long. It was added as a fifth fixture and scored
+with `eval/uclass_score.py`. Full tables:
+[BENCHMARK-VS-WHISPER-CPP.md](BENCHMARK-VS-WHISPER-CPP.md).
+
+**Method.** The UCLASS transcript is syllable-level and it marks each filled
+pause, each repetition and each aborted word. It therefore gives two references:
+*verbatim*, which keeps all of them, and *cleaned*, which removes them. Three
+corrections are mechanical and they are in the scorer. Reference tokens whose
+audio is silent are dropped, because UCL redacts names and postcodes in the wav
+itself. Hypothesis words inside a gap longer than 3 s between subject tokens are
+dropped, because the wav holds the interviewer and the transcript does not. One
+text normalizer runs over both sides, because UCLASS writes pronunciation
+("chissick", "favrite") and the model writes orthography. A fourth correction
+came later: UCLASS aligned some transcripts to a master with a longer lead-in
+than the released wav, so the scorer fits a constant offset from the shared
+words. For this file the offset is -0.14 s and the median residual is 60 ms.
+
+**The synthetic fixture is gone.** Finding 14 used 8 sentences from the macOS
+`say` command as its only exact reference. Synthetic speech measures the voice
+and not the model, which this file already recorded for the Indonesian-voice
+Taglish clip. `M_1017_11y8m_1` replaces it, and it is a real recording.
+
+**What was measured.** Swift only; the whisper.cpp side still uses the old
+fixtures.
+
+| `M_1017_11y8m_1` | Verbatim | Cleaned | Decode |
+| --- | --- | --- | --- |
+| `small`, offline | 18.7% | 10.1% | 3.3 s |
+| `balanced`, offline | 16.3% | 9.5% | 4.4 s |
+| `balanced`, live at real time | 19.3% | 11.5% | 155.6 s |
+
+- *Most of the error is convention, not accuracy.* The default tier scores 16.3%
+  verbatim and 9.5% cleaned. 6.8 of the 16.3 points are filled pauses and
+  repetitions that the model omits deliberately. A verbatim score punishes the
+  behaviour that a meeting transcript wants.
+- *The model gap in finding 14 was mostly the reference.* `small` against the
+  default tier is 7.5 points on `F_1211` with this app's own export as the
+  reference. The same pair is 0.6 points on `M_1017` with a human reference. The
+  self-written reference inflated the distance by more than ten times.
+- *The live cost is smaller than finding 14 reported.* Live against offline is
+  2.0 points here (9.5% to 11.5%) and not 6.6 points. The live run dropped 0
+  hops on this file, against 3 hops on `F_1211`.
+- *The behaviour is not consistent inside one run.* The default tier keeps the
+  repetition "for my my end of year" and drops the repetition "good marks mark".
+  Both appear in the same decode.
+
+**What it changes.** Do not quote a WER against a reference that this app wrote.
+Finding 14's interview numbers stand only as a runtime comparison, where both
+sides carry the same handicap. `M_1017` is now the fixture to quote. Any future
+accuracy claim needs the verbatim and the cleaned number together, because one
+number alone cannot separate a mishearing from a convention.
+
+**Still open.** Two things.
+
+The whisper.cpp side has not run against the UCLASS reference. Until it does, no
+cross-runtime accuracy number on this project is measured against an independent
+transcript.
+
+UCLASS publishes a transcript for three more monologues, and this project cannot
+score them yet. Their time offset from the released wav leaves a residual of
+166 ms to 315 ms after the fit, and at 315 ms the silence test marks ordinary
+words as redacted. Their speakers also repeat whole phrases ("i didn't i
+didn't"), and the cleaning rule removes only an immediate repetition of one
+token. The rule suits a mild stutter and it reports too high a score for a
+severe stutter.

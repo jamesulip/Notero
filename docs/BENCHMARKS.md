@@ -252,6 +252,65 @@ Findings 3, 4, 6 and 7 in [FINDINGS.md](FINDINGS.md) hold the rest, including
 the concurrency measurement: partial latency holds to 4 streams, but the number
 of commits for each stream falls by approximately one third.
 
+## Against whisper.cpp on the same audio (2026-09-14)
+
+The Tauri Notero runs the same weights through whisper.cpp on Metal. Same
+files, one scorer; conditions and every transcript in
+[BENCHMARK-VS-WHISPER-CPP.md](BENCHMARK-VS-WHISPER-CPP.md), the reasoning in
+[FINDINGS.md §14](FINDINGS.md#14-the-same-audio-through-whisperkit-and-whispercpp-2026-09-14).
+The interview reference is this app's own export, so the WhisperKit numbers on
+it are flattered by a few points.
+
+| Interview, 2:57 English, WER | WhisperKit (this app) | whisper.cpp, per utterance | whisper.cpp, 28 s windows |
+| --- | --- | --- | --- |
+| small | 15.9% | 30.6% | 19.2% |
+| large-v3-turbo | **8.4%** | 17.1% | 12.0% |
+| large-v3 (full) | 12.6% | 21.0% | 11.4% |
+| large-v3-turbo, live path at real time | 15.0% | 17.1% | -- |
+
+| Interview decode, model warm | WhisperKit | whisper.cpp, per utterance | whisper.cpp, windows |
+| --- | --- | --- | --- |
+| small | 9.1 s | 6.8 s | 2.5 s |
+| large-v3-turbo | 8.7 s | 26.6 s | 5.1 s |
+| large-v3 (full) | 24 s | 32.5 s | 12.2 s |
+
+| 34 s Tagalog clip, words kept (~75 spoken) | WhisperKit offline | WhisperKit live | whisper.cpp |
+| --- | --- | --- | --- |
+| large-v3-turbo | 25 | 75 | 72 |
+| large-v3 (full) | 31 | -- | 33 |
+
+A set of 8 synthetic sentences from the macOS `say` command was removed from
+this comparison. Synthetic speech measures the voice and not the model.
+
+## Against a human reference (2026-09-15)
+
+The interview above has no human transcript, so the tables use this app's own
+export. UCLASS publishes a time-aligned human transcript for four of its
+monologues. `M_1017_11y8m_1` is one: a boy of 11y8m who stutters, 2:29 long.
+`eval/get-uclass.sh` fetches it and `eval/uclass_score.py` scores it. The
+reasoning is in [FINDINGS.md §15](FINDINGS.md#15-a-human-reference-changes-the-answer-2026-09-15).
+
+The transcript marks each filled pause and each repetition, so it gives two
+references. *Verbatim* keeps them. *Cleaned* removes them.
+
+| `M_1017_11y8m_1`, WER | Verbatim | Cleaned | Decode |
+| --- | --- | --- | --- |
+| small, offline | 18.7% | 10.1% | 3.3 s |
+| large-v3-turbo, offline | **16.3%** | **9.5%** | 4.4 s |
+| large-v3-turbo, live at real time | 19.3% | 11.5% | 155.6 s |
+
+Two cautions come from this table.
+
+**Quote the pair, not one number.** 6.8 of the default tier's 16.3 verbatim
+points are filled pauses and repetitions that the model omits deliberately. One
+number alone cannot separate a mishearing from a convention.
+
+**The interview tables overstate the distance between the models.** small
+against large-v3-turbo is 7.5 points on the interview with this app's own
+reference, and 0.6 points here with a human reference. Read the interview
+tables as a runtime comparison, where both sides carry the same handicap, and
+not as an accuracy claim.
+
 ## Limitations
 
 1. **One machine.** Every number comes from one MacBook Pro M5 Pro. The app

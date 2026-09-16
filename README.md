@@ -160,6 +160,7 @@ encryption of its own, thus FileVault is the only protection.
 | [docs/MODELS.md](docs/MODELS.md) | The three tiers, the model IDs and the naming trap |
 | [docs/CLI.md](docs/CLI.md) | The `transcribe` command-line tool |
 | [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | RTF, WER and memory, with their conditions |
+| [docs/BENCHMARK-VS-WHISPER-CPP.md](docs/BENCHMARK-VS-WHISPER-CPP.md) | The same audio through WhisperKit and whisper.cpp |
 | [docs/FINDINGS.md](docs/FINDINGS.md) | Engineering findings and the failures behind the design |
 | [docs/RELEASE.md](docs/RELEASE.md) | How to build and publish a release |
 | [docs/LEGACY-SERVER.md](docs/LEGACY-SERVER.md) | The Python server, which the app replaced |
