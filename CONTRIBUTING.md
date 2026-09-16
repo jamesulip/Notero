@@ -122,6 +122,7 @@ files use it:
 
 - `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`
 - `docs/ARCHITECTURE.md`, `docs/DEVELOPMENT.md`, `docs/BENCHMARKS.md`,
+  `docs/BENCHMARK-VS-WHISPER-CPP.md`,
   `docs/MODELS.md`, `docs/CLI.md`, `docs/RELEASE.md`,
   `docs/LEGACY-SERVER.md`, `docs/DEPLOY.md`
 - The comments in `.env.example`

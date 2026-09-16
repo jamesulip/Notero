@@ -38,8 +38,9 @@ public enum ModelCatalogue {
             label: "large-v3 (full, not turbo)",
             detail: "Full 1.5B large-v3. The `_turbo` suffix here is a WhisperKit "
                   + "compute variant, NOT the turbo model — its decoder is 5.3x "
-                  + "heavier. Expected to be more accurate; unmeasured on Taglish "
-                  + "in this project. Far slower per hop.",
+                  + "heavier. Measured 2026-09-14 (FINDINGS §14): ~3x slower than "
+                  + "turbo, no more accurate on English, truncated fast Tagalog, "
+                  + "hallucinated on trailing silence. Kept for comparison.",
             approxMB: 3195, multilingual: true, recommended: false),
         ModelOption(
             id: "openai_whisper-medium",

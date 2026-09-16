@@ -287,8 +287,6 @@ struct RecordingDetailView: View {
     /// the first layout, and the flip rebuilt the transcript view, which read
     /// the whole transcript a second time.
     @State private var showInspector: Bool?
-    /// An earlier transcript revision open for reading. Nil is the latest.
-    @State private var revision: Int?
 
     enum InspectorTab: String, CaseIterable, Identifiable {
         case notes, bookmarks, speakers
@@ -303,15 +301,19 @@ struct RecordingDetailView: View {
     }
 
     var body: some View {
+        @Bindable var state = state
+
         VStack(spacing: 0) {
             header
-            RecordingInfoBar(recording: recording, revision: $revision)
+            // The open revision lives on the app state, not here, so the
+            // export sheet and the Copy actions can read it.
+            RecordingInfoBar(recording: recording, revision: $state.openRevision)
             Divider()
 
             // maxHeight as well as maxWidth. Without it the pane sizes to its
             // content and nothing else is left to hold the column open -- so
             // the whole header sinks to the middle of the window.
-            TranscriptView(recording: recording, revision: revision)
+            TranscriptView(recording: recording, revision: state.openRevision)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if recording.hasAudio {

@@ -15,7 +15,7 @@ speed and not a model name.
 | --- | --- | --- |
 | **Fast** | `openai_whisper-large-v3-v20240930_626MB` | The quantized turbo model. The lowest latency and the smallest memory footprint. It gives up some accuracy on Taglish, and the amount is unmeasured. |
 | **Balanced** | `openai_whisper-large-v3-v20240930_turbo` | **The default.** The full large-v3 encoder with a 4-layer decoder. This is what keeps live transcription at real-time speed. |
-| **Best** | `openai_whisper-large-v3_turbo` | The full large-v3, and the largest model here. The decode cost is approximately 5 times the cost for each window. Use it to transcribe a finished recording again, and not for the live path. **This project has not measured its accuracy.** Read [Measured and inferred](#measured-and-inferred). |
+| **Best** | `openai_whisper-large-v3_turbo` | The full large-v3, and the largest model here. The decode cost is approximately 5 times the cost for each window. Use it to transcribe a finished recording again, and not for the live path. **It is not more accurate.** It scored worse than Balanced on English and it truncated fast Tagalog. Read [Measured and inferred](#measured-and-inferred). |
 
 **The Best tier was named Accurate before.** The app reads a stored
 `accurate` and gives you the Best tier, and `transcribe --tier accurate` also
@@ -50,23 +50,23 @@ CoreML compile that [BENCHMARKS.md](BENCHMARKS.md) records.
 
 ## Measured and inferred
 
-**Each accuracy number in this repository comes from the Balanced tier.** No
-measurement compares one model against another model.
+Most accuracy numbers in this repository come from the Balanced tier. Findings
+14 and 15 in [FINDINGS.md](FINDINGS.md) added the first comparisons between
+models.
 
 | Claim | Status |
 | --- | --- |
 | Balanced keeps live transcription at real-time speed | Measured. [BENCHMARKS.md](BENCHMARKS.md) gives the numbers. |
 | Balanced is the model behind the offline Tagalog word error rate | Measured. Finding 1 in [FINDINGS.md](FINDINGS.md) records it. |
-| Best gives a better transcript than Balanced | **Not measured.** The weights are not in `models/`, thus this project has never run the model. |
+| Best gives a better transcript than Balanced | **Measured, and false.** Best scored 12.6% on an English interview against 8.4% for Balanced. It kept 31 words of approximately 75 on a fast Tagalog clip. Finding 14 records it. |
+| Balanced gives a better transcript than Small | Measured, and the distance is small. Against a human reference the two are 0.6 points apart. Finding 15 records it. |
 | Fast gives up some accuracy against Balanced | **Not measured.** |
-| The full large-v3 costs approximately 5 times the decode | Inferred from the decoder sizes in [The `_turbo` trap](#the-_turbo-trap), and not timed. |
+| The full large-v3 costs approximately 5 times the decode | **Measured at approximately 3 times**, and not 5 times: 24 s against 8.7 s for the same interview. The 5 times figure was inferred from the decoder sizes. |
 
 **Do not treat the Best tier as a known-better transcript.** The tier names a
-position on the speed ladder, and not a measured result. To make it a measured
-result, compare it against the Balanced tier on a real recording with a correct
-reference transcript. The two clips that [BENCHMARKS.md](BENCHMARKS.md)
-describes cannot answer this question. One clip uses an Indonesian voice, and
-the reference transcript of the other clip is too poor.
+position on the speed ladder. The one measurement of it shows a worse result on
+English and on Tagalog. Use it to transcribe a finished recording again when you
+want a second opinion, and not because it is more accurate.
 
 ## The full catalogue
 
