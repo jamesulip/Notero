@@ -105,6 +105,13 @@ public enum CaptureNotice: Equatable, Sendable {
     case microphoneLost(String)
     /// A device changed and capture could not be started again.
     case captureFailed(String)
+    /// The recording's audio file stopped being written -- the disk ran low,
+    /// or a write failed. What was written before is kept and still plays.
+    case recordingNotSaved(String)
+    /// The 16 kHz working copy stopped being written. The live transcript is
+    /// unaffected, but anything that reads the copy later -- Transcribe Again,
+    /// speaker identification -- ends where it does.
+    case workingCopyNotSaved(String)
 
     /// One or two sentences for the recording screen and for the warning that
     /// the recording keeps.
@@ -121,6 +128,13 @@ public enum CaptureNotice: Equatable, Sendable {
         case .captureFailed(let why):
             return "The audio input changed and could not be restarted (\(why)). "
                  + "The recording is silent from that moment."
+        case .recordingNotSaved(let why):
+            return "The audio stopped being saved (\(why)). "
+                 + "What was recorded before that moment is kept."
+        case .workingCopyNotSaved(let why):
+            return "The copy of the audio used for transcription stopped being saved "
+                 + "(\(why)). Transcribe Again and speaker identification will cover only "
+                 + "the audio before that moment."
         }
     }
 }

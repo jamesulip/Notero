@@ -579,6 +579,50 @@ is omitted. After the change the probe records from both connections at
 purpose: a 16 kHz microphone carries nothing above 8 kHz, and the model
 resamples to 16 kHz anyway.
 
+## 14. A full disk crashed the app and made the archive unreadable (2026-10-31)
+
+Found by code audit and then reproduced. Two separate failures happened when the
+disk filled up during a recording:
+
+- **The working copy crashed the app.** `WavWriter` appended with the legacy
+  `FileHandle.write(_:)`. On any write error that call raises an Objective-C
+  exception, and Swift cannot catch one. A standalone program that made the
+  same calls into a 4 MB disk image ended with `NSFileHandleOperationException:
+  -[NSConcreteFileHandle writeData:]: No space left on device`, exit 134. The
+  throwing `write(contentsOf:)` reported the same condition as an ordinary
+  error after 4,009,280 bytes. In the app, the crash also left the AAC archive
+  unfinalized.
+- **The archive lost everything, not only its end.** `ArchiveWriter` discarded
+  its write errors with `try?`. `AVAudioFile` *does* report a full disk (it
+  threw `com.apple.coreaudio.avfaudio -40` after 538 s of 48 kHz AAC on the same
+  4 MB image), but nobody heard it, and the file it left could not be opened:
+  `afinfo` failed with `AudioFileOpenURL failed`. An MPEG-4 file is readable
+  only once its index (the `moov` atom) is written at close, and a full disk
+  has no room for that. Nine minutes of audio were lost.
+
+**The fix stops writing before the disk is full.** Both writers now look at the
+free space every 5 s of audio. Below a 100 MB reserve, they stop and close the
+file while closing can still succeed. The reserve is far more than any index
+needs (a six-hour AAC index is about 4 MB) and leaves SwiftData room to save the
+transcript. If a recording starts with less than the reserve free, it is
+refused with a message that says the disk is almost full. A write that fails
+anyway (another program filled the disk between two looks, or a volume went
+away) now stops that writer cleanly. Each writer reports the failure once, as a
+notice on the recording screen that is also kept with the recording. The live
+transcript is unaffected, because it does not depend on either file. An import
+that runs out of space now throws, so it no longer returns a short working copy
+that looks complete.
+
+Checked on a real 200 MB volume filled to 108 MB free, with the real `statfs`
+probe and no fakes: both writers stopped at 99.9 MB free, nothing crashed, the
+working copy held a clean 259 s, and the archive opened in `afinfo`. (The
+archive was 4 s long only because the check loop ran far faster than real time,
+so the working copy used up the space before the archive's queue looked at the
+disk.) `DiskFullTests` reproduces the crash without a disk image:
+`RLIMIT_FSIZE` makes `write(2)` fail with `EFBIG` through the same path. With
+the legacy call put back, the test fails with
+`NSFileHandleOperationException: File too large`.
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a

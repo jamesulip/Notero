@@ -16,6 +16,14 @@
   recording refused to start with a CoreAudio error. The app now asks the
   encoder for the permitted range. [docs/FINDINGS.md](docs/FINDINGS.md) entry
   13 gives the measurements.
+- **A full disk no longer crashes a recording or loses its audio.** Writing
+  the transcription copy into a full disk crashed the app. The recording file
+  stopped silently, and it could not be opened afterwards because its index
+  was never written. Notero now stops saving audio while 100 MB is still free,
+  closes both files so that they stay playable, and shows a notice that is
+  kept with the recording. The live transcript continues. A recording does not
+  start when the disk is already that full. [docs/FINDINGS.md](docs/FINDINGS.md)
+  entry 14 gives the details.
 
 ## 1.1.0 — 2026-09-08
 

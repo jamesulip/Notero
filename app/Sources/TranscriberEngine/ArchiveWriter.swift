@@ -12,16 +12,30 @@ import TranscriberCore
 /// the room and the call rather than left and right -- one file, one clock, and
 /// no way for the two to drift apart. Anything that cannot read the lanes still
 /// plays the meeting.
+///
+/// Writing stops early, and the file is closed while it still can be, when the
+/// disk runs low or a write fails. An MPEG-4 file whose index was never written
+/// cannot be opened at all, so pressing on into a full disk loses the whole
+/// recording rather than its end (FINDINGS §14). `onFailure` says so once.
 final class ArchiveWriter: @unchecked Sendable {
+    /// Touched only on `queue`, after `init`.
     private var file: AVAudioFile?
     private let queue = DispatchQueue(label: "transcriber.archive", qos: .utility)
     private let lock = NSLock()
     private var frames: AVAudioFramePosition = 0
     private let lanes: [CaptureLane]
     private let format: AVAudioFormat
+    private let url: URL
+    private let disk: DiskSpace
+    /// Touched only on `queue`.
+    private var framesSinceDiskCheck: AVAudioFramePosition = 0
+    private var _failure: (any Error)?
+    private var _onFailure: (@Sendable (any Error) -> Void)?
 
-    init(url: URL, sampleRate: Double, lanes: [CaptureLane]) throws {
+    init(url: URL, sampleRate: Double, lanes: [CaptureLane], disk: DiskSpace = .system) throws {
         self.lanes = lanes
+        self.url = url
+        self.disk = disk
         guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate,
                                          channels: AVAudioChannelCount(lanes.count))
         else { throw AudioCapture.CaptureError.unsupportedFormat(sampleRate) }
@@ -47,12 +61,25 @@ final class ArchiveWriter: @unchecked Sendable {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true
         )
+        if let free = disk.shortfall(at: url) {
+            throw EngineError.cannotSaveAudio(
+                DiskSpace.Low(availableBytes: free).localizedDescription)
+        }
         file = try AVAudioFile(forWriting: url, settings: settings,
                                commonFormat: .pcmFormatFloat32, interleaved: false)
     }
 
     var frameCount: AVAudioFramePosition {
         lock.withLock { frames }
+    }
+
+    /// Why writing stopped early, if it has.
+    var failure: (any Error)? { lock.withLock { _failure } }
+
+    /// Called once, on the writer's queue, when writing stops early.
+    var onFailure: (@Sendable (any Error) -> Void)? {
+        get { lock.withLock { _onFailure } }
+        set { lock.withLock { _onFailure = newValue } }
     }
 
     /// `target` clamped into the bitrates the AAC encoder accepts for `format`,
@@ -117,9 +144,38 @@ final class ArchiveWriter: @unchecked Sendable {
 
         lock.withLock { frames += AVAudioFramePosition(count) }
         queue.async { [weak self] in
-            guard let self else { return }
-            try? self.file?.write(from: copy)
+            self?.commit(copy)
         }
+    }
+
+    /// The disk check and the write, on `queue`.
+    private func commit(_ buffer: AVAudioPCMBuffer) {
+        guard let file else { return }
+        framesSinceDiskCheck += AVAudioFramePosition(buffer.frameLength)
+        let interval = AVAudioFramePosition(format.sampleRate)
+            * AVAudioFramePosition(DiskSpace.checkIntervalMs) / 1000
+        if framesSinceDiskCheck >= interval {
+            framesSinceDiskCheck = 0
+            if let free = disk.shortfall(at: url) {
+                stop(because: DiskSpace.Low(availableBytes: free))
+                return
+            }
+        }
+        do {
+            try file.write(from: buffer)
+        } catch {
+            stop(because: error)
+        }
+    }
+
+    /// Closes the file now, while closing it can still succeed, and reports why.
+    private func stop(because error: any Error) {
+        file = nil
+        let report = lock.withLock { () -> (@Sendable (any Error) -> Void)? in
+            _failure = error
+            return _onFailure
+        }
+        report?(error)
     }
 
     /// Closes the file, and does mean *closes*.

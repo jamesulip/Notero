@@ -279,6 +279,10 @@ public final class LiveSession {
         // the reason, and replacing it with a generic string here is what made
         // this undiagnosable in the first place.
         let cache = try WavWriter(url: cacheURL)
+        cache.onFailure = { [weak self] error in
+            let notice = CaptureNotice.workingCopyNotSaved(error.localizedDescription)
+            Task { @MainActor in self?.notices.append(notice) }
+        }
         self.cache = cache
 
         guard let capture = AudioCapture(source: captureSource,

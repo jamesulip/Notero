@@ -186,6 +186,9 @@ public final class AudioCapture: @unchecked Sendable {
         let writer = try archiveURL.map {
             try ArchiveWriter(url: $0, sampleRate: rate, lanes: lanes)
         }
+        writer?.onFailure = { [weak self] error in
+            self?.onNotice?(.recordingNotSaved(error.localizedDescription))
+        }
         stateLock.withLock {
             self.input = input
             self.chains = chains

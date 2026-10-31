@@ -46,11 +46,11 @@ deliberate, and you must keep this property. Refer to "The four layers".
 Run each command that applies to your change:
 
 ```bash
-cd app && swift build && swift test    # 301 tests, and 0 warnings
+cd app && swift build && swift test    # 314 tests, and 0 warnings
 ./.venv/bin/python -m pytest           # 75 tests
 ```
 
-The 301 tests are 273 XCTest tests and 28 swift-testing tests. Keep
+The 314 tests are 286 XCTest tests and 28 swift-testing tests. Keep
 `swift build` at **zero warnings**. There is no linter and no formatter for
 either language. Write code in the style of the code around it.
 `.editorconfig` gives the indentation.

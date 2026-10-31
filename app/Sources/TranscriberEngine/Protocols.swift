@@ -140,6 +140,8 @@ public enum EngineError: LocalizedError, Sendable {
     case modelNotLoaded
     case backendUnavailable(String)
     case audioUnreadable(String)
+    /// Audio could not be written to disk: the disk is full, or nearly.
+    case cannotSaveAudio(String)
 
     public var errorDescription: String? {
         switch self {
@@ -149,6 +151,8 @@ public enum EngineError: LocalizedError, Sendable {
             return why
         case .audioUnreadable(let why):
             return "Could not read that audio: \(why)"
+        case .cannotSaveAudio(let why):
+            return "Could not save the audio: \(why)"
         }
     }
 }
