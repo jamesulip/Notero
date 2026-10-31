@@ -2,6 +2,57 @@
 
 ## Unreleased
 
+### Recording and recovery
+
+- **A recording that is killed, crashes or is force-quit now leaves a playable
+  file.** The file used to be unreadable, because it only opened after a clean
+  close. It is written in 5-second fragments now, and at most the last few
+  seconds are lost. Quitting during a recording stops and saves it first.
+  [docs/FINDINGS.md](docs/FINDINGS.md) entry 17 gives the details and what is
+  not covered. A recording that was killed before this change stays unreadable.
+- **The working copy of the audio is kept when the recording file cannot
+  replace it.** After an interrupted recording, Transcribe Again no longer
+  deletes the only complete copy. The recovery messages say what survived.
+- **A job is no longer called Complete when its transcript could not be
+  saved,** and a failed job keeps its reason. The warning says when live lines
+  or the length of the recording are not being saved.
+- **A long meeting finishes in seconds and not minutes.** Saving the final
+  transcript of a six-hour meeting took 159 s in a measurement, and 6.5 s after
+  the change. Entry 19 gives the conditions.
+- **A running transcription steps aside when you start a recording,** and
+  starts again from the beginning afterwards. It no longer competes with the
+  live transcript.
+- **A recording can start again after a refused microphone, a failed model load
+  or a failed capture start.** It used to fail until the app was restarted.
+- **Interfaces at 88.2, 96 or 192 kHz can record.** They were refused.
+- **A Mac that sleeps during a recording no longer allocates the whole sleep at
+  once,** and the recording says how long the input was interrupted.
+- **Speaker names that you chose survive a re-run that finds no speakers.**
+- **Search no longer stalls the window on a long meeting.**
+
+### Transcription
+
+- **The same file no longer transcribes differently on each run.** The first
+  window of the test clip decoded as invented English filler in about half of
+  the runs. The pipeline now decodes greedily first and, if that is refused,
+  retries with a short lead-in of silence before any random re-sampling. On the
+  test clip, 0 of 20 runs collapsed against 7 of 20, and every run gave the same
+  transcript. That clip starts abruptly, which is the cause, so the change is
+  unproven on real recordings. Entry 16 gives the numbers.
+- **The live decoder's memory no longer grows with the length of the
+  session.** It grew about 110 MB an hour. Entry 18 gives the measurement.
+- **Two requests for the same model at the same time share one load.**
+- **Voice-activity batches that fail are counted** in the session stats.
+
+### Tools
+
+- **`eval/make_multispeaker.py` and `eval/der.py`** build synthetic
+  multi-speaker fixtures with known turn boundaries and score a diarization run
+  with a frame-level DER, for A/B comparison. They are not an accuracy measure
+  for real meetings.
+- FluidAudio is pinned to patch releases of 0.15.6. Entry 20 explains why 0.15.8
+  and 0.18.0 were not adopted.
+
 ### Audio
 
 - **Test the microphone in Settings › Audio.** Click **Test Microphone**, speak,

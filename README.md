@@ -124,8 +124,8 @@ Taglish test clip, with the default Balanced model:
 | Measurement | Result |
 | --- | --- |
 | Whole-file real-time factor (RTF) | 0.09 to 0.14, which is 7 to 11 times faster than real time |
-| Word error rate (WER) | 20.3% to 25.8% |
-| Peak memory | approximately 300 MB |
+| Word error rate (WER) | 24.2% in every run after the first-window fix, on this clip; 24% to 70% before it (see [FINDINGS.md](docs/FINDINGS.md) entries 15 and 16) |
+| Peak process memory | approximately 300 MB. This is the process footprint, and it does not include the model weights that Core ML holds outside the process (approximately 1.6 GB for the default model) |
 
 **Read these numbers with their conditions.** The test clip is synthetic, the
 reference transcript is small, and the measurement Mac is faster than the 16 GB
@@ -172,14 +172,15 @@ encryption of its own, thus FileVault is the only protection.
 history and not current documentation.
 
 **Read [docs/FINDINGS.md](docs/FINDINGS.md) before you trust a number on this
-page.** Eleven findings changed the design. In one of them, a single refused
+page.** The findings in that file changed the design. In one of them, a single refused
 decode window deleted 44% of a transcript and reported no error. In another,
 the speaker model merged two different voices that shared a 10-second chunk.
 
 ## Status
 
 Version 1.0.0 is the first public release. Every feature in the list above is
-complete and tested. [CHANGELOG.md](CHANGELOG.md) gives what it contains, and
+complete. The logic below the windows has automated tests, and the windows
+themselves do not. [CHANGELOG.md](CHANGELOG.md) gives what it contains, and
 the private builds that came before it.
 
 Version 1.0.0 does **not** contain a local LLM, automatic summaries, automatic

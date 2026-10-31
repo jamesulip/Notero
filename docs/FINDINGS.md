@@ -656,7 +656,7 @@ changes sampling or fallback, and use more runs.
 Randomness enters only when WhisperKit's own temperature fallback re-samples a
 window whose greedy decode tripped the log-probability or compression
 threshold. The fixture starts at full amplitude at sample 0, which makes its
-first window the one most likely to trip a threshold. To test the hypothesis,
+first window the one most likely to trip a threshold. Finding 16 tests it and confirms it. To test the hypothesis,
 log WhisperKit's per-window fallback count beside the collapsed windows. If it
 holds, the fix belongs in the decode policy, for example a repetition or
 known-filler check that sends a window to the retry ladder. That fix needs real
@@ -665,6 +665,178 @@ recordings to tune it, not this clip.
 The live path varied too, by less: 24.2–35.9% WER and 5–8 forced commits on
 1.1.0 over three runs. **One run on this clip proves nothing.** Before you
 compare two builds, run each several times and compare the spread.
+
+## 16. The first window failed greedy decoding, and the random fallback was the only way out (2026-11-01)
+
+This confirms the hypothesis in finding 15. It was measured on the 16 GB Mac mini
+M2 Pro with WhisperKit 1.1.0, on the 57 s synthetic clip, offline, Balanced tier,
+with no diarization.
+
+The first 24.9 s window starts at full amplitude on sample 0. Its greedy decode
+is refused at the first token by `firstTokenLogProbThreshold`, every time (an
+empty result in about 0.44 s). WhisperKit then re-samples at temperatures 0.2 and
+0.4 with an unseeded random number generator, and it has no seed option. In every
+probe all three attempts failed their gates, and WhisperKit returned the last one
+anyway. Over 30 production-configuration decodes of that window, 7 returned
+nothing, 7 had less than half of their words in the reference (for example
+"Thank you so much for coming"), and 16 were usable.
+
+**Dead ends.** A deterministic ladder (`topK = 1`) loops ("Kalo mga mga…",
+compression ratio 38). Disabling or relaxing the first-token gate,
+`withoutTimestamps`, a 100 ms fade, and widening the window by 700 ms did not
+help. Rejecting any result with a compression ratio above 2.4 and retrying cut
+the collapses from 5 to 2 in 12 runs, but the median WER rose from 30.1% to
+36.7%, and the rule rejected good text, so it was not adopted.
+
+**Fix.** With 50–550 ms of silence in front of the window, the greedy decode
+passes the gate and returns the same text every time. `OfflinePipeline.decode`
+now runs the greedy step alone. If that step is refused with no text, it retries
+with 250 ms and then 450 ms of silence in front. Any other outcome falls through
+to the rest of the old ladder in the old order: the sampled retries, wider audio,
+then halves. The live path is unchanged: a test asserts that every live request
+uses the standard ladder at attempt 0.
+
+**Result (interleaved, one series by the agent that wrote the fix, one by the
+lead).** The agent's series: n = 20 per arm, collapsed first windows 7 of 20
+against 0 of 20 (Fisher exact, two-sided, p = 0.008). All 20 candidate runs gave
+24.2% WER with 120 words and the same text, and the baseline gave 24.2–70.3%.
+The lead's series: n = 6 per arm, baseline 4 of 6 collapsed (WER 29.7–63.3%),
+candidate 0 of 6 (24.2% in all six, identical text). The median RTF fell from 0.092 to 0.082
+in the lead's series, and from 0.110 to 0.084 and from 0.099 to 0.082 in the agent's.
+Process footprint was 126–133 MB against 129–136 MB. Model residency was not
+measured.
+
+**Left open.** English filler that does not trip any gate can still pass the
+sampled ladder (1 of 30 baseline decodes, with a compression ratio of 0.81). A
+window with very few words is not caught either. Every number here is from one
+synthetic clip whose abrupt start is the cause of the failure, so none of it says
+how often a real recording starts a window that way. A real recording needs
+checking before this is called a fix for real use. The change only acts on a
+window that was refused with no text, so a recording whose first greedy decode
+passes behaves as before.
+
+## 17. A quit, a crash or a kill made the whole archive unreadable (2026-11-01)
+
+An m4a written by `AVAudioFile` is readable only after it is closed. A real
+SIGKILL at 30 s left 241 KB with every sample in it, and `afinfo` reported
+`AudioFileOpenURL failed` (`ffprobe`: `moov atom not found`). Nothing intercepts
+quit, so a ⌘Q during a recording had the same result. Only the 16 kHz working
+copy survived, and by default the app deleted it as soon as the user did what the
+recovery message said, which was "transcribe it again". An AAC-in-CAF file opened
+but could not be converted (`afconvert` error -66567), so that option was dropped.
+
+**Fix, in two halves.** `ArchiveWriter` now writes through `AVAssetWriter` with 5 s
+movie fragments. In 24 real SIGKILLs of the real writer at random times between
+2.5 s and 12 s (16 mono, 8 stereo), every file was readable and at most 4.81 s was
+lost. Killed files play in `AVAudioPlayer` and decode through `AVAssetReader`, and
+a clean close holds exactly the frames written, at about 4% more file size. The app
+side holds a quit until the recording is stopped and closed (`QuitGate`), deletes
+the working copy only when the archive opens and holds at least as much audio
+(`WorkingCopyPolicy`), and says what survived in the recovery message.
+
+**Not covered.** A kill in the first 5 s, before the first fragment (1 of 12 in the
+prototype). Power loss, because neither writer calls `fsync`. Archives that were
+made before this change and never closed stay unreadable, and only their working
+copy recovers them. A crashed two-lane recording keeps only the mixed working copy,
+so it transcribes as one lane. The quit gate is unit-tested through its seam, and a
+real ⌘Q during a recording was not driven.
+
+Two smaller fixes in the same area. After a sleep the first buffer reports the
+whole sleep as a gap, and `fillGap` allocated it as one buffer per lane: an hour at
+48 kHz raised the footprint by 770 MB, made one 115 MB chunk and held the capture
+thread for 19 s. It is written in 1 s slices now, and any gap of 1 s or more raises
+a notice. Interfaces at 88.2, 96 or 192 kHz were refused (the encoder offers nothing
+above 48 kHz); they are archived at 44.1 or 48 kHz now.
+
+## 18. The live ring buffer grew by the whole PCM rate (2026-11-01)
+
+`Data.removeFirst` only moves the start of a slice over the same storage, and the
+next `append` extends that storage, so the dead prefix is never freed. The live
+decoder's ring held a window of about 145 KB and grew 112 MB an hour without bound
+(671 MB over a simulated 6 h session). It was found by the audio agent and measured
+again independently, pushing audio through the ring and trimming every 1.5 s as the
+decoder does: the footprint grew 112, 222 and 332 MB after 1, 2 and 3 simulated
+hours, and 0, 1 and 1 MB with the fix, at the same window size. The fix drops the
+prefix into fresh storage. The regression test fails on the old code (37 MB of growth
+in 20 simulated minutes against a 12 MB limit). Every other part of the capture and
+decode path stayed flat in the simulated 1 h, 3 h and 6 h runs (about 1 MB an hour of
+footprint growth). These runs used a scripted device, recognizer and voice-activity
+detector, so they say nothing about the model's own memory.
+
+## 19. Long transcripts slowed down quadratically, and finishing one could empty it (2026-11-01)
+
+On an on-disk store, setting `row.transcript` before inserting the row made SwiftData
+rework the transcript's whole `segments` list for each row. A 250-row batch cost
+24 ms into an empty transcript and 3.6 s into one of 3,000 rows. Deleting the partial
+rows one by one made the save grow with the square of the row count: 159 s for
+`completeTranscript` at 15,000 rows (a six-hour meeting). `completeTranscript` also
+saved the delete before the insert, so a failure between the two left the transcript
+empty.
+
+The fixes insert before linking, save the final revision first, and then delete the
+partial revision by predicate. At 15,000 rows `completeTranscript` took 6.5 s and a
+250-row append 84 ms. These are single debug-build runs on an on-disk store by the
+agent that made the changes, so read them as the size of the effect and not as exact
+timings. Related fixes in the same pass: a job whose transcript could not be saved is
+no longer marked complete (and a failed job keeps its reason), live lines that stop
+being saved are reported while recording, a running job steps aside and restarts when
+a recording starts (it loses its progress, but it no longer competes with live
+decoding or has its model unloaded), a request made while a cancelled run unwinds is
+no longer dropped, and an empty diarization result no longer wipes the speaker names a
+person chose.
+
+## 20. FluidAudio 0.15.8 and 0.18.0 change nothing we measured, and reusing the first pass's embeddings loses turns (2026-11-01)
+
+On 7 synthetic multi-speaker fixtures with known turn boundaries (`say` voices that
+were measured to be far enough apart; `eval/make_multispeaker.py`, scored with
+`eval/der.py`), on the Mac mini M2 Pro, with release builds, n = 5 per arm,
+interleaved, with the network denied, FluidAudio 0.15.6, 0.15.8 and 0.18.0 produced
+identical spans to the 10 ms, label for label, in the same time (1115, 1113 and
+1115 ms) and the same footprint (164–165 MB, process footprint and not model
+residency). Mean DER was 16.98% for all three. Every arm gave one distinct output
+across its 5 runs, so speaker ids are stable run to run. Notero calls no symbol whose
+signature changed in 0.18.0, and both versions build with zero warnings.
+
+**Upgrading costs something.** On 0.15.8 and 0.18.0, a model cache without a revision
+marker triggers a network check at first load. With the network denied, speaker
+identification failed and the cache directory was deleted (once on 0.15.8, twice on
+0.18.0). Online, the weights came out byte-identical. The same code path serves the
+voice-activity model, which was not tested. This is the reason `Package.swift` keeps
+FluidAudio on patch releases of 0.15.6. Version 0.18.0's default traits also compile
+the text-to-speech code; `traits: ["Diarizer"]` removes it with identical output
+(the release build of the benchmark tool was 12.0 MB against 24.6 MB).
+
+**Reusing embeddings is faster and worse.** Three candidates re-used the first pass's
+embeddings (chunk-slot embeddings from 0.18.0, segment embeddings, and a hybrid). The
+time for speaker processing fell 39.5%, 39.4% and 17.3%, and the footprint fell to
+124–146 MB. Mean DER rose from 16.98% to 24.44%, 18.56% and 18.11%, and the
+speaker count was wrong on 2, 3 and 3 of 7 fixtures against 1 of 7 (a pair that every
+arm fuses). On the fixture where Daniel and Tessa trade short turns, which reproduces
+finding 10, the shipping path scored 8.5% DER and chunk-slot embeddings scored 49.8%,
+the same as the first pass alone. The embedding-reuse candidates added a phantom third
+speaker. With a stated head-count of four, the three candidates fell to 33.1% DER
+because consolidation merged the wrong pair. None of them was adopted.
+
+All of this is synthetic. No real recording and no real DER reference exist on this
+machine, and the first pass drops turns under 1 s, which is why "missed" is large and
+equal in every arm.
+
+## 21. A `@ModelActor` created on the main actor runs on the main thread (2026-11-01)
+
+A search was moved to a `@ModelActor` reader to keep a long meeting from stalling the
+window. It did not work: `isMainThread` was true for a reader created from a
+`@MainActor` method and false for one created in a detached task. The app target's
+default isolation is the main actor, so `AppState.makeSearcher()` built the reader on
+the main thread and the half-second search still ran there. The test that was meant to
+catch it passed anyway, because its ticker never ran during the search and a gap of
+0 ms satisfied the assertion. The reader is now created inside a detached task
+(`SearchReader.search(_:in:)`), and the test asserts that the ticker ran. With the old
+call pattern restored it fails, and with the fix the longest main-actor gap was 15 ms
+during a 0.17 s search.
+
+`AppState.makeReader()` creates a `TranscriptReader` in the same way and probably has
+the same problem, which would mean the transcript loads that were described as off the
+main actor run on it. That was not measured and not changed.
 
 ## Caveat: the audio was synthetic
 
