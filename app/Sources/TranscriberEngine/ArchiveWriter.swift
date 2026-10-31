@@ -52,6 +52,13 @@ final class ArchiveWriter: @unchecked Sendable {
     /// fragment.
     static let fragmentSeconds = 5.0
 
+    /// Seconds of audio before the *first* fragment. Until a fragment is written the
+    /// file holds no index at all, so a kill before it lost the whole recording:
+    /// measured, a copy of an open archive was unreadable at 0.5, 1.2, 2.5 and 4.5 s
+    /// and readable from 5.5 s (finding 33). One short first fragment moves that
+    /// edge from 5 s to 1 s for the price of one more fragment header (about 1.2 KB).
+    static let firstFragmentSeconds = 1.0
+
     /// How long `commit` waits for the encoder to take a buffer before the
     /// writer is declared stuck. A healthy encoder takes one in milliseconds.
     private static let stallLimit: TimeInterval = 30
@@ -103,7 +110,11 @@ final class ArchiveWriter: @unchecked Sendable {
     /// (the encoder never answered). Touched only on `queue`.
     private var durable: AVAudioFramePosition?
 
-    init(url: URL, sampleRate: Double, lanes: [CaptureLane], disk: DiskSpace = .system) throws {
+    /// - Parameter firstFragmentSeconds: when the first fragment is written; nil for
+    ///   none, which is what every recording had before finding 33. For tests that
+    ///   compare the two.
+    init(url: URL, sampleRate: Double, lanes: [CaptureLane], disk: DiskSpace = .system,
+         firstFragmentSeconds: Double? = ArchiveWriter.firstFragmentSeconds) throws {
         self.lanes = lanes
         self.url = url
         self.disk = disk
@@ -185,6 +196,10 @@ final class ArchiveWriter: @unchecked Sendable {
         writer.add(input)
         writer.movieFragmentInterval = CMTime(seconds: Self.fragmentSeconds,
                                               preferredTimescale: 600)
+        if let firstFragmentSeconds {
+            writer.initialMovieFragmentInterval = CMTime(seconds: firstFragmentSeconds,
+                                                         preferredTimescale: 600)
+        }
         guard writer.startWriting() else {
             throw EngineError.cannotSaveAudio(
                 writer.error?.localizedDescription ?? "the archive could not be started")
