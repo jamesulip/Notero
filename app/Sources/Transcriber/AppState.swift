@@ -203,8 +203,39 @@ final class AppState {
         // Before any view reads the store: the live session and the queue did
         // not survive the last quit, so anything they still claim to be working
         // on is stranded.
-        _ = try? RecordingStore.recoverInterrupted(in: container.mainContext)
+        recoverInterruptedWork()
         startPump()
+    }
+
+    /// Resolves what the last run left unfinished, and says what is on disk
+    /// for each such recording. A failure is shown rather than dropped: rows
+    /// that claim to be recording or transcribing would otherwise wait forever
+    /// for work that is gone.
+    private func recoverInterruptedWork() {
+        let support = Paths.support
+        do {
+            try RecordingStore.recoverInterrupted(in: container.mainContext) { recording in
+                // A recording file the app wrote is an `.m4a`, and that one
+                // either opens or does not. Anything else was imported, and
+                // its format may be one that only the asset reader opens.
+                let archive: Int?
+                if let url = recording.audioURL, url.pathExtension.lowercased() == "m4a" {
+                    archive = ArchiveProbe.recordedDurationMs(of: url)
+                } else {
+                    archive = recording.hasAudio ? max(1, recording.durationMs) : nil
+                }
+                let copy = (try? MappedPCM(
+                    contentsOf: AudioCache.url(for: recording.id, under: support)
+                ))?.durationMs
+                return RecordingStore.SurvivingAudio(archiveMs: archive, workingCopyMs: copy)
+            }
+        } catch {
+            alert = AppAlert(
+                title: "Unfinished recordings could not be checked",
+                message: "\(error.localizedDescription) Recordings that were under way when "
+                    + "the app closed may still show as recording or transcribing."
+            )
+        }
     }
 
     /// Persists the gain and pushes it to a session already running, so moving
