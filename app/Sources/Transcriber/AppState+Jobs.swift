@@ -59,6 +59,7 @@ extension AppState {
                     try await writer.updateStatus(outcome.status, progress: fraction,
                                                   error: outcome.errorMessage, for: id)
                 }
+                syncStore(id)
                 if outcome.status != status { progress[id]?.status = outcome.status }
                 if let note = outcome.warning { await appendWarning(note, for: id) }
             }
@@ -71,6 +72,7 @@ extension AppState {
                     for: id
                 )
             }
+            syncStore(id)
 
         case .partial(let id, let segments, let coveredMs):
             guard let job = queuedJobs[id] else { break }
@@ -87,6 +89,7 @@ extension AppState {
                 }
             }
             progress[id]?.coveredMs = coveredMs
+            syncStore(id)
             transcriptTicks[id, default: 0] += 1
 
         case .transcribed(let id, let payload):
@@ -110,12 +113,14 @@ extension AppState {
                     for: id
                 )
             }
+            syncStore(id)
             transcriptTicks[id, default: 0] += 1
 
         case .rangeTranscribed(let id, let fromMs, let toMs, let segments, _):
             await ledger.attempt(.turn, for: id) {
                 try await writer.replaceSegments(fromMs: fromMs, toMs: toMs, with: segments, for: id)
             }
+            syncStore(id)
             transcriptTicks[id, default: 0] += 1
 
         case .diarized(let id, let spans, let roster):
@@ -127,6 +132,7 @@ extension AppState {
                     "Speaker identification found no speech to label, so the speaker "
                     + "labels that were already on this transcript were kept.", for: id)
             }
+            syncStore(id)
             transcriptTicks[id, default: 0] += 1
 
         case .failed(let id, let message):
@@ -141,6 +147,7 @@ extension AppState {
             _ = await ledger.succeeded(.status, for: id) {
                 try await writer.updateStatus(.failed, error: message, for: id)
             }
+            syncStore(id)
 
         case .warning(let id, let message):
             // The transcript is usable but incomplete. Keyed to the recording

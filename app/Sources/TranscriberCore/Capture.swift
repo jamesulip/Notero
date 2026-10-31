@@ -117,6 +117,9 @@ public enum CaptureNotice: Equatable, Sendable {
     /// recover from; the same microphone can come back, so no device notice
     /// says it happened.
     case audioGap(seconds: Int)
+    /// The recording file did not finish closing in time, and Stop went on without
+    /// it. It keeps closing in the background.
+    case archiveNotClosed(seconds: Int)
 
     /// One or two sentences for the recording screen and for the warning that
     /// the recording keeps.
@@ -144,6 +147,11 @@ public enum CaptureNotice: Equatable, Sendable {
             return "The audio input was interrupted for \(Self.duration(seconds)). "
                  + "The recording holds silence for that time, and the transcript has "
                  + "nothing for it."
+        case .archiveNotClosed(let seconds):
+            return "The recording file did not finish closing within \(Self.duration(seconds)), "
+                 + "so the app stopped waiting for it. It goes on closing in the background: "
+                 + "if it does, the whole recording plays, and if it does not, the last few "
+                 + "seconds may be missing. A copy of the audio is kept for Transcribe Again."
         }
     }
 

@@ -151,7 +151,10 @@ final class LongSessionSoakTests: XCTestCase {
                 if index == gapAt {
                     input.onGap?(gapFrames)
                     source.skip(gapFrames)            // the device lost this time
-                    progress.record(frames: gapFrames, ms: Int(Double(gapFrames) / rate * 1000))
+                    // The silence is written on a queue now (finding 33), not by this
+                    // call, so the consumer has not got it yet: it is counted as
+                    // delivered at the next `settle`, when the queue has drained.
+                    progress.recordGap(frames: gapFrames, ms: Int(Double(gapFrames) / rate * 1000))
                 }
                 let first = source.position
                 let buffer = source.buffer(frames: frames)
@@ -169,7 +172,10 @@ final class LongSessionSoakTests: XCTestCase {
                 if (index + 1) % perSecond == 0 {
                     while progress.deliveredMs - progress.consumedMs > 2_000 { usleep(200) }
                 }
-                if (index + 1) % Int(30 * buffersPerSecond) == 0 { capture.settle() }
+                if (index + 1) % Int(30 * buffersPerSecond) == 0 {
+                    capture.settle()
+                    progress.creditGap()
+                }
                 if (index + 1) % sampleEvery == 0 {
                     progress.sample(hours: Double(index + 1) / buffersPerSecond / 3_600,
                                     mb: MemoryProbe.footprintMB())
@@ -300,6 +306,24 @@ private final class SoakProgress: @unchecked Sendable {
         lock.withLock {
             _recordedFrames += frames
             _deliveredMs += ms
+        }
+    }
+
+    private var _gapPendingMs = 0
+
+    /// A gap whose silence is still being written: the frames are the recording's
+    /// at once, the time is the consumer's to catch up with only once `creditGap`.
+    func recordGap(frames: Int, ms: Int) {
+        lock.withLock {
+            _recordedFrames += frames
+            _gapPendingMs += ms
+        }
+    }
+
+    func creditGap() {
+        lock.withLock {
+            _deliveredMs += _gapPendingMs
+            _gapPendingMs = 0
         }
     }
 

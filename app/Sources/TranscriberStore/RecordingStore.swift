@@ -49,6 +49,34 @@ public enum RecordingStore {
         try context.save()
     }
 
+    // MARK: - Seeing another context's save
+
+    /// Brings the main context's copy of one recording up to date with what the
+    /// writer has saved, now.
+    ///
+    /// A row held on the main context does not see another context's save until
+    /// the main context fetches it: measured, 0 of 40 held rows were current after
+    /// `await writer.updateStatus(...)`, however long the main actor waited, and 40
+    /// of 40 after a fetch. A `@Query` that is on screen does the fetch itself, a few
+    /// milliseconds after the save (at most 11 ms in 180 saves), so a view catches up
+    /// without help; what this closes is the gap between the writer returning and
+    /// that fetch, which was zero when the writer ran on the main thread and is not
+    /// now (finding 32). Called before the app tells a view to re-read, so that the
+    /// view reads the rows that were saved and not the ones before.
+    ///
+    /// Three small fetches, none of them of the segments: the recording, its
+    /// transcripts (a transcript is its own object, and `completeTranscript`
+    /// replaces one) and its speakers.
+    public static func refresh(_ id: UUID, in context: ModelContext) {
+        var recording = FetchDescriptor<StoredRecording>(predicate: #Predicate { $0.id == id })
+        recording.fetchLimit = 1
+        _ = try? context.fetch(recording)
+        _ = try? context.fetch(FetchDescriptor<StoredTranscript>(
+            predicate: #Predicate { $0.recording?.id == id }))
+        _ = try? context.fetch(FetchDescriptor<StoredSpeaker>(
+            predicate: #Predicate { $0.recording?.id == id }))
+    }
+
     // MARK: - Recovery
 
     /// What is still on disk for a recording whose session ended without a
@@ -85,11 +113,19 @@ public enum RecordingStore {
 
     /// What a recovered row says about the audio, beyond what it says about
     /// the transcript. Empty when the recording file opens.
-    static func audioClause(_ audio: SurvivingAudio) -> String {
+    ///
+    /// A recording of two lanes is a different promise when its file did not close.
+    /// The copy that was kept is the room and the call mixed, so it can be
+    /// transcribed, but as one: the lines will not say which side they came from.
+    static func audioClause(_ audio: SurvivingAudio, lanes: [CaptureLane] = [.room]) -> String {
         if audio.archivePlays { return "" }
         if audio.workingCopyMs != nil {
+            let mixed = lanes.count > 1
+                ? " It holds the room and the call mixed, so the transcript will not say "
+                    + "which side each line came from."
+                : ""
             return " The recording file was never closed, so it will not play, "
-                + "but a copy of the audio was kept and can be transcribed."
+                + "but a copy of the audio was kept and can be transcribed." + mixed
         }
         return " No audio survived, so it cannot be transcribed again."
     }
@@ -125,7 +161,7 @@ public enum RecordingStore {
         for recording in stale {
             let wasRecording = recording.status == .recording
             let surviving = audio(recording)
-            let clause = audioClause(surviving)
+            let clause = audioClause(surviving, lanes: recording.lanes)
             if recording.durationMs == 0, surviving.durationMs > 0 {
                 // The length is written at Stop, which never came.
                 recording.durationMs = surviving.durationMs

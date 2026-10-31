@@ -86,23 +86,27 @@ public enum SearchService {
 /// `TranscriptReader`: a context keeps the rows it loaded, and a long-lived
 /// one would read an edit that the window saved a moment ago in its old form.
 ///
-/// **Where it runs depends on where it is created.** A `@ModelActor` made on the
-/// main actor runs on the main thread: measured, `isMainThread` was true for
-/// one created from a `@MainActor` method and false for one created in a
-/// detached task. `search(_:in:)` therefore makes the reader inside a detached
-/// task; building one in the app target, whose default isolation is the main
-/// actor, kept the half-second stall it was meant to remove.
-@ModelActor
+/// **Where it runs depends on who calls it, not on who made it.** A `@ModelActor`
+/// runs a call on the caller's thread: called from the main actor it ran on the
+/// main thread however it was created, and called from a detached task it did not
+/// (finding 32). This is a plain actor, so it is off the main thread for every
+/// caller; `search(_:in:)` is the one-call form.
 public actor SearchReader {
+
+    public nonisolated let modelContainer: ModelContainer
+    lazy var modelContext = ModelContext(modelContainer)
+
+    public init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+    }
+
     public func search(_ query: String, limit: Int = 80) throws -> [SearchHit] {
         try SearchService.search(query, in: modelContext, limit: limit)
     }
 
-    /// One search, on a thread that is not the main one.
+    /// One search on a context of its own, off the main thread.
     public static func search(_ query: String, in container: ModelContainer,
                               limit: Int = 80) async throws -> [SearchHit] {
-        try await Task.detached(priority: .userInitiated) {
-            try await SearchReader(modelContainer: container).search(query, limit: limit)
-        }.value
+        try await SearchReader(modelContainer: container).search(query, limit: limit)
     }
 }

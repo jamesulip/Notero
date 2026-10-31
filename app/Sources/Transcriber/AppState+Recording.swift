@@ -50,6 +50,11 @@ extension AppState {
         activeRecordingId = id
         let name = Paths.newRecordingName(id: id, ext: "m4a", on: recording.createdAt)
         recording.audioFileName = name
+        // Kept from the start and not only at Stop: a recording that is killed never
+        // reaches Stop, and with the default of one lane its archive -- which holds
+        // both channels and now survives a kill -- would be read as a single room
+        // channel by Transcribe Again.
+        recording.lanes = settings.captureSource.lanes
         recording.status = .preparing
         try? context.save()
 
@@ -180,6 +185,9 @@ extension AppState {
                     .compactMap { $0 }.joined(separator: " ")
             }
         }
+        // The transcript is saved on the writer's context. Brought across before
+        // anything below reads the row.
+        syncStore(result.recordingId)
         let attached = await ledger.succeeded(.status, for: result.recordingId) {
             try await writer.attachAudio(
                 fileName: result.archiveFileName ?? "",
@@ -190,6 +198,7 @@ extension AppState {
                 for: result.recordingId
             )
         }
+        syncStore(result.recordingId)
         if !attached {
             // Without these a two-lane recording is transcribed as one, and the
             // library shows no length. The row the app holds is a second way
@@ -284,6 +293,7 @@ extension AppState {
                 }
             }
         }
+        syncStore(result.recordingId)
         // What changed under the recording: a microphone that was unplugged
         // and replaced, a default input that moved, an input that could not
         // be restarted. Kept with the recording, because the person reading

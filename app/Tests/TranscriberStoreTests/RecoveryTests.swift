@@ -224,6 +224,45 @@ extension RecoveryTests {
         XCTAssertTrue(message.contains("will not play"), message)
     }
 
+    /// A two-lane recording that was killed: its working copy is the room and the
+    /// call mixed, and the archive did not close. Transcribe Again will work from
+    /// the copy, as one lane, and the message has to say that rather than promise
+    /// the two sides apart (finding 33).
+    func testATwoLaneRecordingWhoseArchiveDidNotCloseSaysItWillBeOneLane() throws {
+        let recording = try quitWhileRecording()
+        recording.lanes = [.room, .remote]
+        try context.save()
+
+        try RecordingStore.recoverInterrupted(in: context) { _ in workingCopyOnly }
+
+        let message = recording.errorMessage ?? ""
+        XCTAssertTrue(message.contains("Transcribe Again"), message)
+        XCTAssertTrue(message.contains("which side"), "the cost of the mixed copy must be said: \(message)")
+        XCTAssertEqual(recording.lanes, [.room, .remote], "recovery keeps what was recorded")
+    }
+
+    func testAOneLaneRecordingDoesNotGetTheTwoLaneSentence() throws {
+        let recording = try quitWhileRecording()
+
+        try RecordingStore.recoverInterrupted(in: context) { _ in workingCopyOnly }
+
+        XCTAssertFalse((recording.errorMessage ?? "").contains("which side"))
+    }
+
+    /// A readable archive still has both channels: the lanes are kept.
+    func testATwoLaneRecordingWhoseArchiveIsReadableKeepsTheOriginalPromise() throws {
+        let recording = try quitWhileRecording()
+        recording.lanes = [.room, .remote]
+        try context.save()
+
+        try RecordingStore.recoverInterrupted(in: context) {
+            _ in RecordingStore.SurvivingAudio(archiveMs: 60_000, workingCopyMs: 60_000)
+        }
+
+        XCTAssertFalse((recording.errorMessage ?? "").contains("which side"))
+        XCTAssertTrue((recording.errorMessage ?? "").contains("The audio is here"))
+    }
+
     func testAReadableArchiveKeepsTheOriginalPromise() throws {
         let recording = try quitWhileRecording()
 
