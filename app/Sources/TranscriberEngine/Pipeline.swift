@@ -121,7 +121,8 @@ public enum OfflinePipeline {
         /// show whether the decoder changed its mind mid-recording, which is
         /// the failure mode auto-detect is flagged for on Taglish.
         public var windowLanguages: [String?] = []
-        /// Windows that came back empty and succeeded on a warmer retry.
+        /// Windows that were refused and then succeeded on a retry: a lead-in
+        /// of silence, wider audio, or half the window.
         public var retriedWindows: Int
         /// Windows that came back empty every time. Audio the transcript is
         /// missing, and the caller is expected to say so rather than present a
@@ -163,6 +164,9 @@ public enum OfflinePipeline {
     static let maxSplitDepth = 2
     /// Below this a fragment is not worth splitting further.
     static let minSplitMs = 4_000
+    /// Silence put in front of a window, one retry each, when its greedy
+    /// decode is refused outright. See `decode`.
+    static let leadInRetriesMs = [250, 450]
 
     public static func transcribe(
         source: any PCMSource,
@@ -384,13 +388,61 @@ public enum OfflinePipeline {
         var neededRetry: Bool
     }
 
-    /// One window: decode, widen, then halve.
+    /// One window: decode greedily, give a refused window a lead-in of silence,
+    /// fall back to Whisper's sampled retries on wider audio, then halve.
+    ///
+    /// **Greedy first, and only greedy.** Whisper's own ladder is greedy, then
+    /// two random re-samples, and it returns the last of them even when that
+    /// one failed its gates too. The first window of the Taglish fixture failed
+    /// all three: the greedy decode is refused at its first token every time
+    /// (the clip starts at full amplitude on sample 0, with no lead-in), and the
+    /// sampled retries came back as good text on some runs and as invented
+    /// filler on others (FINDINGS 15, 16). Running the greedy step alone keeps
+    /// what already worked -- a greedy decode that passes is the decode the
+    /// ladder would have accepted -- and makes the failure visible.
+    ///
+    /// **A refusal gets a lead-in, not a dice roll.** A first-token refusal
+    /// returns nothing, in about half a second. The same window with 250 ms of
+    /// silence in front of it is a different decode problem, and greedy passed
+    /// it on every run on the fixture. Only a refusal with no text at all is
+    /// retried this way. A decode that produced text and failed a gate goes
+    /// straight to the sampled ladder, as before, so noisy audio does not pay
+    /// for an extra full decode.
+    ///
+    /// What is left of the ladder after those two steps is the same decodes in
+    /// the same order that WhisperKit's single call would have run.
     static func decode(
         _ window: SpeechRegion, in source: any PCMSource, using asr: any SpeechRecognizing,
         language: String, prompt: String?, notBefore floorMs: Int, depth: Int
     ) async throws -> Outcome {
         var detected: String?
 
+        // Deterministic stage.
+        if let greedy = try await run(window, leadInMs: 0, attempt: 0, sampling: .greedyOnly,
+                                      in: source, using: asr, language: language, prompt: prompt) {
+            detected = greedy.detectedLanguage
+            let produced = rebase(greedy.tokens, into: window, keeping: window, notBefore: floorMs)
+            if !produced.isEmpty, greedy.quality?.passedGates ?? true {
+                return Outcome(tokens: produced, language: detected, neededRetry: false)
+            }
+            if greedy.tokens.isEmpty {
+                for leadInMs in leadInRetriesMs {
+                    try Task.checkCancellation()
+                    guard let retry = try await run(
+                        window, leadInMs: leadInMs, attempt: 0, sampling: .greedyOnly,
+                        in: source, using: asr, language: language, prompt: prompt
+                    ) else { break }
+                    detected = detected ?? retry.detectedLanguage
+                    let produced = rebase(retry.tokens, into: window, keeping: window,
+                                          notBefore: floorMs)
+                    if !produced.isEmpty, retry.quality?.passedGates ?? true {
+                        return Outcome(tokens: produced, language: detected, neededRetry: true)
+                    }
+                }
+            }
+        }
+
+        // Sampled stage: the rest of Whisper's ladder, then wider audio.
         for attempt in 0..<maxDecodeAttempts {
             try Task.checkCancellation()
             let widen = attempt * retryWidenMs
@@ -398,13 +450,10 @@ public enum OfflinePipeline {
                 startMs: max(0, window.startMs - widen),
                 endMs: min(source.durationMs, window.endMs + widen)
             )
-            let samples = source.floats(msRange: decodeWindow.startMs..<decodeWindow.endMs)
-            guard samples.count > Audio.sampleRate / 10 else { break }
-
-            let output = try await asr.transcribe(ASRRequest(
-                samples: samples, language: language, prompt: prompt,
-                wordTimestamps: true, decodeAttempt: attempt
-            ))
+            guard let output = try await run(
+                decodeWindow, leadInMs: 0, attempt: attempt, sampling: .resampleOnly,
+                in: source, using: asr, language: language, prompt: prompt
+            ) else { break }
             detected = detected ?? output.detectedLanguage
             let produced = rebase(output.tokens, into: decodeWindow,
                                   keeping: window, notBefore: floorMs)
@@ -434,6 +483,37 @@ public enum OfflinePipeline {
             tokens.append(contentsOf: outcome.tokens)
         }
         return Outcome(tokens: tokens, language: detected, neededRetry: !tokens.isEmpty)
+    }
+
+    /// One call to the recognizer on `decodeWindow`, optionally with silence in
+    /// front of it. Tokens come back on the clock of `decodeWindow` itself: the
+    /// lead-in is taken off again, and anything the model heard inside it is
+    /// dropped, because that audio is digital silence.
+    private static func run(
+        _ decodeWindow: SpeechRegion, leadInMs: Int, attempt: Int,
+        sampling: ASRRequest.Sampling, in source: any PCMSource,
+        using asr: any SpeechRecognizing, language: String, prompt: String?
+    ) async throws -> ASROutput? {
+        var samples = source.floats(msRange: decodeWindow.startMs..<decodeWindow.endMs)
+        guard samples.count > Audio.sampleRate / 10 else { return nil }
+        if leadInMs > 0 {
+            samples.insert(contentsOf: repeatElement(0, count: leadInMs * Audio.sampleRate / 1000),
+                           at: 0)
+        }
+        var output = try await asr.transcribe(ASRRequest(
+            samples: samples, language: language, prompt: prompt,
+            wordTimestamps: true, decodeAttempt: attempt, sampling: sampling
+        ))
+        if leadInMs > 0 {
+            output.tokens = output.tokens.compactMap { token in
+                guard token.endMs > leadInMs else { return nil }
+                var shifted = token
+                shifted.startMs = max(0, token.startMs - leadInMs)
+                shifted.endMs = max(shifted.startMs, token.endMs - leadInMs)
+                return shifted
+            }
+        }
+        return output
     }
 
     /// Window-relative timings to file-relative, dropping padding

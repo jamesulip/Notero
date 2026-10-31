@@ -85,6 +85,10 @@ public struct SessionStats: Sendable, Equatable, Codable {
     public var failedHops = 0
     /// The most recent decode error, for surfacing when `failedHops` is high.
     public var lastError: String?
+    /// Voice-activity batches that threw. The audio in each was never heard by
+    /// the detector, so a pause or an utterance end inside it went undetected.
+    /// Decoding carries on without it, which is exactly why it has to be counted.
+    public var vadFailures = 0
     /// Utterance ends that committed something.
     public var boundaries = 0
     /// Commits made without agreement because the window was about to slide.

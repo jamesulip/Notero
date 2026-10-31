@@ -11,62 +11,133 @@ import WhisperKit
 /// the whole window every hop is the difference between real-time and not.
 public actor WhisperEngine: SpeechRecognizing {
 
+    /// Builds a ready WhisperKit for a model id, downloading it first if it is
+    /// not on disk. A seam: a test can stand in for the 1.6 GB load.
+    typealias PipelineFactory = @Sendable (
+        _ model: String, _ modelsDirectory: URL, _ progress: ProgressReport?
+    ) async throws -> sending WhisperKit
+
     private let modelsDirectory: URL
+    private let makePipeline: PipelineFactory
     private var pipeline: WhisperKit?
     private var currentModel: String?
     public private(set) var loadMs: Int = 0
 
+    /// The load in progress, and the callers waiting for it.
+    private struct LoadInFlight {
+        var model: String
+        var waiters: [CheckedContinuation<Void, Error>] = []
+    }
+    private var inFlight: LoadInFlight?
+
     public init(modelsDirectory: URL) {
         self.modelsDirectory = modelsDirectory
+        self.makePipeline = Self.loadPipeline
+    }
+
+    init(modelsDirectory: URL, makePipeline: @escaping PipelineFactory) {
+        self.modelsDirectory = modelsDirectory
+        self.makePipeline = makePipeline
     }
 
     public var loadedModel: String? { currentModel }
 
+    /// Callers parked behind the load in progress. For tests.
+    var waitingLoads: Int { inFlight?.waiters.count ?? 0 }
+
     // MARK: - Lifecycle
 
+    /// Loads `model`, once.
+    ///
+    /// The `pipeline` guard below only sees a *finished* load, and a load takes
+    /// seconds to minutes (the first compile of a model took 284 s). The actor
+    /// is re-entered at every `await`, so a second call that arrived while the
+    /// first was still loading found `pipeline == nil` and started a second
+    /// 1.6 GB load of the same model: the launch warm-up and a Dock-drop import
+    /// can both ask within that window. A call for the model that is loading now
+    /// waits for that load and shares its result; a call for a different model
+    /// waits its turn, because two loads at once cannot both leave `pipeline`
+    /// as the caller asked.
     public func load(model: String, progress: ProgressReport?) async throws {
-        if pipeline != nil, currentModel == model { return }
+        while true {
+            if pipeline != nil, currentModel == model { return }
+            guard let running = inFlight else { break }
+            do {
+                try await waitForLoad()
+            } catch {
+                // The failure belongs to whoever asked for that model.
+                if running.model == model { throw error }
+            }
+            if running.model == model, pipeline != nil, currentModel == model {
+                progress?("Ready", 1)
+            }
+        }
 
-        let option = ModelCatalogue.option(model)
-        let label = option?.label ?? model
-        let known = ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory)
-
+        inFlight = LoadInFlight(model: model)
         let previous = pipeline
         let previousName = currentModel
         pipeline = nil
 
         let started = Date()
         do {
-            if !known {
-                // Fetched separately first: the combined download-and-load
-                // path reports nothing until the weights are on disk, and a
-                // 1.6 GB wait behind a spinner reads as a hang.
-                let title = "Downloading \(label) (\(option?.sizeLabel ?? "~1.6 GB"))…"
-                progress?(title, 0)
-                _ = try await WhisperKit.download(variant: model, downloadBase: modelsDirectory) { report in
-                    progress?(title, report.fractionCompleted)
-                }
-            }
-            progress?("Loading \(label)…", nil)
-            let config = WhisperKitConfig(
-                model: model,
-                downloadBase: modelsDirectory,
-                verbose: false,
-                prewarm: true,
-                load: true,
-                download: true
-            )
-            pipeline = try await WhisperKit(config)
+            let loaded = try await makePipeline(model, modelsDirectory, progress)
+            pipeline = loaded
             currentModel = model
             loadMs = Int(Date().timeIntervalSince(started) * 1000)
             progress?("Ready", 1)
+            finishLoad(nil)
         } catch {
             // Leave the working model in place rather than no model at all --
             // a failed switch should not take the session down with it.
             pipeline = previous
             currentModel = previousName
+            finishLoad(error)
             throw error
         }
+    }
+
+    private func waitForLoad() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            // Runs on the actor before any suspension, so `inFlight` is still
+            // the load that was seen a line ago.
+            inFlight?.waiters.append(continuation)
+        }
+    }
+
+    private func finishLoad(_ error: Error?) {
+        let waiters = inFlight?.waiters ?? []
+        inFlight = nil
+        for waiter in waiters {
+            if let error { waiter.resume(throwing: error) } else { waiter.resume() }
+        }
+    }
+
+    private static func loadPipeline(model: String, modelsDirectory: URL,
+                                     progress: ProgressReport?) async throws -> sending WhisperKit {
+        let option = ModelCatalogue.option(model)
+        let label = option?.label ?? model
+        let known = ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory)
+
+        if !known {
+            // Fetched separately first: the combined download-and-load
+            // path reports nothing until the weights are on disk, and a
+            // 1.6 GB wait behind a spinner reads as a hang.
+            let title = "Downloading \(label) (\(option?.sizeLabel ?? "~1.6 GB"))…"
+            progress?(title, 0)
+            _ = try await WhisperKit.download(variant: model, downloadBase: modelsDirectory) { report in
+                progress?(title, report.fractionCompleted)
+            }
+        }
+        progress?("Loading \(label)…", nil)
+        let config = WhisperKitConfig(
+            model: model,
+            downloadBase: modelsDirectory,
+            verbose: false,
+            prewarm: true,
+            load: true,
+            download: true
+        )
+        return try await WhisperKit(config)
     }
 
     public func unload() {
@@ -76,6 +147,41 @@ public actor WhisperEngine: SpeechRecognizing {
     }
 
     // MARK: - Inference
+
+    /// Where WhisperKit's temperature ladder starts and how long it is.
+    struct Sampling: Equatable {
+        var temperature: Float
+        var fallbackCount: Int
+    }
+
+    /// The standard ladder, and the two halves of it that the offline pass runs
+    /// separately.
+    ///
+    /// Attempt 0 is greedy. A retry warms the sampler: the failure being
+    /// retried is a window whose greedy first token looked improbable, and
+    /// repeating the same deterministic decode would fail identically.
+    ///
+    /// Zero fallbacks on a request that is allowed to fall back is silent data
+    /// loss: WhisperKit discards any window whose first token looks improbable,
+    /// and with nothing to fall back to the window returns empty rather than
+    /// being retried. Sliding windows start mid-word every hop, so this fires
+    /// often -- measured at 37% of hops with no fallbacks, 16% with two.
+    /// `.greedyOnly` is for a caller that retries on its own.
+    static func sampling(for request: ASRRequest) -> Sampling {
+        let attempt = request.decodeAttempt
+        switch request.sampling {
+        case .standard:
+            return Sampling(temperature: Float(attempt) * 0.2, fallbackCount: 2 + attempt * 2)
+        case .greedyOnly:
+            return Sampling(temperature: 0, fallbackCount: 0)
+        case .resampleOnly:
+            // The standard ladder at attempt 0 is temperatures 0, 0.2, 0.4;
+            // this is 0.2, 0.4. Later attempts never started at 0.
+            return attempt == 0
+                ? Sampling(temperature: 0.2, fallbackCount: 1)
+                : Sampling(temperature: Float(attempt) * 0.2, fallbackCount: 2 + attempt * 2)
+        }
+    }
 
     public func transcribe(_ request: ASRRequest) async throws -> ASROutput {
         guard let pipeline else { throw EngineError.modelNotLoaded }
@@ -92,17 +198,10 @@ public actor WhisperEngine: SpeechRecognizing {
         options.wordTimestamps = request.wordTimestamps
         options.withoutTimestamps = false
         options.chunkingStrategy = nil
-        // Attempt 0 is greedy. A retry warms the sampler: the failure being
-        // retried is a window whose greedy first token looked improbable, and
-        // repeating the same deterministic decode would fail identically.
-        options.temperature = Float(request.decodeAttempt) * 0.2
+        let sampling = Self.sampling(for: request)
+        options.temperature = sampling.temperature
         options.temperatureIncrementOnFallback = 0.2
-        // Zero fallbacks is silent data loss: WhisperKit discards any window
-        // whose first token looks improbable, and with nothing to fall back to
-        // the window returns empty rather than being retried. Sliding windows
-        // start mid-word every hop, so this fires often -- measured at 37% of
-        // hops with no fallbacks, 16% with two.
-        options.temperatureFallbackCount = 2 + request.decodeAttempt * 2
+        options.temperatureFallbackCount = sampling.fallbackCount
 
         if request.language == "auto" {
             // Auto-detect resolves Taglish elsewhere and starts translating; on
@@ -127,12 +226,20 @@ public actor WhisperEngine: SpeechRecognizing {
 
         var tokens: [Token] = []
         var logProbs: [Double] = []
+        // The gates are WhisperKit's own, read back from the segments of the
+        // decode it returned. See `DecodeQuality`.
+        var worstLogProb = Double.infinity
+        var worstCompression = 0.0
         for result in results {
             for segment in result.segments {
                 // Whisper reports how sure it is that a window is silence.
                 // Above this it is almost always about to invent a sentence.
                 if segment.noSpeechProb > 0.85 { continue }
                 logProbs.append(Double(segment.avgLogprob))
+                if !segment.text.trimmed.isEmpty {
+                    worstLogProb = min(worstLogProb, Double(segment.avgLogprob))
+                    worstCompression = max(worstCompression, Double(segment.compressionRatio))
+                }
 
                 if let words = segment.words, !words.isEmpty {
                     for word in words where !word.word.trimmed.isEmpty {
@@ -160,9 +267,18 @@ public actor WhisperEngine: SpeechRecognizing {
         let confidence = logProbs.isEmpty
             ? nil
             : min(1, max(0, exp(logProbs.reduce(0, +) / Double(logProbs.count))))
+        var quality: DecodeQuality?
+        if worstLogProb.isFinite {
+            quality = DecodeQuality(
+                avgLogProb: worstLogProb,
+                compressionRatio: worstCompression,
+                isRepetitive: options.compressionRatioThreshold.map { worstCompression > Double($0) } ?? false,
+                isLowConfidence: options.logProbThreshold.map { worstLogProb < Double($0) } ?? false
+            )
+        }
         return ASROutput(tokens: tokens, audioMs: audioMs, inferMs: inferMs,
                          detectedLanguage: results.first?.language ?? request.language,
-                         confidence: confidence)
+                         confidence: confidence, quality: quality)
     }
 }
 

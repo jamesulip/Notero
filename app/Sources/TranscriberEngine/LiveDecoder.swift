@@ -181,7 +181,18 @@ public final class LiveDecoder {
             await vad.clearSpeechCounter()
             clearSpeechPending = false
         }
-        guard let reading = try? await vad.push(samples) else { return }
+        let reading: VoiceActivityReading
+        do {
+            reading = try await vad.push(samples)
+        } catch {
+            // The batch is already consumed and nobody will push it again, so
+            // the detector never hears this audio. Silence and speech boundaries
+            // inside it are not detected; hops still decode on schedule, which
+            // is why the session carries on. Counted, because a detector that
+            // throws on every batch would otherwise look like a quiet room.
+            stats.vadFailures += 1
+            return
+        }
         let previous = lastReading
         lastReading = reading
         noteSilence(reading, heardThrough: fedThroughMs)
