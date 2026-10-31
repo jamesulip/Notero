@@ -157,6 +157,18 @@ struct RunReport: Codable {
     var wer: Double?
     var live: SessionStats?
     var config: SessionConfig?
+    // Added for the benchmark harness (`eval/bench_runs.py`). All optional: a
+    // report from an older binary lacks them, and readers must cope.
+    /// Wall time to load the model, which the RTF does not include.
+    var loadMs: Int?
+    /// Per-call recognizer cost, apart from the whole-run RTF above.
+    var decodeTiming: DecodeTimingSummary?
+    /// Live only. Words committed, against the audio fed so far.
+    var commitLatency: CommitLatencySummary?
+    /// Live with `--realtime` only. The same, against wall time since the replay began.
+    var commitLatencyWall: CommitLatencySummary?
+    /// This process's memory accounting at named stages. A footprint, not model residency.
+    var memory: [MemorySnapshot]?
 }
 
 let options = parse()
@@ -206,6 +218,7 @@ guard FileManager.default.fileExists(atPath: audioURL.path) else {
 }
 
 let started = Date()
+var memory: [MemorySnapshot] = [.current(stage: "start")]
 let scratch = FileManager.default.temporaryDirectory
     .appendingPathComponent("transcriber-cli-\(UUID().uuidString).wav")
 defer { try? FileManager.default.removeItem(at: scratch) }
@@ -234,6 +247,7 @@ do {
 let source: any PCMSource = options.roomMode ? HighPassPCM(rawPCM) : rawPCM
 if options.roomMode { log("room mode: high-pass at \(Int(HighPassFilter.roomCornerHz)) Hz") }
 log("audio: \(TimeFormat.short(ms: source.durationMs)) (\(source.sampleCount) samples)")
+memory.append(.current(stage: "beforeModelLoad"))
 
 let engines = EngineHost(modelsDirectory: options.models)
 let modelId = options.modelId ?? options.tier.defaultModelId
@@ -243,15 +257,22 @@ let prompt = TranscriptionPrompt.compose(language: options.language,
                                          vocabulary: options.vocabulary)
 if let prompt { log("prompt: \(prompt)") }
 
+let loadStarted = Date()
 do {
     try await engines.loadModel(modelId) { message, _ in log("  \(message)") }
 } catch {
     log("error: could not load model \(modelId): \(error.localizedDescription)")
     exit(1)
 }
+let loadMs = Int(Date().timeIntervalSince(loadStarted) * 1000)
+memory.append(.current(stage: "afterModelLoad"))
 try? await engines.prepareVAD { message, _ in log("  \(message)") }
+memory.append(.current(stage: "afterVADLoad"))
 let vad = await engines.voiceActivity
-let asr = await engines.recognizer
+// Every decode goes through this wrapper so the per-call cost is measured from
+// outside the model, apart from the whole-run RTF. It forwards unchanged.
+let timedASR = TimedRecognizer(wrapping: await engines.recognizer)
+let asr: any SpeechRecognizing = timedASR
 
 var tokens: [Token] = []
 var detectedLanguage: String?
@@ -259,6 +280,8 @@ var windowLanguages: [String?] = []
 var offlineRegions: [SpeechRegion]?
 var liveStats: SessionStats?
 var liveConfig: SessionConfig?
+var commitLatency = CommitLatencyTracker()
+var commitLatencyWall = CommitLatencyTracker()
 let decodeStarted = Date()
 
 if options.live {
@@ -271,7 +294,19 @@ if options.live {
     liveConfig = config
     await vad.reset()
     let decoder = LiveDecoder(config: config, recognizer: asr, vad: vad)
-    decoder.onCommitted = { tokens += $0 }
+    // `fedMs` is the audio handed to the decoder so far, set before each
+    // `ingest`, so a word committed during that call is measured against the
+    // audio that had arrived and not the audio before it.
+    var fedMs = 0
+    let replayStarted = Date()
+    decoder.onCommitted = { committed in
+        tokens += committed
+        commitLatency.record(committed, atMs: fedMs)
+        if options.realtime {
+            commitLatencyWall.record(
+                committed, atMs: Int(Date().timeIntervalSince(replayStarted) * 1000))
+        }
+    }
     log("live replay: hop \(config.hopMs) ms, pre-roll \(config.preRollMs) ms, context "
         + "\(config.contextMs) ms\(config.adaptiveHop ? ", adaptive hop" : "")"
         + "\(options.realtime ? ", real-time pacing" : ", every decode awaited")")
@@ -280,6 +315,7 @@ if options.live {
     var cursor = 0
     while cursor < source.durationMs {
         let end = min(source.durationMs, cursor + chunkMs)
+        fedMs = end
         decoder.ingest(PCM.data(from: source.floats(msRange: cursor..<end)))
         cursor = end
         if options.realtime {
@@ -288,6 +324,7 @@ if options.live {
             await decoder.drain()
         }
     }
+    fedMs = source.durationMs
     await decoder.finish()
     let stats = decoder.stats
     liveStats = stats
@@ -346,8 +383,22 @@ if options.live {
 }
 
 let decodeMs = Int(Date().timeIntervalSince(decodeStarted) * 1000)
+memory.append(.current(stage: "afterDecode"))
 log("decoded \(tokens.count) words in \(TimeFormat.short(ms: decodeMs)) "
     + "(RTF \(String(format: "%.3f", Double(decodeMs) / Double(max(1, source.durationMs)))))")
+log("model load \(loadMs) ms (not in the RTF)")
+let decodeTiming = await timedASR.summary
+if let t = decodeTiming {
+    log(String(format: "per decode: %d calls, infer RTF %.3f, wall RTF %.3f; infer ms mean %.0f median %.0f p95 %.0f max %d; wall ms mean %.0f p95 %.0f max %d",
+               t.calls, t.inferRtf, t.wallRtf, t.meanInferMs, t.medianInferMs, t.p95InferMs,
+               t.maxInferMs, t.meanWallMs, t.p95WallMs, t.maxWallMs))
+}
+func describe(_ c: CommitLatencySummary, clock: String) -> String {
+    String(format: "commit latency (%@): %d words, median %.0f ms, mean %.0f, p95 %.0f, max %d, min %d, ahead of audio %d",
+           clock, c.words, c.medianMs, c.meanMs, c.p95Ms, c.maxMs, c.minMs, c.aheadOfAudio)
+}
+if let c = commitLatency.summary { log(describe(c, clock: "audio fed")) }
+if let c = commitLatencyWall.summary { log(describe(c, clock: "wall")) }
 
 var spans: [SpeakerSpan] = []
 var roster: [SpeakerLabel] = []
@@ -418,6 +469,7 @@ if let referenceURL = options.reference {
     log(String(format: "WER %.4f (%.1f%%)", score, score * 100))
 }
 
+memory.append(.current(stage: "end"))
 if let jsonURL = options.json {
     let report = RunReport(
         audio: audioURL.path,
@@ -434,7 +486,12 @@ if let jsonURL = options.json {
         words: tokens,
         wer: wer,
         live: liveStats,
-        config: liveConfig
+        config: liveConfig,
+        loadMs: loadMs,
+        decodeTiming: decodeTiming,
+        commitLatency: commitLatency.summary,
+        commitLatencyWall: commitLatencyWall.summary,
+        memory: memory
     )
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -449,5 +506,11 @@ if let jsonURL = options.json {
     }
 }
 
-log("peak memory \(MemoryProbe.footprintMB()) MB, "
-    + "total \(TimeFormat.short(ms: Int(Date().timeIntervalSince(started) * 1000)))")
+// The line used to read "peak memory N MB". N was `phys_footprint` read once, at
+// exit: the footprint at that instant, not a peak, and not model residency.
+let atExit = memory.last ?? .current(stage: "end")
+log("memory (one process, not model residency): footprint at exit \(atExit.physFootprintMB) MB, "
+    + "lifetime peak footprint \(atExit.lifetimePeakFootprintMB) MB, "
+    + "resident \(atExit.residentMB) MB; after model load \(memory.first { $0.stage == "afterModelLoad" }?.physFootprintMB ?? 0) MB "
+    + "(before \(memory.first { $0.stage == "beforeModelLoad" }?.physFootprintMB ?? 0) MB)")
+log("total \(TimeFormat.short(ms: Int(Date().timeIntervalSince(started) * 1000)))")
