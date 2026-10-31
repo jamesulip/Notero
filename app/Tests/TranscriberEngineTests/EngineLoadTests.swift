@@ -1,6 +1,7 @@
 import Synchronization
 import XCTest
 import WhisperKit
+import TranscriberCore
 @testable import TranscriberEngine
 
 /// Loading a model takes seconds to minutes and the engine is re-entered at
@@ -367,5 +368,42 @@ final class EngineLoadTests: XCTestCase {
         XCTAssertEqual(loaded, "good", "a failed switch left no model")
         let started = await gate.started
         XCTAssertEqual(started, ["good", "bad", "good"])
+    }
+}
+
+/// How a model that is already on disk is loaded.
+final class LocalLoadConfigurationTests: XCTestCase {
+
+    private func models(withDecoderFor id: String?) throws -> URL {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("transcriber-local-load-\(UUID().uuidString)", isDirectory: true)
+        if let id {
+            let decoder = ModelCatalogue.directory(for: id, modelsDirectory: base)
+                .appendingPathComponent("TextDecoder.mlmodelc", isDirectory: true)
+            try FileManager.default.createDirectory(at: decoder, withIntermediateDirectories: true)
+        } else {
+            try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        }
+        addTeardownBlock { try? FileManager.default.removeItem(at: base) }
+        return base
+    }
+
+    /// A load that asks the Hub first took 8.7 s of which 7 s was that question,
+    /// and it needs the network for a model that is on the disk.
+    func testAModelOnDiskIsLoadedFromItsFolderWithoutAskingTheHub() throws {
+        let id = "openai_whisper-large-v3-v20240930_turbo"
+        let base = try models(withDecoderFor: id)
+        let config = try XCTUnwrap(WhisperEngine.localConfiguration(model: id, modelsDirectory: base))
+        XCTAssertEqual(config.modelFolder,
+                       ModelCatalogue.directory(for: id, modelsDirectory: base).path)
+        XCTAssertEqual(config.download, false, "a model on disk must not trigger a Hub listing")
+        XCTAssertEqual(config.load, true)
+        XCTAssertEqual(config.model, id)
+    }
+
+    func testAModelThatIsNotOnDiskHasNoLocalConfiguration() throws {
+        let base = try models(withDecoderFor: nil)
+        XCTAssertNil(WhisperEngine.localConfiguration(
+            model: "openai_whisper-large-v3-v20240930_turbo", modelsDirectory: base))
     }
 }

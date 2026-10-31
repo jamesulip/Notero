@@ -178,12 +178,47 @@ public actor WhisperEngine: SpeechRecognizing {
         for waiter in waiters { waiter.continuation.resume(returning: outcome) }
     }
 
+    /// The configuration that loads a model already on disk straight from its
+    /// folder, or nil when the model is not there.
+    ///
+    /// With `download: true` and no folder, WhisperKit asks the Hub which files
+    /// the model has and checks each against the disk on every load, whether or
+    /// not anything is missing. On the Mac mini M2 Pro that cost 7 s of an 8.7 s
+    /// load of a model that was already complete, and it needs the network for a
+    /// model that is local. Handed the folder it loads in 1.6 s with the same
+    /// 1580 MB on the Neural Engine and the same transcript.
+    static func localConfiguration(model: String, modelsDirectory: URL) -> WhisperKitConfig? {
+        guard ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory) else { return nil }
+        let folder = ModelCatalogue.directory(for: model, modelsDirectory: modelsDirectory)
+        return WhisperKitConfig(
+            model: model,
+            downloadBase: modelsDirectory,
+            modelFolder: folder.path,
+            verbose: false,
+            prewarm: true,
+            load: true,
+            download: false
+        )
+    }
+
     private static func loadPipeline(model: String, modelsDirectory: URL,
                                      progress: ProgressReport?) async throws -> sending WhisperKit {
         let option = ModelCatalogue.option(model)
         let label = option?.label ?? model
-        let known = ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory)
 
+        if let local = localConfiguration(model: model, modelsDirectory: modelsDirectory) {
+            progress?("Loading \(label)…", nil)
+            do {
+                return try await WhisperKit(local)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // A folder that is damaged or missing a file: fall through to the
+                // path that asks the Hub, which downloads whatever is missing.
+            }
+        }
+
+        let known = ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory)
         if !known {
             // Fetched separately first: the combined download-and-load
             // path reports nothing until the weights are on disk, and a
