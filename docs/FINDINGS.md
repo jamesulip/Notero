@@ -623,6 +623,49 @@ disk.) `DiskFullTests` reproduces the crash without a disk image:
 the legacy call put back, the test fails with
 `NSFileHandleOperationException: File too large`.
 
+## 15. The same file decodes differently on each run; WhisperKit 1.1.1 is not adopted (2026-10-31)
+
+WhisperKit 1.1.1 was evaluated as a patch upgrade. Its release notes replace
+force-unwraps in logits sampling with typed errors, which is on the path that
+every `transcribe(audioArray:)` call takes. The plan was to adopt it if the
+transcript did not change. That needed a baseline, and the baseline found the
+larger problem first: **the offline pass is not deterministic.**
+
+Measured on the 16 GB **Mac mini M2 Pro** (Mac14,12, macOS 26.6.2) that this project targets, not the M5 Pro
+in BENCHMARKS.md. The audio is the synthetic clip (57 s), the tier is Balanced,
+there is no diarization, and `transcribe` ran eight times per build on
+identical input:
+
+| Build | Runs | First window collapsed | Median WER | WER range | Median RTF |
+| --- | ---: | ---: | ---: | --- | ---: |
+| WhisperKit 1.1.0 (shipping) | 8 | 1 | 28.1% | 25.0–57.0% | 0.135 |
+| WhisperKit 1.1.1 | 8 | **5** | 57.8% | 26.6–60.2% | 0.091 |
+
+"Collapsed" means that the first decode window of about 40 words came back as
+English filler that nobody spoke, for example "How are you? Welcome to meeting.
+Thank you. Thank you. Thank goodness." or "Thank you so much for watching." The
+remainder of the transcript was the same as in the other runs. The retry ladder
+does not see this failure, because the window is not empty. The shipping build
+does it too, in one run of eight. 1.1.1 did it in five runs of eight. With
+eight runs each the difference is not significant (Fisher exact, two-sided,
+p = 0.12). The result still points the wrong way, and nothing showed 1.1.1 to
+be safe, so **the pin stays at 1.1.0.** Look at it again when a release
+changes sampling or fallback, and use more runs.
+
+**Hypothesis, not verified:** attempt 0 is greedy and therefore deterministic.
+Randomness enters only when WhisperKit's own temperature fallback re-samples a
+window whose greedy decode tripped the log-probability or compression
+threshold. The fixture starts at full amplitude at sample 0, which makes its
+first window the one most likely to trip a threshold. To test the hypothesis,
+log WhisperKit's per-window fallback count beside the collapsed windows. If it
+holds, the fix belongs in the decode policy, for example a repetition or
+known-filler check that sends a window to the retry ladder. That fix needs real
+recordings to tune it, not this clip.
+
+The live path varied too, by less: 24.2–35.9% WER and 5–8 forced commits on
+1.1.0 over three runs. **One run on this clip proves nothing.** Before you
+compare two builds, run each several times and compare the spread.
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a

@@ -271,7 +271,13 @@ of commits for each stream falls by approximately one third.
    Best tier or the Fast tier gives a better or a worse transcript.
    [MODELS.md](MODELS.md) lists which tier promises this project measured,
    and which ones it infers.
-7. **The findings are engineering results and not product guarantees.** The
+7. **One run is not a measurement.** The same build gives a different
+   transcript of the same file on different runs. Over eight offline runs of
+   the synthetic clip, the WER went from 25% to 57%, because the first window
+   sometimes comes back as invented English filler. [FINDINGS.md](FINDINGS.md)
+   entry 15 gives the numbers. Run each build several times, and compare the
+   spread.
+8. **The findings are engineering results and not product guarantees.** The
    caveat section of [FINDINGS.md](FINDINGS.md) says which findings are
    structural, and which ones must be derived again against your own
    recordings.
