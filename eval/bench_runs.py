@@ -57,7 +57,10 @@ EVAL_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(EVAL_DIR))
 
 import benchstats as bs  # noqa: E402
+import regresslib as rl  # noqa: E402
 from langscore import score as lang_score  # noqa: E402
+from regresslib import fmt_p as _p  # noqa: E402
+from regresslib import fmt_value as _fmt  # noqa: E402
 from score import levenshtein, normalize  # noqa: E402
 
 REPO = EVAL_DIR.parent
@@ -227,11 +230,13 @@ def summarize_records(records: list[dict], *, meta: dict) -> dict:
 
     wers = [r["score"]["wer"] for r in ok]
     hyp_words = [r["score"]["hyp_words"] for r in ok]
-    flags, threshold = (bs.classify_collapsed(wers, hyp_words, ref_words)
-                        if ok else ([], float("nan")))
+    filler = [bool(r["score"]["filler_markers"]) for r in ok]
+    reasons, threshold = (bs.collapse_reasons(wers, hyp_words, ref_words, filler=filler)
+                          if ok else ([], float("nan")))
+    flags = [bool(r) for r in reasons]
 
     per_run = []
-    for record, flag in zip(ok, flags):
+    for record, flag, why in zip(ok, flags, reasons):
         report = record["report"]
         per_run.append({
             "index": record["index"],
@@ -241,6 +246,7 @@ def summarize_records(records: list[dict], *, meta: dict) -> dict:
             "rtf": report.get("rtf"),
             "decode_ms": report.get("decodeMs"),
             "collapsed": flag,
+            "collapse_reasons": why,
             "filler_markers": record["score"]["filler_markers"],
             "loadavg_1m": record.get("loadavg_1m_at_launch"),
             "retried_windows": record["stderr_info"].get("retried_windows"),
@@ -351,39 +357,15 @@ def _mb(value) -> float | None:
 # Comparing two summaries (pure; tested)
 # --------------------------------------------------------------------------
 
-def _metric_rows(mode: str) -> list[tuple[str, str, float, str]]:
-    """(label, dotted path into the summary, display scale, unit)."""
-    rows = [
-        ("WER", "wer", 100.0, "%"),
-        ("words (normalized)", "hyp_words", 1.0, ""),
-        ("whole-file RTF" if mode == "offline" else "replay RTF", "rtf", 1.0, ""),
-        ("decodeMs", "decode_ms", 1.0, " ms"),
-    ]
-    if mode.startswith("live"):
-        rows += [
-            ("dropped hops", "live.dropped_hops", 1.0, ""),
-            ("forced commits", "live.forced_commits", 1.0, ""),
-            ("unagreed tail words", "live.unagreed_tail_words", 1.0, ""),
-            ("mean per-decode RTF", "live.mean_decode_rtf", 1.0, ""),
-            ("infer ms per hop", "live.infer_ms_per_hop", 1.0, " ms"),
-            ("commit latency median", "live.commit_latency_median_ms", 1.0, " ms"),
-        ]
-    return rows
-
-
-def _dig(summary: dict, path: str):
-    node = summary
-    for part in path.split("."):
-        if not isinstance(node, dict) or node.get(part) is None:
-            return None
-        node = node[part]
-    return node
-
-
 def compare_summaries(base: dict, cand: dict, *, allow_non_interleaved: bool = False,
                       seed: int = bs.DEFAULT_SEED) -> dict:
     """Everything `compare` prints, as data. Raises ValueError for arms that
-    are not comparable (different audio, reference or mode)."""
+    are not comparable (different audio, reference or mode).
+
+    The decision is `benchstats.decide` (rank-sum permutation tests, Holm over every
+    tested metric, effect-size floors, timing believed only on a quiet machine), the
+    same rule `regress.py` applies to a whole suite, and the collapse counts judge
+    BOTH arms against one pooled reference level."""
     for key in ("mode",):
         if base.get(key) != cand.get(key):
             raise ValueError(f"arms differ in {key}: {base.get(key)!r} vs {cand.get(key)!r}")
@@ -400,87 +382,56 @@ def compare_summaries(base: dict, cand: dict, *, allow_non_interleaved: bool = F
                        and base_inter.get("id") == cand_inter.get("id")
                        and {base_inter.get("arm"), cand_inter.get("arm")} == {"A", "B"})
 
-    wer_a = [p["wer"] for p in base["per_run"]]
-    wer_b = [p["wer"] for p in cand["per_run"]]
-    n_a, n_b = len(wer_a), len(wer_b)
+    arm_a, arm_b = rl.arm_from_summary(base), rl.arm_from_summary(cand)
+    series = rl.compare_series("series", mode, arm_a, arm_b, seed=seed)
+    evaluated = rl.evaluate([series], interleaved=interleaved or allow_non_interleaved)
+    decision = evaluated["decision"]
+    headline = decision["headline"]
+    if not interleaved and not allow_non_interleaved:
+        headline = ("NO VERDICT: the two arms were not interleaved A/B in one session, so a "
+                    "difference may be machine drift or another process, not the build. "
+                    "Re-run with `bench_runs.py run --interleave BASE CAND`.")
+    elif not interleaved:
+        headline = "NOT INTERLEAVED, treat as indicative only. " + headline
+    failed = {"baseline": base.get("runs_failed") or 0, "candidate": cand.get("runs_failed") or 0}
+    if any(failed.values()):
+        # A failed run is a finding, not a missing row: say it in the verdict itself.
+        headline = (f"INCOMPLETE (baseline: {failed['baseline']} of {base.get('runs_attempted')} runs failed; "
+                    f"candidate: {failed['candidate']} of {cand.get('runs_attempted')}): the arms below are "
+                    f"the runs that succeeded. " + headline)
 
     result: dict = {
         "mode": mode,
-        "baseline": {"label": base.get("label"), "n": n_a},
-        "candidate": {"label": cand.get("label"), "n": n_b},
+        "baseline": {"label": base.get("label"), "n": arm_a["n"]},
+        "candidate": {"label": cand.get("label"), "n": arm_b["n"]},
         "interleaved": interleaved,
         "interleave_id": (base_inter or {}).get("id"),
         "collapse_rule": bs.COLLAPSE_RULE,
         "min_runs_for_verdict": bs.MIN_RUNS_FOR_VERDICT,
-        "rows": [],
+        "rows": [], "decision": decision, "load": series["load"],
+        "verdict": headline, "failed_runs": failed, "skipped_metrics": series["skipped_metrics"],
     }
-
-    for label, path, scale, unit in _metric_rows(mode):
-        a_values, b_values = _series_for(base, path), _series_for(cand, path)
-        row = {"metric": label, "path": path, "scale": scale, "unit": unit,
-               "baseline": bs.describe(a_values), "candidate": bs.describe(b_values),
-               "diff": None, "p": None, "p_method": None}
-        if a_values and b_values:
-            row["diff"] = bs.median_difference(a_values, b_values)
-            row["p"], row["p_method"] = bs.permutation_p_value(a_values, b_values, seed=seed)
-        result["rows"].append(row)
-
-    wer_row = result["rows"][0]
-    wer_ci = bs.bootstrap_ci(wer_a, wer_b, seed=seed) if wer_a and wer_b else None
-    result["wer"] = {"diff": wer_row["diff"], "p": wer_row["p"], "p_method": wer_row["p_method"],
+    for t in series["tests"]:
+        if t["key"] == "collapsed":
+            continue
+        spec = bs.METRICS[t["key"]]
+        result["rows"].append({"metric": spec["label"], "path": t["key"], "scale": spec["scale"],
+                               "unit": spec["unit"], "baseline": t["a"], "candidate": t["b"],
+                               "diff": t["diff"], "p": t["p"], "p_method": t["p_method"],
+                               "p_holm": t.get("p_holm"), "status": t.get("status")})
+    wer = next((t for t in series["tests"] if t["key"] == "wer"), None)
+    wer_ci = bs.bootstrap_ci(arm_a["wer"], arm_b["wer"], seed=seed) if wer else None
+    result["wer"] = {"diff": wer and wer["diff"], "p": wer and wer["p"],
+                     "p_method": wer and wer["p_method"], "p_holm": wer and wer.get("p_holm"),
                      "ci95": wer_ci, "ci_method": f"percentile bootstrap, B={bs.BOOTSTRAP_RESAMPLES}, "
                                                   f"seed {seed}"}
-
-    col_a = sum(1 for p in base["per_run"] if p["collapsed"])
-    col_b = sum(1 for p in cand["per_run"] if p["collapsed"])
-    fisher_p = bs.fisher_exact(col_a, n_a - col_a, col_b, n_b - col_b) if n_a and n_b else None
-    result["collapsed"] = {"baseline": col_a, "candidate": col_b, "fisher_p": fisher_p}
-
-    # The candidate judged against the BASELINE's level. Judged only against
-    # itself, an arm that collapses every run has no collapsed runs.
-    if n_a and n_b and base["collapse"]["wer_threshold"] is not None:
-        ref_words = base["collapse"]["ref_words"]
-        shared_flags, shared_threshold = bs.classify_collapsed(
-            wer_b, [p["hyp_words"] for p in cand["per_run"]], ref_words,
-            wer_threshold=base["collapse"]["wer_threshold"])
-        shared = sum(shared_flags)
-        result["collapsed_vs_baseline_threshold"] = {
-            "threshold": shared_threshold, "candidate": shared,
-            "fisher_p": bs.fisher_exact(col_a, n_a - col_a, shared, n_b - shared)}
-
-    result["verdict"] = bs.verdict(
-        n_a=n_a, n_b=n_b, wer_diff=wer_row["diff"], wer_p=wer_row["p"], wer_ci=wer_ci,
-        collapsed_a=col_a, collapsed_b=col_b, fisher_p=fisher_p,
-        interleaved=interleaved, allow_non_interleaved=allow_non_interleaved)
+    collapse = series["collapse"]
+    collapsed = next(t for t in series["tests"] if t["key"] == "collapsed")
+    result["collapse"] = collapse
+    result["collapsed"] = {"baseline": collapse["A"]["count"], "candidate": collapse["B"]["count"],
+                           "fisher_p": collapsed["p"], "p_holm": collapsed.get("p_holm"),
+                           "status": collapsed.get("status")}
     return result
-
-
-def _series_for(summary: dict, path: str) -> list[float]:
-    """Per-run values for a metric path, in run order."""
-    per_run = summary.get("per_run") or []
-    direct = {"wer": "wer", "hyp_words": "hyp_words", "rtf": "rtf", "decode_ms": "decode_ms"}
-    if path in direct:
-        return [float(p[direct[path]]) for p in per_run if p.get(direct[path]) is not None]
-    if path.startswith("live."):
-        return [float(v) for v in (summary.get("live_series", {}).get(path.split(".", 1)[1]) or [])]
-    return []
-
-
-def _fmt(value, scale: float, unit: str) -> str:
-    if value is None:
-        return "—"
-    shown = value * scale
-    if unit == "%":
-        return f"{shown:.1f}%"
-    if unit == " ms":
-        return f"{shown:.0f} ms"
-    if abs(shown) >= 100 or shown == int(shown):
-        return f"{shown:.0f}"
-    return f"{shown:.3f}"
-
-
-def _p(p) -> str:
-    return "—" if p is None else ("<0.001" if p < 0.001 else f"{p:.3f}")
 
 
 def format_comparison(result: dict) -> str:
@@ -492,11 +443,16 @@ def format_comparison(result: dict) -> str:
                  + (f"yes (session {result['interleave_id']})" if result["interleaved"]
                     else "NO (the arms were not run in one interleaved session)"))
     lines.append(f"Collapse rule: {result['collapse_rule']}.")
+    collapse = result["collapse"]
+    if collapse.get("level") is not None:
+        lines.append(f"Reference level {collapse['level'] * 100:.1f}% WER (best-half median of both arms "
+                     f"pooled), collapse threshold {collapse['threshold'] * 100:.1f}%.")
     lines.append("")
     header = (f"| {'metric':<24} | {'baseline median [min..max] (IQR)':<38} "
-              f"| {'candidate median [min..max] (IQR)':<38} | {'cand − base':>12} | {'perm p':>7} |")
+              f"| {'candidate median [min..max] (IQR)':<38} | {'cand − base':>12} | {'p':>7} "
+              f"| {'p Holm':>7} | status |")
     lines.append(header)
-    lines.append("|" + "|".join("-" * (len(c)) for c in header.split("|")[1:-1]) + "|")
+    lines.append("|" + "|".join("-" * len(c) for c in header.split("|")[1:-1]) + "|")
 
     def cell(d, scale, unit):
         if not d:
@@ -515,28 +471,35 @@ def format_comparison(result: dict) -> str:
             diff = f"{row['diff']:+.3g}"
         lines.append(f"| {row['metric']:<24} | {cell(row['baseline'], row['scale'], row['unit']):<38} "
                      f"| {cell(row['candidate'], row['scale'], row['unit']):<38} "
-                     f"| {diff:>12} | {_p(row['p']):>7} |")
+                     f"| {diff:>12} | {_p(row['p']):>7} | {_p(row['p_holm']):>7} | {row['status']} |")
     c = result["collapsed"]
     lines.append(f"| {'collapsed runs':<24} | {c['baseline']}/{base['n']:<36} "
-                 f"| {c['candidate']}/{cand['n']:<36} | {'':>12} | {_p(c['fisher_p']):>7} |")
+                 f"| {c['candidate']}/{cand['n']:<36} | {'':>12} | {_p(c['fisher_p']):>7} "
+                 f"| {_p(c['p_holm']):>7} | {c['status']} |")
     lines.append("")
-    lines.append("perm p: two-sided permutation test on the difference of medians; the WER row is the "
-                 "primary test, every other row is secondary and not corrected for multiple comparisons. "
-                 "The collapsed-runs row is Fisher's exact test (two-sided).")
+    lines.append("p: two-sided permutation test on the RANK SUM (the difference of medians is the effect "
+                 "size, not the test statistic: at n = 8 it cannot reach p below 0.003, which would make a "
+                 "Holm correction impossible). The collapsed-runs row is Fisher's exact test. p Holm is "
+                 "corrected over every tested metric of this table together.")
     wer = result["wer"]
     if wer["diff"] is not None:
         lines.append(f"WER median difference (candidate − baseline): {wer['diff'] * 100:+.1f} points; "
-                     f"permutation p = {_p(wer['p'])} ({wer['p_method']}); "
+                     f"rank-sum permutation p = {_p(wer['p'])} ({wer['p_method']}); "
                      f"95% CI {wer['ci95'][0] * 100:+.1f} to {wer['ci95'][1] * 100:+.1f} "
                      f"({wer['ci_method']}).")
-    shared = result.get("collapsed_vs_baseline_threshold")
-    if shared:
-        lines.append(f"Check against the baseline's own level: {shared['candidate']}/{cand['n']} candidate "
-                     f"runs have WER above {shared['threshold'] * 100:.1f}% (2x the baseline's best-half "
-                     f"median); Fisher p = {_p(shared['fisher_p'])}. This catches a candidate that is "
-                     f"uniformly bad, which its own best half would not.")
+    load = result["load"]
+    if load["recorded"]:
+        lines.append(f"Load average at launch, median / max: baseline {load['median_a']:.2f} / "
+                     f"{load['max_a']:.2f}, candidate {load['median_b']:.2f} / {load['max_b']:.2f}"
+                     + ("" if load["reliable"] else f" — timing NOT believed: {load['reason']}") + ".")
+    else:
+        lines.append("Load average at launch was not recorded for every run: timing differences are "
+                     "indicative only.")
+    if result["skipped_metrics"]:
+        lines.append("Not tested, reported by only one build: " + ", ".join(
+            f"{m['label']} (missing in the {m['missing_in']})" for m in result["skipped_metrics"]) + ".")
     lines.append("")
-    lines.append(result["verdict"])
+    lines.append("VERDICT: " + result["verdict"])
     return "\n".join(lines)
 
 

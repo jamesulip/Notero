@@ -181,11 +181,33 @@ def test_compare_calls_a_collapse_difference_and_a_wer_difference():
     cand = arm("cand", [0.25, 0.26, 0.27, 0.25, 0.26, 0.28, 0.27, 0.26], which="B")
     result = br.compare_summaries(base, cand)
     assert result["interleaved"] and result["baseline"]["n"] == 8
-    assert result["collapsed"] == {"baseline": 2, "candidate": 0,
-                                   "fisher_p": pytest.approx(bs.fisher_exact(2, 6, 0, 8))}
+    assert result["collapsed"]["baseline"] == 2 and result["collapsed"]["candidate"] == 0
+    assert result["collapsed"]["fisher_p"] == pytest.approx(bs.fisher_exact(2, 6, 0, 8))
     text = br.format_comparison(result)
     assert "WER" in text and "collapsed runs" in text and "VERDICT" in text
     assert bs.COLLAPSE_RULE in text
+    assert "Holm" in text and "rank sum" in text.lower().replace("-", " ")
+
+
+def test_compare_rows_carry_the_holm_adjusted_p_and_a_status():
+    base = arm("base", [0.25, 0.26, 0.27, 0.25, 0.26, 0.28, 0.27, 0.26])
+    cand = arm("cand", [0.40, 0.41, 0.42, 0.40, 0.41, 0.43, 0.42, 0.41], which="B")
+    result = br.compare_summaries(base, cand)
+    wer = next(r for r in result["rows"] if r["metric"] == "WER")
+    assert wer["status"] == "regression" and wer["p_holm"] < bs.ALPHA and wer["p_holm"] >= wer["p"]
+    assert "SUSPECTED REGRESSION" in result["verdict"] and "CONFIRMED" not in result["verdict"]
+    decode = next(r for r in result["rows"] if r["metric"] == "decodeMs")
+    assert decode["status"] == "untested"        # decodeMs is RTF times the clip length: one test, not two
+
+
+def test_summary_counts_a_filler_run_even_when_wer_alone_would_not():
+    # A window of invented filler that cost only 4 points of WER: still collapsed.
+    wers = [0.25, 0.26, 0.25, 0.27, 0.26, 0.29]
+    records = [make_record(i + 1, w, 120) for i, w in enumerate(wers)]
+    records[5]["score"]["filler_markers"] = ["thank you for watching"]
+    summary = br.summarize_records(records, meta=META)
+    assert summary["collapse"]["collapsed_indices"] == [6]
+    assert summary["per_run"][5]["collapse_reasons"] == ["filler"]
 
 
 def test_compare_below_minimum_n_gives_no_verdict_whatever_the_difference():
@@ -197,11 +219,21 @@ def test_compare_below_minimum_n_gives_no_verdict_whatever_the_difference():
 
 def test_compare_flags_a_uniformly_bad_candidate_against_the_baseline_level():
     base = arm("base", [0.25, 0.26, 0.25, 0.27, 0.26, 0.25, 0.26, 0.27])
-    cand = arm("cand", [0.60, 0.61, 0.62, 0.60, 0.59, 0.61, 0.60, 0.62], which="B")
+    # (make_record adds a filler marker above 50% WER, which would collapse these by the
+    # filler rule; this test is about the WER level alone.)
+    wers = [0.60, 0.61, 0.62, 0.60, 0.59, 0.61, 0.60, 0.62]
+    records = [make_record(i + 1, w, 120) for i, w in enumerate(wers)]
+    for record in records:
+        record["score"]["filler_markers"] = []
+    cand = br.summarize_records(records, meta=dict(META, label="cand",
+                                                   interleave={"id": "s1", "arm": "B"}))
+    # Alone, the candidate has no collapsed run (its own best half is 0.60) ...
+    assert cand["collapse"]["collapsed_runs"] == 0
+    # ... but a comparison judges both arms by the pooled level, which is the baseline's.
     result = br.compare_summaries(base, cand)
-    assert result["collapsed"]["candidate"] == 0          # not collapsed against itself
-    assert result["collapsed_vs_baseline_threshold"]["candidate"] == 8   # but against the baseline
-    assert "SIGNIFICANT" in result["verdict"].split("collapsed")[0]
+    assert result["collapsed"]["candidate"] == 8 and result["collapsed"]["baseline"] == 0
+    assert result["collapsed"]["status"] == "regression"
+    assert "SUSPECTED REGRESSION" in result["verdict"]
 
 
 def test_compare_requires_interleaving_unless_allowed():
@@ -394,3 +426,31 @@ def test_bsd_time_is_used_only_where_it_understands_dash_l(monkeypatch):
     monkeypatch.setattr(br.sys, "platform", "darwin")
     monkeypatch.setattr(br, "TIME_BINARY", br.Path("/nonexistent/time"))
     assert br.bsd_time_available() is False
+
+
+def test_compare_names_failed_runs_in_the_verdict():
+    base = arm("base", [0.25, 0.26, 0.27, 0.25, 0.26, 0.28, 0.27, 0.26])
+    records = [make_record(i + 1, 0.27, 120) for i in range(8)] + [make_record(9 + i, 0, 0, ok=False) for i in range(4)]
+    cand = br.summarize_records(records, meta=dict(META, label="cand", interleave={"id": "s1", "arm": "B"}))
+    assert cand["runs_failed"] == 4 and cand["runs_ok"] == 8
+    result = br.compare_summaries(base, cand)
+    assert result["failed_runs"] == {"baseline": 0, "candidate": 4}
+    assert result["verdict"].startswith("INCOMPLETE (baseline: 0 of 8 runs failed; candidate: 4 of 12")
+    assert "INCOMPLETE" in br.format_comparison(result)
+    clean = br.compare_summaries(base, arm("cand", [0.26] * 8, which="B"))
+    assert not clean["verdict"].startswith("INCOMPLETE")
+
+
+def test_compare_lists_a_metric_only_one_build_reports():
+    live = {"dropped_hops": 0, "forced_commits": 2, "unagreed_tail_words": 4, "mean_decode_rtf": 0.06,
+            "infer_ms_per_hop": 900.0}
+    newer = dict(live, commit_latency_median_ms=2100.0)
+    meta = dict(META, mode="live")
+    base = br.summarize_records([make_record(i, 0.27, 120, live=live) for i in range(1, 9)],
+                                meta=dict(meta, interleave={"id": "s", "arm": "A"}))
+    cand = br.summarize_records([make_record(i, 0.27, 120, live=newer) for i in range(1, 9)],
+                                meta=dict(meta, interleave={"id": "s", "arm": "B"}))
+    result = br.compare_summaries(base, cand)
+    assert result["skipped_metrics"] == [{"key": "live.commit_latency_median_ms",
+                                          "label": "commit latency median", "missing_in": "base"}]
+    assert "commit latency median (missing in the base)" in br.format_comparison(result)

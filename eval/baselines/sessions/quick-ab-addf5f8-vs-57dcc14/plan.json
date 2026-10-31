@@ -1,0 +1,229 @@
+{
+  "suite": "quick",
+  "args": {
+    "command": "compare",
+    "base": "addf5f8",
+    "cand": "57dcc14",
+    "suite": "quick",
+    "only": null,
+    "runs": null,
+    "rounds": null,
+    "order": "abba",
+    "out_dir": "/tmp/notero-regress/reports/quick-ab-addf5f8-vs-57dcc14",
+    "baseline": null,
+    "confirm_with": null,
+    "dry_run": false,
+    "scratch": null,
+    "no_lock": false,
+    "no_build": false,
+    "hold_seconds": 240,
+    "timeout": 900.0,
+    "models": null,
+    "fixture_dir": null,
+    "fleurs_dir": null,
+    "fleurs_clips": 8,
+    "extra": []
+  },
+  "identity": {
+    "base_info": {
+      "spec": "addf5f8",
+      "path": "/private/tmp/notero-regress/builds/addf5f8f9456d49344da13969bdfb3d6b5feba06/app/.build/release/transcribe",
+      "label": "addf5f8 Merge pull request #8 from jamesulip/microphone-test",
+      "commit": "addf5f8f9456d49344da13969bdfb3d6b5feba06",
+      "built": false,
+      "sha256": "435679b7f2ebad82bb796ffaf0d7c85b91605baa74d689ea912f6402e4f6c459"
+    },
+    "cand_info": {
+      "spec": "57dcc14",
+      "path": "/private/tmp/notero-regress/builds/57dcc142a8e2bfb60b9001d3b9fa4056ec109e4f/app/.build/release/transcribe",
+      "label": "57dcc14 Use the BSD time wrapper only on macOS in the benchmark har...",
+      "commit": "57dcc142a8e2bfb60b9001d3b9fa4056ec109e4f",
+      "built": false,
+      "sha256": "223cc2454b9401257169b2c9c86e05d64d73f52eefe8d823147af8f41a981625"
+    }
+  },
+  "environment": {
+    "date_utc": "2026-10-31T19:36:18+00:00",
+    "hardware_model": "Mac14,12",
+    "cpu": "Apple M2 Pro",
+    "memory_gb": 16,
+    "macos": "26.6.2",
+    "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)",
+    "python": "3.14.7",
+    "harness_commit": "57dcc142a8e2bfb60b9001d3b9fa4056ec109e4f",
+    "harness_eval_dir_dirty": true,
+    "os_build": "25G83",
+    "logical_cpus": 10,
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O"
+  },
+  "lock_used": true,
+  "interleave": {
+    "id": "20261031T193618Z",
+    "scheme": "abba"
+  },
+  "series": {
+    "offline-synthetic": {
+      "definition": {
+        "kind": "asr",
+        "fixture": "synthetic-taglish",
+        "mode": "offline",
+        "est_s": 16
+      },
+      "files": {
+        "audio": "/private/tmp/notero-regress/fixtures/synthetic-taglish.wav",
+        "reference": "/private/tmp/notero-regress/frozen/eval/synthetic-taglish.txt",
+        "sha256": "e858bd6a1da505428823efb749017a81659b028742810f34deca10dbddd05f25",
+        "matches_manifest": true,
+        "id": "synthetic-taglish",
+        "synthetic": true,
+        "reference_sha256": "29ed96618fdf2b67924e4c113b02ce6317efa7a98a3b0c59ab3fa6a8ed78572c"
+      },
+      "run": {
+        "schedule": "ABBAABBAABBAABBA",
+        "batches": [
+          12,
+          4
+        ],
+        "system": {
+          "before": {
+            "time_utc": "2026-10-31T19:42:48+00:00",
+            "loadavg": [
+              6.45,
+              8.53,
+              7.97
+            ],
+            "uptime": "3:42  up 35 days, 15:54, 2 users, load averages: 6.45 8.53 7.97",
+            "memory": {
+              "page_size": 16384,
+              "free_pages": 9075,
+              "active_pages": 324347,
+              "inactive_pages": 255247,
+              "wired_pages": 97634,
+              "compressed_pages": 259918,
+              "pageouts": 628369,
+              "free_percentage": 64
+            }
+          },
+          "after": {
+            "time_utc": "2026-10-31T20:08:28+00:00",
+            "loadavg": [
+              6.27,
+              5.61,
+              5.35
+            ],
+            "uptime": "4:08  up 35 days, 16:20, 2 users, load averages: 6.27 5.61 5.35",
+            "memory": {
+              "page_size": 16384,
+              "free_pages": 30563,
+              "active_pages": 331965,
+              "inactive_pages": 262383,
+              "wired_pages": 96847,
+              "compressed_pages": 253100,
+              "pageouts": 629809,
+              "free_percentage": 65
+            }
+          },
+          "pageouts_delta": 1440
+        }
+      }
+    },
+    "live-synthetic": {
+      "definition": {
+        "kind": "asr",
+        "fixture": "synthetic-taglish",
+        "mode": "live",
+        "est_s": 70
+      },
+      "files": {
+        "audio": "/private/tmp/notero-regress/fixtures/synthetic-taglish.wav",
+        "reference": "/private/tmp/notero-regress/frozen/eval/synthetic-taglish.txt",
+        "sha256": "e858bd6a1da505428823efb749017a81659b028742810f34deca10dbddd05f25",
+        "matches_manifest": true,
+        "id": "synthetic-taglish",
+        "synthetic": true,
+        "reference_sha256": "29ed96618fdf2b67924e4c113b02ce6317efa7a98a3b0c59ab3fa6a8ed78572c"
+      },
+      "run": {
+        "schedule": "ABBAABBAABBAABBA",
+        "batches": [
+          4,
+          4,
+          4,
+          4
+        ],
+        "system": {
+          "before": {
+            "time_utc": "2026-10-31T20:17:47+00:00",
+            "loadavg": [
+              2.01,
+              4.96,
+              5.62
+            ],
+            "uptime": "4:17  up 35 days, 16:29, 2 users, load averages: 2.01 4.96 5.62",
+            "memory": {
+              "page_size": 16384,
+              "free_pages": 28942,
+              "active_pages": 319786,
+              "inactive_pages": 285022,
+              "wired_pages": 95652,
+              "compressed_pages": 250994,
+              "pageouts": 727324,
+              "free_percentage": 65
+            }
+          },
+          "after": {
+            "time_utc": "2026-10-31T21:39:50+00:00",
+            "loadavg": [
+              4.02,
+              2.72,
+              2.48
+            ],
+            "uptime": "5:39  up 35 days, 17:51, 2 users, load averages: 4.02 2.72 2.48",
+            "memory": {
+              "page_size": 16384,
+              "free_pages": 44763,
+              "active_pages": 330085,
+              "inactive_pages": 226624,
+              "wired_pages": 100749,
+              "compressed_pages": 240961,
+              "pageouts": 987488,
+              "free_percentage": 66
+            }
+          },
+          "pageouts_delta": 260164
+        }
+      }
+    },
+    "der-quick": {
+      "definition": {
+        "kind": "der",
+        "fixtures": [
+          "ms-two-distinct",
+          "ms-three-voices"
+        ],
+        "rounds": 2,
+        "est_s": 55
+      },
+      "files": {
+        "files": {
+          "ms-two-distinct": {
+            "audio": "/private/tmp/notero-regress/fixtures/multispeaker/two-distinct.wav",
+            "rttm": "/private/tmp/notero-regress/fixtures/multispeaker/two-distinct.rttm",
+            "sha256": "504b228ecb64042196667e45cd4f022ad21137b49b7865818542a9c7bd7a4635",
+            "matches_manifest": true
+          },
+          "ms-three-voices": {
+            "audio": "/private/tmp/notero-regress/fixtures/multispeaker/three-voices.wav",
+            "rttm": "/private/tmp/notero-regress/fixtures/multispeaker/three-voices.rttm",
+            "sha256": "07d12c5ee3cfc7bfc04f31812f4c72fff4b2c9d5fe8e75866e0dc2bf1e01bbd2",
+            "matches_manifest": true
+          }
+        }
+      }
+    }
+  },
+  "warnings": [],
+  "skipped": [],
+  "confirm_with": null,
+  "baseline": null
+}

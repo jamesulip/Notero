@@ -1,0 +1,1405 @@
+{
+  "schema": 2,
+  "kind": "notero-regress-report",
+  "suite": "quick",
+  "identity": {
+    "base": "addf5f8 Merge pull request #8 from jamesulip/microphone-test",
+    "cand": "57dcc14 Use the BSD time wrapper only on macOS in the benchmark har...",
+    "base_info": {
+      "spec": "addf5f8",
+      "path": "/private/tmp/notero-regress/builds/addf5f8f9456d49344da13969bdfb3d6b5feba06/app/.build/release/transcribe",
+      "label": "addf5f8 Merge pull request #8 from jamesulip/microphone-test",
+      "commit": "addf5f8f9456d49344da13969bdfb3d6b5feba06",
+      "built": false,
+      "sha256": "435679b7f2ebad82bb796ffaf0d7c85b91605baa74d689ea912f6402e4f6c459"
+    },
+    "cand_info": {
+      "spec": "57dcc14",
+      "path": "/private/tmp/notero-regress/builds/57dcc142a8e2bfb60b9001d3b9fa4056ec109e4f/app/.build/release/transcribe",
+      "label": "57dcc14 Use the BSD time wrapper only on macOS in the benchmark har...",
+      "commit": "57dcc142a8e2bfb60b9001d3b9fa4056ec109e4f",
+      "built": false,
+      "sha256": "223cc2454b9401257169b2c9c86e05d64d73f52eefe8d823147af8f41a981625"
+    },
+    "same_binary": false
+  },
+  "environment": {
+    "date_utc": "2026-10-31T19:36:18+00:00",
+    "hardware_model": "Mac14,12",
+    "cpu": "Apple M2 Pro",
+    "memory_gb": 16,
+    "macos": "26.6.2",
+    "swift": "Apple Swift version 6.3.3 (swiftlang-6.3.3.1.3 clang-2100.1.1.101)",
+    "python": "3.14.7",
+    "harness_commit": "57dcc142a8e2bfb60b9001d3b9fa4056ec109e4f",
+    "harness_eval_dir_dirty": true,
+    "os_build": "25G83",
+    "logical_cpus": 10,
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O"
+  },
+  "model": "openai_whisper-large-v3-v20240930_turbo",
+  "lock_used": true,
+  "interleave": {
+    "id": "20261031T193618Z",
+    "scheme": "abba"
+  },
+  "series": [
+    {
+      "id": "offline-synthetic",
+      "mode": "offline",
+      "ref_words": 128,
+      "arms": {
+        "A": {
+          "label": "addf5f8 Merge pull request #8 from jamesulip/microphone-test",
+          "n": 8
+        },
+        "B": {
+          "label": "57dcc14 Use the BSD time wrapper only on macOS in the benchmark har...",
+          "n": 8
+        }
+      },
+      "tests": [
+        {
+          "series": "offline-synthetic",
+          "key": "wer",
+          "label": "WER",
+          "kind": "quality",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 0.34375,
+            "min": 0.3046875,
+            "max": 0.5859375,
+            "q1": 0.31640625,
+            "q3": 0.419921875,
+            "iqr": 0.103515625,
+            "mean": 0.3935546875
+          },
+          "b": {
+            "n": 8,
+            "median": 0.2421875,
+            "min": 0.2421875,
+            "max": 0.2421875,
+            "q1": 0.2421875,
+            "q3": 0.2421875,
+            "iqr": 0.0,
+            "mean": 0.2421875
+          },
+          "diff": -0.1015625,
+          "rel_diff": -0.29545454545454547,
+          "floor_abs": 0.02,
+          "floor_rel": 0.0,
+          "floor_met": true,
+          "p": 0.0001554001554001554,
+          "p_method": "exact",
+          "p_holm": 0.00202020202020202,
+          "status": "improvement"
+        },
+        {
+          "series": "offline-synthetic",
+          "key": "hyp_words",
+          "label": "words (normalized)",
+          "kind": "size",
+          "better": "neutral",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 120.0,
+            "min": 83.0,
+            "max": 122.0,
+            "q1": 119.5,
+            "q3": 121.0,
+            "iqr": 1.5,
+            "mean": 115.625
+          },
+          "b": {
+            "n": 8,
+            "median": 120.0,
+            "min": 120.0,
+            "max": 120.0,
+            "q1": 120.0,
+            "q3": 120.0,
+            "iqr": 0.0,
+            "mean": 120.0
+          },
+          "diff": 0.0,
+          "rel_diff": 0.0,
+          "floor_abs": 4.0,
+          "floor_rel": 0.03,
+          "floor_met": false,
+          "p": 0.6102564102564103,
+          "p_method": "exact",
+          "p_holm": 1.0,
+          "status": "not-significant"
+        },
+        {
+          "series": "offline-synthetic",
+          "key": "rtf",
+          "label": "RTF",
+          "kind": "timing",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 0.09245819427522028,
+            "min": 0.08984478465857923,
+            "max": 0.1286751072734015,
+            "q1": 0.0917695255248892,
+            "q3": 0.105242711589059,
+            "iqr": 0.013473186064169793,
+            "mean": 0.10146165527714503
+          },
+          "b": {
+            "n": 8,
+            "median": 0.0830552171072381,
+            "min": 0.08279917359749961,
+            "max": 0.08437075100210133,
+            "q1": 0.08296251169853967,
+            "q3": 0.0831567516024792,
+            "iqr": 0.00019423990393953317,
+            "mean": 0.08318765340537868
+          },
+          "diff": -0.00940297716798219,
+          "rel_diff": -0.10169977081741777,
+          "floor_abs": 0.0,
+          "floor_rel": 0.05,
+          "floor_met": true,
+          "p": 0.0001554001554001554,
+          "p_method": "exact",
+          "p_holm": 0.00202020202020202,
+          "status": "indicative",
+          "load_reason": "the machine was busy: median load average 6.4 (A) and 6.4 (B) against a limit of 2",
+          "would_be": "improvement"
+        },
+        {
+          "series": "offline-synthetic",
+          "key": "decode_ms",
+          "label": "decodeMs",
+          "kind": "timing",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 5236.0,
+            "min": 5088.0,
+            "max": 7287.0,
+            "q1": 5197.0,
+            "q3": 5960.0,
+            "iqr": 763.0,
+            "mean": 5745.875
+          },
+          "b": {
+            "n": 8,
+            "median": 4703.5,
+            "min": 4689.0,
+            "max": 4778.0,
+            "q1": 4698.25,
+            "q3": 4709.25,
+            "iqr": 11.0,
+            "mean": 4711.0
+          },
+          "diff": -532.5,
+          "rel_diff": -0.10169977081741788,
+          "floor_abs": 0.0,
+          "floor_rel": 0.05,
+          "floor_met": true,
+          "p": 0.0001554001554001554,
+          "p_method": "exact",
+          "status": "untested"
+        },
+        {
+          "series": "offline-synthetic",
+          "key": "collapsed",
+          "label": "collapsed runs",
+          "kind": "count",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "floor_abs": 2.0,
+          "floor_rel": 0.0,
+          "diff": -3.0,
+          "rel_diff": null,
+          "floor_met": true,
+          "p": 0.2,
+          "p_method": "fisher",
+          "a": {
+            "n": 8,
+            "median": 3.0,
+            "min": 3.0,
+            "max": 3.0,
+            "iqr": 0.0,
+            "count": 3
+          },
+          "b": {
+            "n": 8,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "iqr": 0.0,
+            "count": 0
+          },
+          "p_holm": 1.0,
+          "status": "not-significant"
+        }
+      ],
+      "collapse": {
+        "level": 0.2421875,
+        "level_source": "pooled best half",
+        "rule": "a run is COLLAPSED if its WER is more than 15 points above the reference level (the median of the best half, the ceil(n/2) lowest, of the runs judged, pooled over both arms of a comparison), or if it produced fewer than 75% of the reference's words, or if it contains an invented-filler phrase the reference lacks",
+        "threshold": 0.3921875,
+        "A": {
+          "count": 3,
+          "indices": [
+            3,
+            5,
+            8
+          ],
+          "reasons": {
+            "3": [
+              "filler"
+            ],
+            "5": [
+              "wer"
+            ],
+            "8": [
+              "wer",
+              "words",
+              "filler"
+            ]
+          }
+        },
+        "B": {
+          "count": 0,
+          "indices": [],
+          "reasons": {}
+        },
+        "word_floor": 96.0
+      },
+      "skipped_metrics": [],
+      "load": {
+        "recorded": true,
+        "median_a": 6.365,
+        "median_b": 6.365,
+        "max_a": 8.3,
+        "max_b": 7.29,
+        "quiet": false,
+        "balanced": true,
+        "reliable": false,
+        "reason": "the machine was busy: median load average 6.4 (A) and 6.4 (B) against a limit of 2"
+      },
+      "per_arm_values": {
+        "A": {
+          "wer": [
+            0.3046875,
+            0.3046875,
+            0.3671875,
+            0.3203125,
+            0.5859375,
+            0.3359375,
+            0.3515625,
+            0.578125
+          ],
+          "hyp_words": [
+            120.0,
+            122.0,
+            120.0,
+            121.0,
+            118.0,
+            120.0,
+            121.0,
+            83.0
+          ],
+          "rtf": [
+            0.08984478465857923,
+            0.09184015821723085,
+            0.09203439812117038,
+            0.12680334092634776,
+            0.09805583514329608,
+            0.1286751072734015,
+            0.09155762744786425,
+            0.09288199042927019
+          ],
+          "decode_ms": [
+            5088.0,
+            5201.0,
+            5212.0,
+            7181.0,
+            5553.0,
+            7287.0,
+            5185.0,
+            5260.0
+          ]
+        },
+        "B": {
+          "wer": [
+            0.2421875,
+            0.2421875,
+            0.2421875,
+            0.2421875,
+            0.2421875,
+            0.2421875,
+            0.2421875,
+            0.2421875
+          ],
+          "hyp_words": [
+            120.0,
+            120.0,
+            120.0,
+            120.0,
+            120.0,
+            120.0,
+            120.0,
+            120.0
+          ],
+          "rtf": [
+            0.08292278080909748,
+            0.08437075100210133,
+            0.08297575532835373,
+            0.08315233705920785,
+            0.08316999523229326,
+            0.08302872984760996,
+            0.08308170436686621,
+            0.08279917359749961
+          ],
+          "decode_ms": [
+            4696.0,
+            4778.0,
+            4699.0,
+            4709.0,
+            4710.0,
+            4702.0,
+            4705.0,
+            4689.0
+          ]
+        }
+      },
+      "fixture": {
+        "id": "synthetic-taglish",
+        "sha256": "e858bd6a1da505428823efb749017a81659b028742810f34deca10dbddd05f25",
+        "synthetic": true,
+        "matches_manifest": true
+      },
+      "system": {
+        "before": {
+          "time_utc": "2026-10-31T19:42:48+00:00",
+          "loadavg": [
+            6.45,
+            8.53,
+            7.97
+          ],
+          "uptime": "3:42  up 35 days, 15:54, 2 users, load averages: 6.45 8.53 7.97",
+          "memory": {
+            "page_size": 16384,
+            "free_pages": 9075,
+            "active_pages": 324347,
+            "inactive_pages": 255247,
+            "wired_pages": 97634,
+            "compressed_pages": 259918,
+            "pageouts": 628369,
+            "free_percentage": 64
+          }
+        },
+        "after": {
+          "time_utc": "2026-10-31T20:08:28+00:00",
+          "loadavg": [
+            6.27,
+            5.61,
+            5.35
+          ],
+          "uptime": "4:08  up 35 days, 16:20, 2 users, load averages: 6.27 5.61 5.35",
+          "memory": {
+            "page_size": 16384,
+            "free_pages": 30563,
+            "active_pages": 331965,
+            "inactive_pages": 262383,
+            "wired_pages": 96847,
+            "compressed_pages": 253100,
+            "pageouts": 629809,
+            "free_percentage": 65
+          }
+        },
+        "pageouts_delta": 1440
+      },
+      "schedule": "ABBAABBAABBAABBA"
+    },
+    {
+      "id": "live-synthetic",
+      "mode": "live",
+      "ref_words": 128,
+      "arms": {
+        "A": {
+          "label": "addf5f8 Merge pull request #8 from jamesulip/microphone-test",
+          "n": 8
+        },
+        "B": {
+          "label": "57dcc14 Use the BSD time wrapper only on macOS in the benchmark har...",
+          "n": 8
+        }
+      },
+      "tests": [
+        {
+          "series": "live-synthetic",
+          "key": "wer",
+          "label": "WER",
+          "kind": "quality",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 0.28125,
+            "min": 0.2578125,
+            "max": 0.328125,
+            "q1": 0.271484375,
+            "q3": 0.298828125,
+            "iqr": 0.02734375,
+            "mean": 0.2861328125
+          },
+          "b": {
+            "n": 8,
+            "median": 0.26171875,
+            "min": 0.2265625,
+            "max": 0.3046875,
+            "q1": 0.234375,
+            "q3": 0.279296875,
+            "iqr": 0.044921875,
+            "mean": 0.26171875
+          },
+          "diff": -0.01953125,
+          "rel_diff": -0.06944444444444445,
+          "floor_abs": 0.02,
+          "floor_rel": 0.0,
+          "floor_met": false,
+          "p": 0.1236985236985237,
+          "p_method": "exact",
+          "p_holm": 1.0,
+          "status": "not-significant"
+        },
+        {
+          "series": "live-synthetic",
+          "key": "hyp_words",
+          "label": "words (normalized)",
+          "kind": "size",
+          "better": "neutral",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 120.0,
+            "min": 115.0,
+            "max": 124.0,
+            "q1": 119.0,
+            "q3": 122.5,
+            "iqr": 3.5,
+            "mean": 120.375
+          },
+          "b": {
+            "n": 8,
+            "median": 118.5,
+            "min": 115.0,
+            "max": 125.0,
+            "q1": 118.0,
+            "q3": 120.25,
+            "iqr": 2.25,
+            "mean": 119.25
+          },
+          "diff": -1.5,
+          "rel_diff": -0.0125,
+          "floor_abs": 4.0,
+          "floor_rel": 0.03,
+          "floor_met": false,
+          "p": 0.331002331002331,
+          "p_method": "exact",
+          "p_holm": 1.0,
+          "status": "not-significant"
+        },
+        {
+          "series": "live-synthetic",
+          "key": "rtf",
+          "label": "RTF",
+          "kind": "timing",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 0.9583090533453409,
+            "min": 0.8211227066447705,
+            "max": 1.0539633769490209,
+            "q1": 0.9030301425014569,
+            "q3": 0.9894757288410941,
+            "iqr": 0.08644558633963728,
+            "mean": 0.9516739948084971
+          },
+          "b": {
+            "n": 8,
+            "median": 1.0065158658685172,
+            "min": 0.9487736398792181,
+            "max": 1.07382882167011,
+            "q1": 0.9622512404866592,
+            "q3": 1.0409448888418003,
+            "iqr": 0.07869364835514103,
+            "mean": 1.0049310448341013
+          },
+          "diff": 0.04820681252317627,
+          "rel_diff": 0.050304035378662154,
+          "floor_abs": 0.0,
+          "floor_rel": 0.05,
+          "floor_met": true,
+          "p": 0.2344988344988345,
+          "p_method": "exact",
+          "p_holm": 1.0,
+          "status": "not-significant"
+        },
+        {
+          "series": "live-synthetic",
+          "key": "decode_ms",
+          "label": "decodeMs",
+          "kind": "timing",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 54270.0,
+            "min": 46501.0,
+            "max": 59687.0,
+            "q1": 51139.5,
+            "q3": 56035.0,
+            "iqr": 4895.5,
+            "mean": 53894.25
+          },
+          "b": {
+            "n": 8,
+            "median": 57000.0,
+            "min": 53730.0,
+            "max": 60812.0,
+            "q1": 54493.25,
+            "q3": 58949.75,
+            "iqr": 4456.5,
+            "mean": 56910.25
+          },
+          "diff": 2730.0,
+          "rel_diff": 0.050304035378662244,
+          "floor_abs": 0.0,
+          "floor_rel": 0.05,
+          "floor_met": true,
+          "p": 0.2344988344988345,
+          "p_method": "exact",
+          "status": "untested"
+        },
+        {
+          "series": "live-synthetic",
+          "key": "live.dropped_hops",
+          "label": "dropped hops",
+          "kind": "count",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "q1": 0.0,
+            "q3": 0.0,
+            "iqr": 0.0,
+            "mean": 0.0
+          },
+          "b": {
+            "n": 8,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "q1": 0.0,
+            "q3": 0.0,
+            "iqr": 0.0,
+            "mean": 0.0
+          },
+          "diff": 0.0,
+          "rel_diff": null,
+          "floor_abs": 1.0,
+          "floor_rel": 0.0,
+          "floor_met": false,
+          "p": 1.0,
+          "p_method": "exact",
+          "p_holm": 1.0,
+          "status": "not-significant"
+        },
+        {
+          "series": "live-synthetic",
+          "key": "live.forced_commits",
+          "label": "forced commits",
+          "kind": "count",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 5.5,
+            "min": 0.0,
+            "max": 11.0,
+            "q1": 2.25,
+            "q3": 7.25,
+            "iqr": 5.0,
+            "mean": 5.0
+          },
+          "b": {
+            "n": 8,
+            "median": 6.5,
+            "min": 0.0,
+            "max": 11.0,
+            "q1": 6.0,
+            "q3": 8.5,
+            "iqr": 2.5,
+            "mean": 6.75
+          },
+          "diff": 1.0,
+          "rel_diff": 0.18181818181818182,
+          "floor_abs": 1.0,
+          "floor_rel": 0.0,
+          "floor_met": true,
+          "p": 0.354001554001554,
+          "p_method": "exact",
+          "p_holm": 1.0,
+          "status": "not-significant"
+        },
+        {
+          "series": "live-synthetic",
+          "key": "live.unagreed_tail_words",
+          "label": "unagreed tail words",
+          "kind": "count",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 17.5,
+            "min": 5.0,
+            "max": 37.0,
+            "q1": 10.5,
+            "q3": 24.25,
+            "iqr": 13.75,
+            "mean": 19.0
+          },
+          "b": {
+            "n": 8,
+            "median": 15.5,
+            "min": 3.0,
+            "max": 37.0,
+            "q1": 6.0,
+            "q3": 37.0,
+            "iqr": 31.0,
+            "mean": 19.375
+          },
+          "diff": -2.0,
+          "rel_diff": -0.11428571428571428,
+          "floor_abs": 2.0,
+          "floor_rel": 0.0,
+          "floor_met": true,
+          "p": 0.811965811965812,
+          "p_method": "exact",
+          "p_holm": 1.0,
+          "status": "not-significant"
+        },
+        {
+          "series": "live-synthetic",
+          "key": "live.mean_decode_rtf",
+          "label": "mean per-decode RTF",
+          "kind": "timing",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 0.12712033961119495,
+            "min": 0.11357455586427549,
+            "max": 0.16466432596629757,
+            "q1": 0.12193053841411508,
+            "q3": 0.1462854282422037,
+            "iqr": 0.024354889828088616,
+            "mean": 0.13365017076076094
+          },
+          "b": {
+            "n": 8,
+            "median": 0.12126013224626297,
+            "min": 0.1153727734464992,
+            "max": 0.15856187380010708,
+            "q1": 0.11825659125896595,
+            "q3": 0.12819859633056524,
+            "iqr": 0.009942005071599286,
+            "mean": 0.12640037467029167
+          },
+          "diff": -0.00586020736493198,
+          "rel_diff": -0.04609968304722729,
+          "floor_abs": 0.0,
+          "floor_rel": 0.05,
+          "floor_met": false,
+          "p": 0.3822843822843823,
+          "p_method": "exact",
+          "p_holm": 1.0,
+          "status": "not-significant"
+        },
+        {
+          "series": "live-synthetic",
+          "key": "live.infer_ms_per_hop",
+          "label": "infer ms per hop",
+          "kind": "timing",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "a": {
+            "n": 8,
+            "median": 1423.9342105263158,
+            "min": 1219.842105263158,
+            "max": 1567.1052631578948,
+            "q1": 1341.967105263158,
+            "q3": 1470.421052631579,
+            "iqr": 128.45394736842104,
+            "mean": 1414.25
+          },
+          "b": {
+            "n": 8,
+            "median": 1495.9868421052631,
+            "min": 1410.1315789473683,
+            "max": 1596.2105263157894,
+            "q1": 1429.842105263158,
+            "q3": 1547.3355263157894,
+            "iqr": 117.49342105263145,
+            "mean": 1493.6282894736842
+          },
+          "diff": 72.05263157894728,
+          "rel_diff": 0.050601095925853996,
+          "floor_abs": 0.0,
+          "floor_rel": 0.05,
+          "floor_met": true,
+          "p": 0.2344988344988345,
+          "p_method": "exact",
+          "p_holm": 1.0,
+          "status": "not-significant"
+        },
+        {
+          "series": "live-synthetic",
+          "key": "collapsed",
+          "label": "collapsed runs",
+          "kind": "count",
+          "better": "lower",
+          "n_a": 8,
+          "n_b": 8,
+          "floor_abs": 2.0,
+          "floor_rel": 0.0,
+          "diff": 0.0,
+          "rel_diff": null,
+          "floor_met": false,
+          "p": 1.0,
+          "p_method": "fisher",
+          "a": {
+            "n": 8,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "iqr": 0.0,
+            "count": 0
+          },
+          "b": {
+            "n": 8,
+            "median": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "iqr": 0.0,
+            "count": 0
+          },
+          "p_holm": 1.0,
+          "status": "not-significant"
+        }
+      ],
+      "collapse": {
+        "level": 0.2578125,
+        "level_source": "pooled best half",
+        "rule": "a run is COLLAPSED if its WER is more than 15 points above the reference level (the median of the best half, the ceil(n/2) lowest, of the runs judged, pooled over both arms of a comparison), or if it produced fewer than 75% of the reference's words, or if it contains an invented-filler phrase the reference lacks",
+        "threshold": 0.4078125,
+        "A": {
+          "count": 0,
+          "indices": [],
+          "reasons": {}
+        },
+        "B": {
+          "count": 0,
+          "indices": [],
+          "reasons": {}
+        },
+        "word_floor": 96.0
+      },
+      "skipped_metrics": [
+        {
+          "key": "live.commit_latency_median_ms",
+          "label": "commit latency median",
+          "missing_in": "base"
+        }
+      ],
+      "load": {
+        "recorded": true,
+        "median_a": 1.205,
+        "median_b": 1.18,
+        "max_a": 2.46,
+        "max_b": 2.52,
+        "quiet": true,
+        "balanced": true,
+        "reliable": true,
+        "reason": null
+      },
+      "per_arm_values": {
+        "A": {
+          "wer": [
+            0.296875,
+            0.265625,
+            0.2578125,
+            0.3046875,
+            0.28125,
+            0.28125,
+            0.328125,
+            0.2734375
+          ],
+          "hyp_words": [
+            124.0,
+            119.0,
+            122.0,
+            121.0,
+            124.0,
+            119.0,
+            119.0,
+            115.0
+          ],
+          "rtf": [
+            0.9693807278698946,
+            0.9047871307234554,
+            0.955448429305504,
+            0.8977591778354611,
+            0.8211227066447705,
+            1.0539633769490209,
+            0.9611696773851778,
+            1.0497607317546926
+          ],
+          "decode_ms": [
+            54897.0,
+            51239.0,
+            54108.0,
+            50841.0,
+            46501.0,
+            59687.0,
+            54432.0,
+            59449.0
+          ],
+          "live.dropped_hops": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "live.forced_commits": [
+            3.0,
+            6.0,
+            7.0,
+            5.0,
+            0.0,
+            8.0,
+            0.0,
+            11.0
+          ],
+          "live.unagreed_tail_words": [
+            20.0,
+            6.0,
+            37.0,
+            5.0,
+            16.0,
+            19.0,
+            12.0,
+            37.0
+          ],
+          "live.mean_decode_rtf": [
+            0.12618288530651858,
+            0.12253285726960346,
+            0.11357455586427549,
+            0.12805779391587135,
+            0.14852719238939924,
+            0.14553817352647183,
+            0.16466432596629757,
+            0.12012358184764992
+          ],
+          "live.infer_ms_per_hop": [
+            1440.4473684210527,
+            1344.7368421052631,
+            1419.921052631579,
+            1333.657894736842,
+            1219.842105263158,
+            1567.1052631578948,
+            1427.9473684210527,
+            1560.342105263158
+          ],
+          "live.commit_latency_median_ms": []
+        },
+        "B": {
+          "wer": [
+            0.265625,
+            0.2578125,
+            0.2734375,
+            0.2265625,
+            0.234375,
+            0.3046875,
+            0.234375,
+            0.296875
+          ],
+          "hyp_words": [
+            119.0,
+            118.0,
+            118.0,
+            118.0,
+            121.0,
+            115.0,
+            120.0,
+            125.0
+          ],
+          "rtf": [
+            0.9487736398792181,
+            1.0500432625240592,
+            0.9665730783493139,
+            1.0379120976143807,
+            1.0193710158746976,
+            0.9936607158623368,
+            1.07382882167011,
+            0.9492857268986951
+          ],
+          "decode_ms": [
+            53730.0,
+            59465.0,
+            54738.0,
+            58778.0,
+            57728.0,
+            56272.0,
+            60812.0,
+            53759.0
+          ],
+          "live.dropped_hops": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "live.forced_commits": [
+            7.0,
+            10.0,
+            6.0,
+            11.0,
+            6.0,
+            6.0,
+            8.0,
+            0.0
+          ],
+          "live.unagreed_tail_words": [
+            7.0,
+            37.0,
+            15.0,
+            37.0,
+            3.0,
+            16.0,
+            37.0,
+            3.0
+          ],
+          "live.mean_decode_rtf": [
+            0.1153727734464992,
+            0.12291865235589076,
+            0.11672166487378928,
+            0.11876823338735819,
+            0.13249008838194992,
+            0.11960161213663519,
+            0.12676809898010366,
+            0.15856187380010708
+          ],
+          "live.infer_ms_per_hop": [
+            1410.1315789473683,
+            1561.1315789473683,
+            1436.2631578947369,
+            1542.7368421052631,
+            1515.2368421052631,
+            1476.7368421052631,
+            1596.2105263157894,
+            1410.578947368421
+          ],
+          "live.commit_latency_median_ms": [
+            11020.0,
+            11950.0,
+            11290.0,
+            12250.0,
+            9071.0,
+            11020.0,
+            11480.0,
+            6380.0
+          ]
+        }
+      },
+      "fixture": {
+        "id": "synthetic-taglish",
+        "sha256": "e858bd6a1da505428823efb749017a81659b028742810f34deca10dbddd05f25",
+        "synthetic": true,
+        "matches_manifest": true
+      },
+      "system": {
+        "before": {
+          "time_utc": "2026-10-31T20:17:47+00:00",
+          "loadavg": [
+            2.01,
+            4.96,
+            5.62
+          ],
+          "uptime": "4:17  up 35 days, 16:29, 2 users, load averages: 2.01 4.96 5.62",
+          "memory": {
+            "page_size": 16384,
+            "free_pages": 28942,
+            "active_pages": 319786,
+            "inactive_pages": 285022,
+            "wired_pages": 95652,
+            "compressed_pages": 250994,
+            "pageouts": 727324,
+            "free_percentage": 65
+          }
+        },
+        "after": {
+          "time_utc": "2026-10-31T21:39:50+00:00",
+          "loadavg": [
+            4.02,
+            2.72,
+            2.48
+          ],
+          "uptime": "5:39  up 35 days, 17:51, 2 users, load averages: 4.02 2.72 2.48",
+          "memory": {
+            "page_size": 16384,
+            "free_pages": 44763,
+            "active_pages": 330085,
+            "inactive_pages": 226624,
+            "wired_pages": 100749,
+            "compressed_pages": 240961,
+            "pageouts": 987488,
+            "free_percentage": 66
+          }
+        },
+        "pageouts_delta": 260164
+      },
+      "schedule": "ABBAABBAABBAABBA"
+    }
+  ],
+  "der": {
+    "note": "DER of the raw diarizer spans against the synthetic RTTM, collar 0.25 s (`der.py`). SYNTHETIC text-to-speech clips with exact boundaries: this supports A/B between two builds, not a claim about real meetings. Not part of the Holm family; a change is reported at 2 points or more.",
+    "fixtures": [
+      {
+        "id": "ms-two-distinct",
+        "base": [],
+        "cand": [],
+        "diff": 0.0,
+        "deterministic": false,
+        "status": "no successful runs on one side"
+      },
+      {
+        "id": "ms-three-voices",
+        "base": [],
+        "cand": [],
+        "diff": 0.0,
+        "deterministic": false,
+        "status": "no successful runs on one side"
+      }
+    ],
+    "changed": [],
+    "series": "der-quick",
+    "rounds": 2,
+    "system": null
+  },
+  "determinism": [
+    {
+      "label": "base addf5f8 Merge pull request #8 from jamesulip/microphone-test / offline-synthetic",
+      "n": 8,
+      "identical": false,
+      "distinct": 8,
+      "group_sizes": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "groups": [
+        [
+          1
+        ],
+        [
+          2
+        ],
+        [
+          3
+        ],
+        [
+          4
+        ],
+        [
+          5
+        ],
+        [
+          6
+        ],
+        [
+          7
+        ],
+        [
+          8
+        ]
+      ],
+      "first_divergence": {
+        "run_a": 1,
+        "run_b": 2,
+        "word_index": 0,
+        "time_ms": 0,
+        "a_context": "Kalo na pagi",
+        "b_context": "Kumusta kayong lahit?",
+        "window_index": null,
+        "window_start_ms": null,
+        "window_end_ms": null
+      },
+      "series": "offline-synthetic",
+      "arm": "A"
+    },
+    {
+      "label": "candidate 57dcc14 Use the BSD time wrapper only on macOS in the benchmark har... / offline-synthetic",
+      "n": 8,
+      "identical": true,
+      "distinct": 1,
+      "group_sizes": [
+        8
+      ],
+      "groups": [
+        [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ]
+      ],
+      "first_divergence": null,
+      "series": "offline-synthetic",
+      "arm": "B"
+    },
+    {
+      "label": "base addf5f8 Merge pull request #8 from jamesulip/microphone-test / live-synthetic",
+      "n": 8,
+      "identical": false,
+      "distinct": 8,
+      "group_sizes": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "groups": [
+        [
+          1
+        ],
+        [
+          2
+        ],
+        [
+          3
+        ],
+        [
+          4
+        ],
+        [
+          5
+        ],
+        [
+          6
+        ],
+        [
+          7
+        ],
+        [
+          8
+        ]
+      ],
+      "first_divergence": {
+        "run_a": 1,
+        "run_b": 2,
+        "word_index": 3,
+        "time_ms": 1180,
+        "a_context": "Kumusta kayong lah at? Welcome sa",
+        "b_context": "Kumusta kayong lah at. Welcome sa",
+        "window_index": null,
+        "window_start_ms": null,
+        "window_end_ms": null
+      },
+      "series": "live-synthetic",
+      "arm": "A"
+    },
+    {
+      "label": "candidate 57dcc14 Use the BSD time wrapper only on macOS in the benchmark har... / live-synthetic",
+      "n": 8,
+      "identical": false,
+      "distinct": 8,
+      "group_sizes": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "groups": [
+        [
+          1
+        ],
+        [
+          2
+        ],
+        [
+          3
+        ],
+        [
+          4
+        ],
+        [
+          5
+        ],
+        [
+          6
+        ],
+        [
+          7
+        ],
+        [
+          8
+        ]
+      ],
+      "first_divergence": {
+        "run_a": 1,
+        "run_b": 2,
+        "word_index": 0,
+        "time_ms": 0,
+        "a_context": "Kumusta kayong Welcome",
+        "b_context": "I'm kayong Welcome",
+        "window_index": null,
+        "window_start_ms": null,
+        "window_end_ms": null
+      },
+      "series": "live-synthetic",
+      "arm": "B"
+    }
+  ],
+  "warnings": [
+    "series live-synthetic: commit latency median is reported by only one build (missing in the base); not tested"
+  ],
+  "skipped": [],
+  "incomplete": [
+    "der-quick: ms-two-distinct: no successful runs on one side",
+    "der-quick: ms-three-voices: no successful runs on one side"
+  ],
+  "plan": {
+    "args": {
+      "command": "compare",
+      "base": "addf5f8",
+      "cand": "57dcc14",
+      "suite": "quick",
+      "only": null,
+      "runs": null,
+      "rounds": null,
+      "order": "abba",
+      "out_dir": "/tmp/notero-regress/reports/quick-ab-addf5f8-vs-57dcc14",
+      "baseline": null,
+      "confirm_with": null,
+      "dry_run": false,
+      "scratch": null,
+      "no_lock": false,
+      "no_build": false,
+      "hold_seconds": 240,
+      "timeout": 900.0,
+      "models": null,
+      "fixture_dir": null,
+      "fleurs_dir": null,
+      "fleurs_clips": 8,
+      "extra": []
+    }
+  },
+  "decision": {
+    "flagged": [
+      {
+        "series": "offline-synthetic",
+        "key": "wer",
+        "label": "WER",
+        "kind": "quality",
+        "better": "lower",
+        "n_a": 8,
+        "n_b": 8,
+        "a": {
+          "n": 8,
+          "median": 0.34375,
+          "min": 0.3046875,
+          "max": 0.5859375,
+          "q1": 0.31640625,
+          "q3": 0.419921875,
+          "iqr": 0.103515625,
+          "mean": 0.3935546875
+        },
+        "b": {
+          "n": 8,
+          "median": 0.2421875,
+          "min": 0.2421875,
+          "max": 0.2421875,
+          "q1": 0.2421875,
+          "q3": 0.2421875,
+          "iqr": 0.0,
+          "mean": 0.2421875
+        },
+        "diff": -0.1015625,
+        "rel_diff": -0.29545454545454547,
+        "floor_abs": 0.02,
+        "floor_rel": 0.0,
+        "floor_met": true,
+        "p": 0.0001554001554001554,
+        "p_method": "exact",
+        "p_holm": 0.00202020202020202,
+        "status": "improvement"
+      }
+    ],
+    "counts": {
+      "improvement": 1,
+      "not-significant": 11,
+      "indicative": 1,
+      "untested": 2
+    },
+    "alpha": 0.05,
+    "family_size": 13,
+    "interleaved": true,
+    "headline": "INCOMPLETE (der-quick: ms-two-distinct: no successful runs on one side; der-quick: ms-three-voices: no successful runs on one side): this verdict covers only what ran. SUSPECTED IMPROVEMENT in offline-synthetic:WER; a single session cannot confirm: repeat it in a second interleaved session (`regress.py --confirm-with THIS_REPORT.json`) before acting; INDICATIVE ONLY, not believed (machine not quiet or load not recorded): offline-synthetic:RTF (improvement)."
+  }
+}

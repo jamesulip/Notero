@@ -1,0 +1,279 @@
+{
+  "schema": 1,
+  "what": "The fixture set the regression harness (eval/regress.py) and the other cycle agents' claims rest on. Audio is never committed (*.wav is git-ignored); this file says how to regenerate each fixture and what a number measured on it can and cannot support. Regenerate with `python3 eval/fixtures.py generate --out DIR`; check with `python3 eval/fixtures.py verify DIR`.",
+  "determinism": "sha256 values were measured on macOS 26.6.2 with the say voices installed on the Mac mini M2 Pro of the cycle, by generating twice and comparing: identical. A different macOS release or voice build changes the audio but not the reference structure; `verify` then reports a mismatch as a WARNING (the fixture still works for A/B, but the numbers are not comparable with earlier ones).",
+  "generators": {
+    "say-synthetic-taglish": {
+      "requires": [
+        "say",
+        "afconvert"
+      ],
+      "commands": [
+        [
+          "say",
+          "-v",
+          "Damayanti",
+          "-r",
+          "175",
+          "-f",
+          "{repo}/eval/synthetic-taglish.txt",
+          "-o",
+          "{tmp}/synthetic-taglish.aiff"
+        ],
+        [
+          "afconvert",
+          "-f",
+          "WAVE",
+          "-d",
+          "LEI16@16000",
+          "-c",
+          "1",
+          "{tmp}/synthetic-taglish.aiff",
+          "{out}/synthetic-taglish.wav"
+        ]
+      ],
+      "same_as": "eval/make-synthetic.sh (the two commands, into a scratch directory instead of eval/audio)"
+    },
+    "paused-synthetic-taglish": {
+      "needs": [
+        "synthetic-taglish"
+      ],
+      "commands": [
+        [
+          "python3",
+          "{repo}/eval/make_paused.py",
+          "{fixture:synthetic-taglish}",
+          "{repo}/eval/fixtures/synthetic-taglish.pause-points.json",
+          "{out}/synthetic-taglish-paused.wav",
+          "1200"
+        ]
+      ]
+    },
+    "multispeaker": {
+      "requires": [
+        "say"
+      ],
+      "commands": [
+        [
+          "python3",
+          "{repo}/eval/make_multispeaker.py",
+          "--out",
+          "{out}/multispeaker"
+        ]
+      ],
+      "subset_flag": "--only"
+    }
+  },
+  "fixtures": [
+    {
+      "id": "synthetic-taglish",
+      "generator": "say-synthetic-taglish",
+      "audio": "synthetic-taglish.wav",
+      "reference": "eval/synthetic-taglish.txt",
+      "sha256": {
+        "synthetic-taglish.wav": "e858bd6a1da505428823efb749017a81659b028742810f34deca10dbddd05f25"
+      },
+      "reference_sha256": "29ed96618fdf2b67924e4c113b02ce6317efa7a98a3b0c59ab3fa6a8ed78572c",
+      "deterministic": true,
+      "synthetic": true,
+      "duration_s": 56.6,
+      "supports": [
+        "A/B comparison of two builds on identical audio (WER, RTF, collapse, live counters)",
+        "regression of the first-window collapse (FINDINGS 15)",
+        "offline determinism check"
+      ],
+      "cannot_support": [
+        "any claim about real Taglish accuracy (an Indonesian say voice reading Taglish; wrong acoustics)",
+        "real meeting behaviour: no overlap, no noise, no turn-taking",
+        "live commit latency at a natural pause: its sub-700 ms gaps never fire the silence boundary"
+      ]
+    },
+    {
+      "id": "synthetic-taglish-paused",
+      "generator": "paused-synthetic-taglish",
+      "audio": "synthetic-taglish-paused.wav",
+      "reference": "eval/synthetic-taglish.txt",
+      "sha256": {
+        "synthetic-taglish-paused.wav": "91cebff621c518120e03507de44e28d82579250f6ad7a5a8f41388a183389edf"
+      },
+      "deterministic": true,
+      "synthetic": true,
+      "duration_s": 87.8,
+      "supports": [
+        "live utterance finalization and boundary commits (1.2 s of silence after every punctuated word, 26 pauses)",
+        "A/B of live commit latency with a pause boundary available"
+      ],
+      "cannot_support": [
+        "real pause behaviour: pauses are digital silence and exactly 1.2 s",
+        "WER comparisons with the unpaused clip: same reference, different audio"
+      ]
+    },
+    {
+      "id": "ms-two-distinct",
+      "generator": "multispeaker",
+      "audio": "multispeaker/two-distinct.wav",
+      "reference": "multispeaker/two-distinct.rttm",
+      "sha256": {
+        "multispeaker/two-distinct.wav": "504b228ecb64042196667e45cd4f022ad21137b49b7865818542a9c7bd7a4635",
+        "multispeaker/two-distinct.rttm": "53c1900bc0204cc5368159ff90dcde16464a71bcf6ea0189a4099a933b04a2ca"
+      },
+      "deterministic": true,
+      "synthetic": true,
+      "duration_s": 90,
+      "supports": [
+        "DER A/B of two diarizer builds: two clearly different voices, the easy case"
+      ],
+      "cannot_support": [
+        "real-meeting DER: text-to-speech voices, exact boundaries, no crosstalk"
+      ],
+      "generator_arg": "two-distinct"
+    },
+    {
+      "id": "ms-two-similar",
+      "generator": "multispeaker",
+      "audio": "multispeaker/two-similar.wav",
+      "reference": "multispeaker/two-similar.rttm",
+      "sha256": {
+        "multispeaker/two-similar.wav": "78da4519dc20f1978eacbac1cd3f15690093997ee0732af8e091c17c8cb31f89",
+        "multispeaker/two-similar.rttm": "8725b1dc79664a4d52b91fcc7c2592d6ec45bb4472bfec1a804fa682d66697bc"
+      },
+      "deterministic": true,
+      "synthetic": true,
+      "duration_s": 100,
+      "supports": [
+        "DER A/B on the FINDINGS 10 case: two similar voices trading short turns inside shared 10 s chunks"
+      ],
+      "cannot_support": [
+        "a claim that a diarizer separates similar real people; no method may split this pair"
+      ],
+      "generator_arg": "two-similar"
+    },
+    {
+      "id": "ms-two-short-turns",
+      "generator": "multispeaker",
+      "audio": "multispeaker/two-short-turns.wav",
+      "reference": "multispeaker/two-short-turns.rttm",
+      "sha256": {
+        "multispeaker/two-short-turns.wav": "0ee8869af042b56c95b032361856479fe0016946f5436fd2d8711da907505016",
+        "multispeaker/two-short-turns.rttm": "3b7d105c62bbb94f8e60a6d42fe2050fab2845c38f368b246edddc0ad5c14b96"
+      },
+      "deterministic": true,
+      "synthetic": true,
+      "duration_s": 100,
+      "supports": [
+        "DER A/B on separable voices trading short turns (the FINDINGS 10 mechanism without the unsplittable pair)"
+      ],
+      "cannot_support": [
+        "real-meeting DER"
+      ],
+      "generator_arg": "two-short-turns"
+    },
+    {
+      "id": "ms-chunk-fusion",
+      "generator": "multispeaker",
+      "audio": "multispeaker/chunk-fusion.wav",
+      "reference": "multispeaker/chunk-fusion.rttm",
+      "sha256": {
+        "multispeaker/chunk-fusion.wav": "e89f5c3082634e50b68e408a622dacf26b587d93ac2c26c3622f549907f45a8c",
+        "multispeaker/chunk-fusion.rttm": "b98aec3d727cdfa9394d1b4679733d95c48a9b30d8be58df7e56cc61f2f0a9ce"
+      },
+      "deterministic": true,
+      "synthetic": true,
+      "duration_s": 80,
+      "supports": [
+        "DER A/B where chunk-level embeddings fuse two separable voices"
+      ],
+      "cannot_support": [
+        "real-meeting DER"
+      ],
+      "generator_arg": "chunk-fusion"
+    },
+    {
+      "id": "ms-three-voices",
+      "generator": "multispeaker",
+      "audio": "multispeaker/three-voices.wav",
+      "reference": "multispeaker/three-voices.rttm",
+      "sha256": {
+        "multispeaker/three-voices.wav": "07d12c5ee3cfc7bfc04f31812f4c72fff4b2c9d5fe8e75866e0dc2bf1e01bbd2",
+        "multispeaker/three-voices.rttm": "0c5db57767517919b126e66fc16409ab1a4c1843de6e6527ea14fe5e6d421618"
+      },
+      "deterministic": true,
+      "synthetic": true,
+      "duration_s": 120,
+      "supports": [
+        "DER A/B with three speakers and one-word backchannels"
+      ],
+      "cannot_support": [
+        "real-meeting DER"
+      ],
+      "generator_arg": "three-voices"
+    },
+    {
+      "id": "ms-four-voices",
+      "generator": "multispeaker",
+      "audio": "multispeaker/four-voices.wav",
+      "reference": "multispeaker/four-voices.rttm",
+      "sha256": {
+        "multispeaker/four-voices.wav": "addf1917fd10e9ecae90a862a66fc4b857c62b87956abfd75ac0b077b3bbfdac",
+        "multispeaker/four-voices.rttm": "7bfca90ae2d44e5745ca2a071059128685ec5615586f4ff957db6c71e8ca9611"
+      },
+      "deterministic": true,
+      "synthetic": true,
+      "duration_s": 160,
+      "supports": [
+        "DER A/B with four speakers, a longer file"
+      ],
+      "cannot_support": [
+        "real-meeting DER"
+      ],
+      "generator_arg": "four-voices"
+    },
+    {
+      "id": "ms-three-overlap",
+      "generator": "multispeaker",
+      "audio": "multispeaker/three-overlap.wav",
+      "reference": "multispeaker/three-overlap.rttm",
+      "sha256": {
+        "multispeaker/three-overlap.wav": "d90e4ea707696f8f9290acbd0406dda4600c4444414c80b67f9b291404b2c78a",
+        "multispeaker/three-overlap.rttm": "57c7a2d847a95c4b2e415f286a27fac3518937e76bec42b67a63ce62034981e3"
+      },
+      "deterministic": true,
+      "synthetic": true,
+      "duration_s": 90,
+      "supports": [
+        "DER A/B with low overlap: a backchannel starts before the previous turn ends"
+      ],
+      "cannot_support": [
+        "real crosstalk"
+      ],
+      "generator_arg": "three-overlap"
+    },
+    {
+      "id": "fleurs-fil-ph-subset",
+      "generator": null,
+      "external": {
+        "source": "google/fleurs, fil_ph, test split, on Hugging Face",
+        "license": "CC-BY-4.0",
+        "expected_layout": "FLEURS_DIR/test.tsv plus FLEURS_DIR/test/test/*.wav (the layout the Taglish agent downloaded to /tmp/notero-data/fleurs)",
+        "selection": "the K clips whose sha1(file name) sorts first, concatenated in that order with 0.5 s of silence between; reference = the tsv's normalized transcript column, joined",
+        "expected_when_present": {
+          "clips": 8,
+          "duration_s": 137.2,
+          "wav_sha256": "4a44f1e7ac53758b27dd492a91872f8fae438249190f181027e59d2779f04a5f",
+          "reference_sha256": "c0d7965bb754b8c82a86970d77517c92529c2c406f4271cb30bfa312fb77488f",
+          "note": "for the FLEURS fil_ph test split as downloaded on 2026-11-01; the harness records the actual hashes in each report, it does not enforce these"
+        }
+      },
+      "deterministic": true,
+      "synthetic": false,
+      "supports": [
+        "A/B regression of read-speech Tagalog accuracy on public data, identical audio for both builds"
+      ],
+      "cannot_support": [
+        "any claim about Taglish or code-switching (FLEURS Filipino is read, monolingual-ish sentences)",
+        "meeting speech: single speakers reading, studio-ish conditions",
+        "absolute WER: the concatenation changes VAD and windowing against per-clip decoding"
+      ]
+    }
+  ]
+}

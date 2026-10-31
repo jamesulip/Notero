@@ -139,6 +139,14 @@ func log(_ message: String) {
     logFileHandle?.write(line)
 }
 
+/// Where one decode window of the offline pass lies in the audio. `eval/regress.py`
+/// uses the list to say in WHICH window two runs of one binary first differ
+/// (`regress.py determinism`, FINDINGS 15/16).
+struct WindowSpan: Codable {
+    var startMs: Int
+    var endMs: Int
+}
+
 /// One run, machine-readable. What `eval/compare_language.py` reads.
 struct RunReport: Codable {
     var audio: String
@@ -169,6 +177,9 @@ struct RunReport: Codable {
     var commitLatencyWall: CommitLatencySummary?
     /// This process's memory accounting at named stages. A footprint, not model residency.
     var memory: [MemorySnapshot]?
+    /// Offline only: the decode windows, in order, so a difference between two runs can be
+    /// placed in a window. Absent from older binaries and from live replays.
+    var windows: [WindowSpan]?
 }
 
 let options = parse()
@@ -277,6 +288,7 @@ let asr: any SpeechRecognizing = timedASR
 var tokens: [Token] = []
 var detectedLanguage: String?
 var windowLanguages: [String?] = []
+var windowSpans: [WindowSpan] = []
 var offlineRegions: [SpeechRegion]?
 var liveStats: SessionStats?
 var liveConfig: SessionConfig?
@@ -348,6 +360,7 @@ if options.live {
     }
     let windows = OfflinePipeline.windows(for: regions, durationMs: source.durationMs)
     offlineRegions = regions
+    windowSpans = windows.map { WindowSpan(startMs: $0.startMs, endMs: $0.endMs) }
     if ProcessInfo.processInfo.environment["TRANSCRIBE_DEBUG_SPANS"] != nil {
         for region in regions {
             log(String(format: "  region %7.2f-%7.2f",
@@ -491,7 +504,8 @@ if let jsonURL = options.json {
         decodeTiming: decodeTiming,
         commitLatency: commitLatency.summary,
         commitLatencyWall: commitLatencyWall.summary,
-        memory: memory
+        memory: memory,
+        windows: windowSpans.isEmpty ? nil : windowSpans
     )
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

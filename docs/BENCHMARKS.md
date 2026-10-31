@@ -202,7 +202,11 @@ The pure build's WER per run, in order: 31.2, 36.7, 57.8, 32.0, 36.7, 33.6, 34.4
   and 57.0% WER, which is the invented-filler failure of FINDINGS 15, but the
   pure arm's best half is at 30.9%, so its threshold is 61.7% and 57.0% stays
   under it. The rule misses a collapse when an arm's ordinary WER is high. That
-  is why the filler-phrase count is reported beside it.
+  is why the filler-phrase count is reported beside it. **That rule has been replaced**
+  (see [Collapsed runs](#compare-two-builds): 15 points above a pooled level, or a filler
+  phrase): it counts run 8, so this arm has 2 collapsed runs of 12, not 1. The figures in
+  this section are as the P6 harness printed them; the committed
+  `eval/baselines/p6-f022c6e-synthetic-taglish.json` holds both counts.
 - **Whether a window needed the retry ladder separates the runs completely.** A
   window came back empty on its first attempt, and went through the ladder, in 9
   of the 24 runs (2 of 12 pure, 7 of 12 instrumented; the difference between the
@@ -371,7 +375,8 @@ demonstration of what a single significant result at n = 8 is worth, and of how
 far the median of 8 runs of the same code can move: the pure build's live WER
 median was 27.3% in the first session, 28.9% in the second and 23.8% here.
 Hence the line "CONFIRM BEFORE ACTING" on any significant verdict with fewer
-than 12 runs per arm.
+than 12 runs per arm. That one comparison was followed by a measurement of the false-positive
+rate, and by a stricter rule: see [How often this harness cries wolf](#how-often-this-harness-cries-wolf).
 
 ## Headline results
 
@@ -620,48 +625,87 @@ latency; the machine's load average at each launch; the environment.
 A failed run is reported as a failure and is not silently dropped.
 
 **Collapsed runs, reported apart from the median.** A single collapsed window is
-the dominant noise source on the synthetic clip, so each summary counts the runs
-that collapsed, by this rule, which is printed in every summary and comparison:
+the dominant noise source on the synthetic clip, so every summary and comparison
+counts the runs that collapsed, under ONE rule (`benchstats.COLLAPSE_RULE`), which
+is printed each time:
 
-> A run is **collapsed** if its WER is more than 2x the median WER of the arm's
-> best half of runs (the ceil(n/2) lowest), or if it produced fewer than 75% of
-> the reference's words.
+> A run is **collapsed** if its WER is more than **15 points** above the
+> **reference level**, or if it produced fewer than **75%** of the reference's
+> words, or if it contains an **invented-filler phrase** the reference lacks. The
+> reference level is the median of the best half (the ceil(n/2) lowest) of the runs
+> judged, **pooled over both arms** of a comparison.
 
-The rule is relative to the arm itself, so an arm that is uniformly bad has no
-collapsed runs. `compare` therefore also prints the candidate's runs above the
-*baseline's* threshold. Runs with invented-filler phrases that the reference
-does not contain ("thanks for watching") are counted as an explanation, and they
-play no part in the rule.
+Three things changed from the first cycle's rule ("more than 2x the arm's own
+best-half median, or fewer than 75% of the words"), and each has a reason in the
+data:
 
-**What `compare` computes.** For the median WER difference, a two-sided
-permutation test on the difference of medians (exact when there are at most
-250,000 arrangements, so up to 10 against 10 runs, and otherwise 100,000 seeded
-shuffles) and a seeded percentile bootstrap 95% interval (10,000 resamples). For
-the collapsed-run counts, Fisher's exact test, two-sided. The other rows (RTF,
-words, the live counters) carry a permutation p-value too. The WER row is the
-primary test and the rest are secondary and not corrected for multiple
-comparisons. Nothing assumes a distribution, and the median and the IQR describe
-a mixture of "fine" and "collapsed" runs better than a mean does.
+* **An additive margin, not a ratio.** At a typical 30% WER the old threshold was
+  60%. The 57.0% run of the P6 offline baseline, the one in which Whisper invented
+  a filler phrase over a window (finding 15), sat just under it and was never
+  counted: the baseline reported 1 collapsed run of 12 where there were 2. Over the
+  80 successful runs of the P6 baseline sessions, the largest excess over its level
+  of a run that nobody calls collapsed is **+10.9 points**, and the smallest excess
+  of a collapsed run is **+26.2 points** (that filler run); the other collapsed runs
+  are +26.2 to +30.5. 15 points is in the middle of that empty gap, 4.1 points clear
+  of the noisy side. One lost 30 s window of the 128-word clip costs about 25 points.
+  `tests/test_baselines.py` recomputes both figures from the committed runs.
+* **A pooled level.** Judged against itself, an arm that is bad in every run has no
+  collapsed run. Pooling the two arms of a comparison gives one level for both, so a
+  uniformly bad candidate is judged by the baseline's good runs (the pooled lowest half
+  is the good arm), and a permutation of the arm labels leaves the level unchanged.
+  On the lead's pre-P6 A/B (`eval/baselines/p6-lead-ab-main-vs-p6-branch.json`: main
+  gave 35.2, 60.9, 63.3, 59.4, 29.7, 57.0% and the P6 branch 24.2% six times) the old
+  rule counted 1 of main's 6 runs; this rule counts 4.
+* **A filler phrase counts.** A run containing "thank you for watching" or another
+  phrase of `FILLER_MARKERS` that the reference lacks is collapsed whatever else it got
+  right. Before, it was only an annotation.
 
-**The verdict line refuses.** It gives `NO VERDICT` when either arm has fewer
-than 8 successful runs, whatever the difference. It also refuses when the arms
-were not interleaved in one session, when they differ in audio, reference or
-mode, and it never says "equivalent": not significant means that the arms could
-not be told apart at this n. A difference counts as significant only when the
-permutation test gives p < 0.05 **and** the bootstrap interval excludes zero.
-At n = 8 the test has little power: a real difference smaller than the spread
-between collapsed and healthy runs will usually come out "not significant". It
-can also come out "significant" when nothing differs: an **A/A comparison of two
-byte-identical binaries at n = 8 gave a significant WER difference** (+2.3
-points, permutation p = 0.041, interval +0.4 to +3.9), see
-[the calibration run](#a-calibration-run-two-identical-binaries). The verdict
-line therefore adds **CONFIRM BEFORE ACTING** to any significant result with
-fewer than 12 runs per arm. Repeat it in a second interleaved session before you
-act on it.
-The tests that carry this are in `tests/test_benchstats.py`, with reference
-values worked out by hand or taken from published tables. When they were written,
-five deliberate bugs were put into the code one at a time, and the tests caught
-each of them.
+The 75% word floor is unchanged (collapsed runs: 57-66% of the reference's words;
+every other run: 88% or more).
+
+**What `compare` computes.** One decision rule (`benchstats.decide`), shared by
+`bench_runs.py compare` and by `regress.py`:
+
+1. At least 8 successful runs per arm, interleaved in one session; otherwise no verdict.
+2. For every metric, a two-sided permutation test on the **rank sum** (exact: up to
+   10 against 10 runs, otherwise 100,000 seeded shuffles), and for the collapsed
+   runs Fisher's exact test. The difference of medians is the **effect size**, not the
+   test statistic: at 8 against 8 the difference of medians ties on so many
+   arrangements that its smallest possible p is 0.0031 even for two completely
+   separated samples, which makes any correction over 17 or more tests impossible;
+   the rank sum reaches 0.00016.
+3. **Holm's correction over every tested metric together**, alpha = 0.05. A comparison
+   reports a dozen metrics, so "p < 0.05 on any of them" is wrong: read that way, the
+   table of an A/A comparison of two identical builds shows a "significant" metric in
+   11-24% of sessions (measured below), where the corrected rule gives 2-3%.
+4. An **effect-size floor** per metric (`benchstats.METRICS`): WER 2 points, RTF and
+   per-hop timing 5%, commit latency 10%, a counter one hop or two words, two collapsed
+   runs, words 4 or 3%. A significant difference smaller than that is reported as
+   "significant, below floor" and not flagged.
+5. **Timing is believed only on a quiet, balanced machine.** A timing metric may be
+   flagged only if every run has a load-average record, the median load at launch is
+   at most 2.0 in both arms, and the two arms' medians are within 1.0. Otherwise it is
+   printed as "indicative only (load)" with the reason, whatever its p-value. The P6
+   live session at median load 3.8-4.4 showed the instrumented binary 17% slower (replay RTF 1.003
+   against 0.859); the recheck at median 0.5-0.7 showed 1% (0.910 against 0.901).
+   `tests/test_baselines.py` pins both. The
+   threshold is a policy chosen on that one case, not a fitted constant; it only moves
+   wording from "regression" to "indicative", and never touches a WER, count or DER verdict.
+6. **One session only suspects.** The verdict says `SUSPECTED REGRESSION`, never "real".
+   A second, independent interleaved session of the same pair
+   (`regress.py --confirm-with REPORT.json`) tests only the metrics the first one flagged
+   (Holm over just those; a flagged metric the second session could not test counts with
+   p = 1) and calls a metric **CONFIRMED** when it reproduces in the same direction above
+   the floor, and, for a timing metric, on a quiet machine again. It refuses outright when
+   the first report compared different binaries or is the session itself. Results at fewer
+   than 12 runs per arm need that second session before anyone acts on them; for anything
+   that will change a default, so do results at 12.
+
+At n = 8 the rule has little power (below), and "not significant" never means
+"equivalent". The tests that carry this are in `tests/test_benchstats.py`; the
+reference values are worked out by hand (the rank-sum case of four values, Holm's
+adjustment of three p-values) or reproduced by a plain enumeration (the optimized exact
+permutation).
 
 **RTF moves with background load.** The lock serializes measured runs only.
 Builds and tests by other processes do not take it. In the baseline below, the
@@ -669,6 +713,162 @@ machine's load average was 2 to 6 for the whole session, and single offline runs
 came out up to 2 times slower than the median. The median and the IQR absorb
 that, and the per-run `loadavg_1m_at_launch` in each summary lets you see it. For
 a timing claim, run when the Mac is quiet and read the IQR.
+
+## Regression comparison in one command: `eval/regress.py`
+
+`bench_runs.py` runs one clip. A regression gate needs a defined **suite**, two builds
+built the same way, one collapse rule, one decision rule and ONE report. That is
+`regress.py`; it reuses `bench_runs.py` (a run, its scoring, its records), `benchstats.py`
+(the statistics), `der.py` (diarization error) and the fixture driver, and adds no model code.
+
+```bash
+# Two builds of any git revision (built from `git archive` into /tmp/notero-regress, never
+# inside the repository, cached by full commit sha), or WORKTREE for the working copy,
+# or a path to a `transcribe` you already have:
+python3 eval/regress.py --base addf5f8 --cand HEAD --suite quick
+python3 eval/regress.py --base BASE/transcribe --cand WORKTREE --suite full
+
+# A second, independent session of the same pair, to turn "suspected" into "confirmed":
+python3 eval/regress.py --base addf5f8 --cand HEAD --suite quick \
+    --confirm-with /tmp/notero-regress/reports/<first session>/report.json
+
+# One build, N runs, one file: is the transcript byte-identical? (the guard for findings 15 and 16)
+python3 eval/regress.py determinism --bin HEAD --runs 8
+```
+
+**Suites.** `quick`: the synthetic Taglish clip offline and live (8 runs per arm each) and
+DER on two synthetic multi-speaker clips (2 rounds per arm and clip). `full` adds the paused
+clip live (26 pauses of 1.2 s, so the silence boundary fires), the other five multi-speaker
+clips (3 rounds), and a FLEURS Filipino subset when `/tmp/notero-data/fleurs` exists
+(8 clips by sha1 of the file name, concatenated; read speech, **not** Taglish and not a
+meeting; skipped with a note when absent). Everything else is synthetic. On this Mac a
+`quick` session is about 25 minutes of exclusive machine time.
+
+**The lock, once per batch.** Measured runs take `/tmp/notero-team/bench-lock.sh` (when it
+exists; otherwise the report says it ran unlocked). A hold covers a whole number of ABBA blocks,
+sized to about 4 minutes (`--hold-seconds`), so each arm meets the same machine in every
+hold. Taking the lock once per run was tried first: behind five other agents' multi-minute
+holds, single runs waited from 3 minutes to over half an hour (7 runs took 35 minutes, and the 8th
+had waited 30 minutes when the stream was stopped), so a 320-run stream would have taken most of
+a day. A hold of about 4 minutes still waits a full queue cycle, about 25 minutes in a busy
+session; `--hold-seconds 600` halves the number of cycles for a long series, at the price of
+holding the lock longer each time.
+
+**Per series, the machine is recorded:** the load average at every launch, and `uptime`,
+`vm_stat` and `memory_pressure` before and after (pageouts during the series, compressor
+pages, free-memory percentage). The decision rule above uses the load record: a timing
+difference is never called a regression on a loaded machine, and the report prints why.
+
+**The report** (`report.md`, with `report.json` beside it and the raw runs under it) states the
+builds (commit, label, binary sha256), the machine, the model id, the interleave scheme, the
+collapse rule and the level both arms were judged by, then per series a table of median [range]
+for both arms, the difference, the rank-sum p, the Holm-adjusted p and a status; the collapse
+counts with the reason for each collapsed run (`wer`, `words`, `filler`); the load record; the
+DER table; the determinism of each arm (distinct transcripts, and where the first one diverges);
+warnings; and the verdict. A run or series that failed makes the session **INCOMPLETE**: the
+verdict starts with `INCOMPLETE (...)` and the exit code is 1, so a candidate that crashes can
+never read as "no significant difference". A metric that only one build reports (an older binary
+lacks the commit-latency fields) is listed as not tested, not dropped silently.
+`regress.py reanalyze DIR` redoes the analysis from the stored runs, which is what to do when
+the rule changes.
+
+**DER** comes from the raw diarizer spans that `transcribe` prints under
+`TRANSCRIBE_DEBUG_SPANS=1`, scored by `der.py` against the clip's RTTM. It is not in the Holm
+family: DER is a deterministic function of the diarizer's output, so where every run of an arm
+agrees a difference is exact, and a change of 2 points or more is reported as one; where the runs
+do not agree the row says so and is **descriptive only, never flagged**: two or three rounds of
+a varying DER all point the same way by chance on 18-38% of fixtures whose spread is a few
+points (simulated), so a varying DER needs `--rounds 8` and a look at the medians, or the
+nondeterminism fixed first. This is not `diarbench` (the speaker agent's
+tool, on its own branch); it measures the whole `transcribe` path.
+
+**Determinism.** `regress.py determinism --bin X --runs N` (and, automatically, each arm of
+every comparison) reports whether the N transcripts are byte-identical, the number of distinct
+ones, and the first divergence: the word index, its time, and the decode window it falls in.
+The window needs the `windows` list that the offline JSON report now carries (offline only;
+older binaries lack it, and the report then says the window is unknown).
+
+**Fixtures** (`eval/fixtures.json`, `eval/fixtures.py`): for each fixture the generator, the
+sha256 of the generated audio (regenerating gives identical bytes on this macOS; checked by
+generating twice), the reference, a `synthetic` flag, and what a number measured on it can and
+cannot support. `python3 eval/fixtures.py generate --out DIR` regenerates them into a scratch
+directory; `verify DIR` compares hashes; `list` prints the limits. The generators need macOS
+`say`; elsewhere the harness skips those series and says so.
+
+**Baselines** (`--baseline eval/baselines/NAME.json`): the committed P6 baseline, with its
+provenance, is in [`eval/baselines/`](../eval/baselines/README.md). `--baseline` names the base
+commit when `--base` is omitted, prints today's base arm next to the committed numbers, and warns
+on **baseline drift** when the hardware, CPU, memory, macOS release, model id or fixture hash
+differs. The committed runs were not interleaved with today's, so they are context and never a test.
+
+**CI.** The Linux job already runs `pytest`; it now also triggers on `eval/**`. The new tests
+need no model, no `/usr/bin/time -l` and no macOS command: the platform-dependent parts are
+tested with `sys.platform` forced. The real `regress.py` run needs a Mac, a model and the bench lock.
+
+## How often this harness cries wolf
+
+An A/A comparison (one binary against itself) has no true difference, so every flag it raises is
+a false positive. `eval/calibrate_aa.py` measures how often the rules do that, two ways.
+
+**Resampling** (2,000 sessions per pool, seed fixed, `eval/baselines/aa-calibration.json`): two
+arms of 8 runs are drawn from the P6 runs of ONE binary, the whole rule is applied, and the draw
+is repeated. A rate is followed by its Wilson 95% interval.
+
+| Pool of runs of ONE binary (draw) | Metrics tested | Table read naively: any p < 0.05 | P6 verdict (WER and collapsed runs only) | Holm | **Shipped rule** (Holm + floors) | Two sessions agree |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| offline-pure: 12 runs, with replacement (bootstrap) | 4 | 12.7% (11.3–14.2) | 1.7% (1.2–2.4) | 2.8% (2.2–3.6) | **2.4% (1.8–3.2)** | 0.0% (0.0–0.2) |
+| offline-instrumented: 12 runs, with replacement (bootstrap) | 4 | 10.8% (9.5–12.2) | 0.8% (0.5–1.3) | 2.4% (1.8–3.2) | **1.8% (1.3–2.4)** | 0.0% (0.0–0.2) |
+| live-pure: 32 runs, without replacement | 9 | 20.0% (18.3–21.8) | 1.7% (1.2–2.4) | 2.6% (2.0–3.4) | **2.6% (2.0–3.4)** | 0.0% (0.0–0.2) |
+| live-instrumented: 16 runs, without replacement | 10 | 23.8% (21.9–25.7) | 1.0% (0.6–1.5) | 2.2% (1.6–2.9) | **1.7% (1.2–2.3)** | 0.0% (0.0–0.2) |
+
+* **The requirement is met: an A/A session flags any metric at most 5% of the time, all
+  reported metrics together** (2.4%, 1.8%, 2.6% and 1.7%; every upper interval end is below 5%).
+  The shipped column is an upper bound: it counts timing flags without the load gate, which
+  can only remove flags.
+* **Read uncorrected, the same sessions show a "significant" metric 11-24% of the time.** Each
+  single test is sized correctly (4-5% per metric, `naive_flags_by_metric` in the JSON); it is
+  the number of metrics that does it. Holm over the whole table is what removes it.
+* **The P6 verdict line was already conservative** on these draws (1-2%), because it tested only
+  WER and the collapsed-run count. That makes the one observed A/A "significant" WER
+  (p = 0.041, two byte-identical copies, n = 8) an event that resampling gives about 1-2%:
+  either chance, or structure that iid draws do not have (drift, order). The real A/A runs below
+  are the check on that.
+* **Two sessions that must agree: 0 of 2,000** in every pool (upper interval end 0.2%).
+
+**Power, which is the other half of the picture.** Percentage of sessions in which the shipped rule
+flags a shift injected into arm B's runs (n = 8 per arm, floors and Holm applied, load gate not):
+
+| Shift injected into arm B | offline-pure | offline-instrumented | live-pure | live-instrumented |
+| --- | ---: | ---: | ---: | ---: |
+| WER +5 points | 16% | 28% | 48% | 100% |
+| WER +10 points | 29% | 63% | 99% | 100% |
+| RTF +10% | 9% | 3% | 24% | 5% |
+| RTF +20% | 33% | 6% | 77% | 25% |
+| mean per-decode RTF +20% | — | — | 38% | 50% |
+
+At n = 8 per arm the rule sees a 10-point WER shift on a tidy series and misses most 5-point shifts
+and most timing changes under 20%. That is the price of a 2-3% false-alarm rate across every metric
+at once, and it is why "no significant difference" is never "equivalent". The offline pools are the
+noisy ones: each holds a collapsed run, so their spread is wide. More runs per arm buy power
+(n = 12 is already exact-to-Monte-Carlo and slower); a quieter machine narrows RTF.
+
+**What the resampling cannot show** is slow drift or load between runs: its draws are iid. A real A/A
+session on the machine (`regress.py --base X --cand X`) is the check, and `calibrate_aa.py stream`
+turns a long stream of real runs into blocks of 8 against 8. **No real A/A session was run this
+cycle**: behind the shared bench lock (8 to 10 waiters, about 25 minutes of waiting per hold) it would
+have taken hours, and the lead decided the resampling above was the right evidence for the rule. The
+false-positive rate in the table is therefore a resampling result, with iid draws.
+
+**The one real session** is kept in `eval/baselines/sessions/quick-ab-addf5f8-vs-57dcc14/` (report,
+data, plan, and a README that says what did not run): `regress.py --suite quick`, pre-P6 `addf5f8`
+against `57dcc14`, n = 8 per arm, through the lock. Its offline and live halves ran; **its DER half and
+the real A/A did not** (lock contention, stopped by the lead). Offline WER 34.4% [30.5-58.6] to 24.2%
+[24.2-24.2] (-10.2 points, Holm-adjusted p = 0.002: a suspected improvement), 3 of 8 collapsed runs to
+0 (Fisher p = 0.20, not significant at n = 8), 8 distinct transcripts in 8 runs against byte-identical.
+The offline RTF gap of -10% is not believed: median load 6.4 against a limit of 2. Live: nothing significant
+(WER 28.1% to 26.2%, p = 0.12; replay RTF +5%, p = 0.23, at a quiet median load of 1.2), and **both builds
+gave 8 distinct transcripts in 8 live runs**: the P6 branch is deterministic offline only. One session
+suspects and does not confirm; this matches the lead's own n = 6 offline A/B.
 
 ## Test material that exists
 
@@ -783,7 +983,11 @@ in its own worktree, and this repository's benchmark files do not duplicate it:
 | `eval/benchstats.py` | benchmark | The statistics below. Import it; do not copy it. |
 
 (File names are those of the diarization worktree's commits `b343fdf` and
-`346308b` at the time of writing; they are not in this branch.)
+`346308b` at the time of writing; they are not in this branch. Since then `der.py` and
+`make_multispeaker.py` have been merged here, and `eval/regress.py` uses them: its DER series
+runs the whole `transcribe` path on the synthetic multi-speaker clips and scores the raw spans
+with `der.py`; see [the regression command](#regression-comparison-in-one-command-evalregresspy).
+`diarbench` and `run_diarization_ab.py` are still not in this branch.)
 
 **The metric.** Diarization error rate is
 
