@@ -52,7 +52,7 @@ public final class AudioCapture: @unchecked Sendable {
     private let stateLock = NSLock()
     private var input: (any LaneCapturing)?
     private var chains: [CaptureLane: LaneChain] = [:]
-    private var archive: ArchiveWriter?
+    private var archive: (any ArchiveWriting)?
     private var onAudio: (@Sendable (CapturedAudio) -> Void)?
     private var _isMuted = false
     private var _isPaused = false
@@ -126,19 +126,25 @@ public final class AudioCapture: @unchecked Sendable {
                   makeInput: AudioCapture.hardwareInput)
     }
 
-    /// The seam tests use: the lane source is built by `makeInput` instead of
+    /// The seams tests use: the lane source is built by `makeInput` instead of
     /// being the microphone or the system tap, so the whole chain from a
-    /// buffer to the archive and the working-copy bytes runs with no device.
+    /// buffer to the archive and the working-copy bytes runs with no device; and
+    /// the archive by `makeArchive`, so that one that stalls can stand in for the
+    /// encoder.
     init(source: CaptureSource, microphoneUID: String?,
-         makeInput: @escaping @Sendable (CaptureSource, String?) -> any LaneCapturing) {
+         makeInput: @escaping @Sendable (CaptureSource, String?) -> any LaneCapturing,
+         makeArchive: @escaping @Sendable (URL, Double, [CaptureLane]) throws -> any ArchiveWriting
+            = { try ArchiveWriter(url: $0, sampleRate: $1, lanes: $2) }) {
         self.source = source
         self.lanes = source.lanes
         self.microphoneUID = microphoneUID
         self.makeInput = makeInput
+        self.makeArchive = makeArchive
     }
 
     private let microphoneUID: String?
     private let makeInput: @Sendable (CaptureSource, String?) -> any LaneCapturing
+    private let makeArchive: @Sendable (URL, Double, [CaptureLane]) throws -> any ArchiveWriting
 
     private static func hardwareInput(_ source: CaptureSource,
                                       _ microphoneUID: String?) -> any LaneCapturing {
@@ -202,9 +208,8 @@ public final class AudioCapture: @unchecked Sendable {
             }
             chains[lane] = chain
         }
-        let writer = try archiveURL.map {
-            try ArchiveWriter(url: $0, sampleRate: rate, lanes: lanes)
-        }
+        let lanes = self.lanes
+        let writer = try archiveURL.map { try makeArchive($0, rate, lanes) }
         writer?.onFailure = { [weak self] error in
             self?.onNotice?(.recordingNotSaved(error.localizedDescription))
         }
@@ -222,7 +227,7 @@ public final class AudioCapture: @unchecked Sendable {
         do {
             try input.start { [weak self] frames in self?.handle(frames) }
         } catch {
-            let closing = stateLock.withLock { () -> ArchiveWriter? in
+            let closing = stateLock.withLock { () -> (any ArchiveWriting)? in
                 defer {
                     archive = nil
                     self.input = nil
@@ -237,13 +242,26 @@ public final class AudioCapture: @unchecked Sendable {
     }
 
     /// Stops capture and closes the archive. Returns what was written.
+    ///
+    /// - Parameter closeWithin: how long to wait for the archive to close, or nil
+    ///   to wait as long as it takes. A caller on the main actor passes one
+    ///   (`LiveSession`): an encoder that never answered froze Stop, and the
+    ///   quit gate's 30 s timer with it, since both ran on the thread that was
+    ///   waiting. The close is not abandoned when the wait ends -- it carries on in
+    ///   the background and the file is finished when the encoder answers -- but
+    ///   `closed` is false and `frames` is what had been handed over.
+    ///
+    /// `frames` is read after the close, and is what the file holds: every frame
+    /// handed over on a clean close, and less after a disk-low stop or a failed
+    /// write (finding 32).
     @discardableResult
-    public func stop() -> (frames: AVAudioFramePosition, sampleRate: Int) {
+    public func stop(closeWithin timeout: TimeInterval? = nil)
+        -> (frames: AVAudioFramePosition, sampleRate: Int, closed: Bool) {
         guard isRunning else {
-            return (stateLock.withLock { archive?.frameCount ?? 0 }, archiveSampleRate)
+            return (stateLock.withLock { archive?.frameCount ?? 0 }, archiveSampleRate, true)
         }
         stateLock.withLock { input }?.stop()
-        let closing = stateLock.withLock { () -> ArchiveWriter? in
+        let closing = stateLock.withLock { () -> (any ArchiveWriting)? in
             defer {
                 archive = nil
                 input = nil
@@ -252,11 +270,29 @@ public final class AudioCapture: @unchecked Sendable {
             }
             return archive
         }
-        let frames = closing?.frameCount ?? 0
         let rate = archiveSampleRate
-        closing?.finish()
+        var closed = true
+        if let closing {
+            if let timeout {
+                closed = Self.close(closing, within: timeout)
+            } else {
+                closing.finish()
+            }
+        }
+        let frames = closing?.frameCount ?? 0
         isRunning = false
-        return (frames, rate)
+        return (frames, rate, closed)
+    }
+
+    /// `finish()` on a thread of its own, waited for at most `timeout`. True when it
+    /// returned in time. The thread is left to finish by itself when it did not.
+    private static func close(_ archive: any ArchiveWriting, within timeout: TimeInterval) -> Bool {
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            archive.finish()
+            done.signal()
+        }
+        return done.wait(timeout: .now() + timeout) == .success
     }
 
     /// Returns once the archive has taken everything handed to it so far. For

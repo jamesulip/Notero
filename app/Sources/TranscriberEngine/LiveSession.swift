@@ -175,6 +175,12 @@ public final class LiveSession {
     /// with no model. When set, nothing is loaded.
     @ObservationIgnored var decoderOverride: (@MainActor (SessionConfig) -> LiveDecoder)?
 
+    /// How long Stop waits for the archive to close before it goes on without it.
+    /// A healthy close takes milliseconds (a six-hour index is 4 MB). Below the quit
+    /// gate's 30 s, so that a quit gets its answer from here and not from the gate's
+    /// timeout. Tests shorten it.
+    @ObservationIgnored var archiveCloseTimeout: TimeInterval = 10
+
     private var capture: AudioCapture?
     private var cache: WavWriter?
     private var decoder: LiveDecoder?
@@ -372,8 +378,15 @@ public final class LiveSession {
         guard let capture, let id = recordingId else { return nil }
         state = .finishing
 
-        let archive = capture.stop()
+        // Taken out of the session first, so that a second stop during the wait finds
+        // nothing to stop. Closed off the main actor: `stop` ends in the encoder's
+        // `finishWriting`, which was a bare wait on this thread, and an encoder that
+        // never answered froze the window, Stop and the quit gate's own timer.
         self.capture = nil
+        let archive = await Self.stopCapture(capture, closeWithin: archiveCloseTimeout)
+        if !archive.closed {
+            notices.append(.archiveNotClosed(seconds: Int(archiveCloseTimeout.rounded())))
+        }
 
         // `removeTap` can race the final callback. Close the stream only after
         // capture stops, then wait until every yielded chunk has reached the
@@ -430,6 +443,18 @@ public final class LiveSession {
         isPaused = false
         state = .ready
         return result
+    }
+
+    /// `capture.stop(closeWithin:)` on a thread that is not the main one, and not one
+    /// of the cooperative pool's either: it blocks, up to `closeWithin`.
+    private static func stopCapture(
+        _ capture: AudioCapture, closeWithin: TimeInterval
+    ) async -> (frames: AVAudioFramePosition, sampleRate: Int, closed: Bool) {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(returning: capture.stop(closeWithin: closeWithin))
+            }
+        }
     }
 
     /// The moment to bookmark. Counted from the audio received rather than a

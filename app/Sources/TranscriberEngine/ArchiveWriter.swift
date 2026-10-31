@@ -3,6 +3,24 @@ import CoreMedia
 import Foundation
 import TranscriberCore
 
+/// What `AudioCapture` needs of an archive: `ArchiveWriter` is the real one, and
+/// a test passes one that stalls, so that "a hung encoder cannot freeze Stop" is
+/// tested against a writer that actually hangs and not against a timeout that
+/// the writer itself honours.
+protocol ArchiveWriting: AnyObject, Sendable {
+    var fileFormat: AVAudioFormat { get }
+    /// The audio in the file: every frame handed over on a clean close, and only
+    /// what was written once writing has stopped early.
+    var frameCount: AVAudioFramePosition { get }
+    var failure: (any Error)? { get }
+    var onFailure: (@Sendable (any Error) -> Void)? { get set }
+    func write(_ buffers: [CaptureLane: AVAudioPCMBuffer])
+    /// Closes the file. May take as long as the encoder does; the caller bounds
+    /// the wait (`AudioCapture.stop(closeWithin:)`).
+    func finish()
+    func settle()
+}
+
 /// Writes the archival AAC file off the audio thread.
 ///
 /// `AVAssetWriter.append` encodes and hits the disk. Doing that inside the
@@ -38,6 +56,11 @@ final class ArchiveWriter: @unchecked Sendable {
     /// writer is declared stuck. A healthy encoder takes one in milliseconds.
     private static let stallLimit: TimeInterval = 30
 
+    /// How long `close` waits for `finishWriting` before it gives up on the
+    /// thread. Closing a six-hour recording writes a 4 MB index and takes well
+    /// under a second; a writer that has not answered in this long is not going to.
+    private static let closeLimit: TimeInterval = 30
+
     /// Touched only on `queue`, after `init`.
     private var writer: AVAssetWriter?
     private var input: AVAssetWriterInput?
@@ -46,6 +69,9 @@ final class ArchiveWriter: @unchecked Sendable {
     private let lock = NSLock()
     private var frames: AVAudioFramePosition = 0
     private var handedOver: AVAudioFramePosition = 0
+    /// False once `finish()` has begun or writing has stopped early: a buffer that
+    /// arrives after that is not counted and not written, so `frames` is the file.
+    private var accepting = true
     private let lanes: [CaptureLane]
     /// What the device delivers, and what `write` copies.
     private let format: AVAudioFormat
@@ -67,6 +93,15 @@ final class ArchiveWriter: @unchecked Sendable {
     struct Stalled: LocalizedError {
         var errorDescription: String? { "the audio encoder stopped accepting audio" }
     }
+
+    /// `finishWriting` did not answer. What earlier fragments hold still plays.
+    struct CloseStalled: LocalizedError {
+        var errorDescription: String? { "the audio file did not finish closing" }
+    }
+
+    /// What the file holds once `close` has run: nil while that is not known
+    /// (the encoder never answered). Touched only on `queue`.
+    private var durable: AVAudioFramePosition?
 
     init(url: URL, sampleRate: Double, lanes: [CaptureLane], disk: DiskSpace = .system) throws {
         self.lanes = lanes
@@ -260,7 +295,7 @@ final class ArchiveWriter: @unchecked Sendable {
     /// not a shortening of the recording.
     func write(_ buffers: [CaptureLane: AVAudioPCMBuffer]) {
         let count = lanes.compactMap { buffers[$0]?.frameLength }.min() ?? 0
-        guard count > 0,
+        guard count > 0, lock.withLock({ accepting }),
               let copy = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: count)
         else { return }
         copy.frameLength = count
@@ -276,16 +311,20 @@ final class ArchiveWriter: @unchecked Sendable {
         }
 
         // Counted in what the file holds, so the length reported is the file's.
+        // Counted and queued under one lock, so that `finish()` -- which closes the
+        // door under the same lock before it queues the close -- cannot fall
+        // between the two and leave a buffer counted that is never written. Held
+        // strongly: every buffer that was accepted is written, even if the owner
+        // lets go of the writer before the queue has drained.
         lock.withLock {
+            guard accepting else { return }
             handedOver += AVAudioFramePosition(count)
             frames = converter == nil
                 ? handedOver
                 : AVAudioFramePosition((Double(handedOver) * fileFormat.sampleRate
                                         / format.sampleRate).rounded())
+            queue.async { self.commit(copy) }
         }
-        // Held strongly: every buffer that was accepted is written, even if the
-        // owner lets go of the writer before the queue has drained.
-        queue.async { self.commit(copy) }
     }
 
     /// The disk check and the write, on `queue`.
@@ -363,8 +402,25 @@ final class ArchiveWriter: @unchecked Sendable {
     }
 
     /// Closes the file now, while closing it can still succeed, and reports why.
+    ///
+    /// From here on the length reported is what the file holds. It was every frame
+    /// handed over, which after a disk-low stop was 60 s in a probe while the file
+    /// held 4.0 s; the recording is still 60 s long (the working copy holds it), but
+    /// a caller that asks the *archive* how long it is must be told the truth.
     private func stop(because error: any Error) {
         close()
+        let report = lock.withLock { () -> (@Sendable (any Error) -> Void)? in
+            accepting = false
+            frames = min(frames, durable ?? framesAppended)
+            guard _failure == nil else { return nil }
+            _failure = error
+            return _onFailure
+        }
+        report?(error)
+    }
+
+    /// Records a failure once, and says so.
+    private func fail(_ error: any Error) {
         let report = lock.withLock { () -> (@Sendable (any Error) -> Void)? in
             guard _failure == nil else { return nil }
             _failure = error
@@ -373,40 +429,63 @@ final class ArchiveWriter: @unchecked Sendable {
         report?(error)
     }
 
+    /// What `writer` left in the file, in frames at the file's rate: everything
+    /// appended when it closed cleanly, and otherwise only what the last complete
+    /// fragment holds, read back from the file.
+    private func durableFrames(after writer: AVAssetWriter) -> AVAudioFramePosition {
+        if writer.status == .completed { return framesAppended }
+        guard let file = try? AVAudioFile(forReading: url), file.length > 0 else { return 0 }
+        return min(framesAppended, file.length)
+    }
+
     /// Finalizes the file: the last fragment, then the closing index.
     ///
     /// Every way out of a recording ends here -- `finish()`, a failed write, a
     /// disk running low, and the writer being let go. A recording that wrote no
-    /// frame at all has no audio to keep, so its empty file is removed rather
-    /// than left behind as something that looks like a recording; a file that
-    /// holds audio is never removed, even when the writer failed, because what
-    /// the last complete fragment holds still plays.
+    /// frame at all has no audio to keep, so its empty file is removed rather than
+    /// left behind as something that looks like a recording; a file that holds
+    /// audio is never removed, even when the writer failed, because what the last
+    /// complete fragment holds still plays.
+    ///
+    /// The wait for `finishWriting` is bounded (`closeLimit`). It was a bare
+    /// semaphore wait, and a hung encoder held the thread for good.
     private func close() {
         guard let writer, let input else { return }
         self.writer = nil
         self.input = nil
-        guard writer.status == .writing else { return }
+        guard writer.status == .writing else {
+            durable = durableFrames(after: writer)
+            return
+        }
         if framesAppended == 0 {
             writer.cancelWriting()
+            durable = 0
             return
         }
         input.markAsFinished()
         let finished = DispatchSemaphore(value: 0)
-        writer.finishWriting { finished.signal() }
-        finished.wait()
+        // The writer is held by its own completion, so that a close that is given
+        // up on is still finished when the encoder gets round to it.
+        let held = Held(writer)
+        writer.finishWriting { _ = held; finished.signal() }
+        guard finished.wait(timeout: .now() + Self.closeLimit) == .success else {
+            durable = nil
+            fail(CloseStalled())
+            return
+        }
+        durable = durableFrames(after: writer)
         if writer.status == .failed, let error = writer.error {
-            let report = lock.withLock { () -> (@Sendable (any Error) -> Void)? in
-                guard _failure == nil else { return nil }
-                _failure = error
-                return _onFailure
-            }
-            report?(error)
+            lock.withLock { frames = min(frames, durable ?? framesAppended) }
+            fail(error)
         }
     }
 
     /// Closes the file, and does mean *closes*: the last fragment is written
     /// and the file finalized before this returns.
     func finish() {
+        // The door shuts first, under the lock `write` counts under: a buffer is
+        // either queued ahead of the close or refused, never counted and lost.
+        lock.withLock { accepting = false }
         queue.sync { close() }
     }
 
@@ -415,6 +494,14 @@ final class ArchiveWriter: @unchecked Sendable {
     func settle() {
         queue.sync {}
     }
+}
+
+extension ArchiveWriter: ArchiveWriting {}
+
+/// Keeps an `AVAssetWriter` alive until the handler that holds this runs.
+private final class Held: @unchecked Sendable {
+    let writer: AVAssetWriter
+    init(_ writer: AVAssetWriter) { self.writer = writer }
 }
 
 /// Whether the archive of a recording can be played.
