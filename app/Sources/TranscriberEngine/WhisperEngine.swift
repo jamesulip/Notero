@@ -48,10 +48,9 @@ public actor WhisperEngine: SpeechRecognizing {
     private var inFlight: LoadInFlight?
     private var nextWaiterId = 0
 
-    /// The model that a switch replaces, kept until the new one is loaded so a
-    /// failed switch can put it back. Held on the actor and not in a local so
-    /// that `unload()` can drop it while the switch is still loading.
-    private var replaced: (pipeline: WhisperKit, model: String)?
+    /// Counts releases. A switch that fails puts the old model back only if no
+    /// release happened while it was loading.
+    private var releases = 0
 
     public init(modelsDirectory: URL) {
         self.modelsDirectory = modelsDirectory
@@ -103,15 +102,22 @@ public actor WhisperEngine: SpeechRecognizing {
         }
 
         inFlight = LoadInFlight(model: model)
-        if let previous = pipeline, let previousName = currentModel {
-            replaced = (previous, previousName)
-        }
+        // The model being replaced is released BEFORE the new one loads. Holding
+        // it until the switch succeeded meant both were resident at the peak:
+        // 2458 MB of Neural Engine memory for Balanced to Fast, against 1580 MB
+        // for either alone, and about 4.8 GB for Balanced to Best, which on a
+        // 16 GB Mac is wired memory that cannot be compressed or swapped. Nothing
+        // is given up: `pipeline` is nil while the new model loads either way, so
+        // no decode could have used the old one. A failed switch loads the old
+        // model again, from the compile cache.
+        let replacedName = currentModel
+        let releasesAtStart = releases
         pipeline = nil
+        currentModel = nil
 
         let started = Date()
         do {
             let loaded = try await makePipeline(model, modelsDirectory, progress)
-            replaced = nil
             pipeline = loaded
             currentModel = model
             loadMs = Int(Date().timeIntervalSince(started) * 1000)
@@ -119,14 +125,17 @@ public actor WhisperEngine: SpeechRecognizing {
             finishLoad(.loaded)
         } catch {
             // Leave the working model in place rather than no model at all --
-            // a failed switch should not take the session down with it. Unless
-            // `unload()` ran meanwhile: that dropped `replaced`, and a model
-            // someone asked to release is not brought back by a failure.
-            if let back = replaced {
-                pipeline = back.pipeline
-                currentModel = back.model
+            // a failed switch should not take the session down with it. Not if
+            // it was released while this loaded: that is someone's decision, and
+            // a failure does not undo it. The reload is one attempt, quiet; if it
+            // fails too (or the caller was cancelled and the reload with it) the
+            // engine is empty and the next `load` starts clean.
+            if let replacedName, releases == releasesAtStart,
+               let back = try? await makePipeline(replacedName, modelsDirectory, nil),
+               releases == releasesAtStart, pipeline == nil {
+                pipeline = back
+                currentModel = replacedName
             }
-            replaced = nil
             // A cancelled owner may report its cancellation as another error
             // (a URLSession task, a Core ML wrapper), so the task is asked too.
             let cancelled = error is CancellationError || Task.isCancelled
@@ -200,7 +209,7 @@ public actor WhisperEngine: SpeechRecognizing {
     public func unload() {
         pipeline = nil
         currentModel = nil
-        replaced = nil
+        releases += 1
         loadMs = 0
     }
 

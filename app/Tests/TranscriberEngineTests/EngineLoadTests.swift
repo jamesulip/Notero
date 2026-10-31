@@ -306,4 +306,66 @@ final class EngineLoadTests: XCTestCase {
             XCTFail("expected cancelled, got \(String(describing: await outcome.result))")
         }
     }
+
+    // MARK: - A switch holds one model at a time
+
+    private final class Weak: @unchecked Sendable {
+        private let lock = NSLock()
+        private var items: [WeakRef] = []
+        struct WeakRef { weak var kit: WhisperKit? }
+        func add(_ kit: WhisperKit) { lock.withLock { items.append(WeakRef(kit: kit)) } }
+        func alive(_ index: Int) -> Bool { lock.withLock { index < items.count && items[index].kit != nil } }
+        var count: Int { lock.withLock { items.count } }
+    }
+
+    /// Releasing the model a switch replaces before the new one loads is what
+    /// keeps the Neural Engine at one model's memory during the switch (2458 MB
+    /// at the peak of Balanced to Fast when both were held, 1580 MB alone).
+    func testTheReplacedModelIsReleasedBeforeTheNewOneLoads() async throws {
+        let gate = Gate()
+        await gate.release()
+        let built = Weak()
+        let firstAliveWhileSecondLoads = Mutex<Bool?>(nil)
+        let engine = WhisperEngine(modelsDirectory: FileManager.default.temporaryDirectory) { model, _, _ in
+            if model == "b" { firstAliveWhileSecondLoads.withLock { $0 = built.alive(0) } }
+            try await gate.enter(model)
+            let kit = try await WhisperKit(WhisperKitConfig(verbose: false, load: false, download: false))
+            built.add(kit)
+            return kit
+        }
+        try await engine.load(model: "a", progress: nil)
+        XCTAssertEqual(built.count, 1)
+        XCTAssertTrue(built.alive(0), "the first model should be loaded now")
+
+        await gate.close()
+        let outcome = Outcome()
+        let task = call(engine, model: "b", into: outcome)
+        await waitUntilStarted(gate, 2)
+        let whileLoading = await engine.loadedModel
+        XCTAssertNil(whileLoading, "nothing is loaded while a switch loads, and the engine should say so")
+        await gate.release()
+        await task.value
+
+        let alive = firstAliveWhileSecondLoads.withLock { $0 }
+        XCTAssertEqual(alive, false, "the model being replaced was still resident while the new one loaded")
+        let loaded = await engine.loadedModel
+        XCTAssertEqual(loaded, "b")
+    }
+
+    /// The cost of that: a failed switch loads the old model again, once.
+    func testAFailedSwitchLoadsTheOldModelAgain() async throws {
+        let gate = Gate()
+        await gate.release()
+        let engine = engine(gate)
+        try await engine.load(model: "good", progress: nil)
+
+        await gate.setFailing(["bad"])
+        do { try await engine.load(model: "bad", progress: nil); XCTFail("the switch was meant to fail") }
+        catch {}
+
+        let loaded = await engine.loadedModel
+        XCTAssertEqual(loaded, "good", "a failed switch left no model")
+        let started = await gate.started
+        XCTAssertEqual(started, ["good", "bad", "good"])
+    }
 }
