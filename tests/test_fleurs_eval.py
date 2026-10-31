@@ -662,3 +662,82 @@ def test_the_collision_file_loads_without_its_comments():
     assert {"pa", "iba", "tubig", "halos"} <= tokens
     assert not any(t.startswith("#") or t != t.lower() or " " in t for t in tokens)
     assert "greenland" not in tokens and "hydrogen" not in tokens     # foreign names and English terms stay English
+
+
+def test_ids_selects_items_and_unknown_ids_are_refused(prepared, tmp_path, capsys):
+    fake = make_fake(tmp_path / "fake", "exact")
+    assert fe.main(["decode", "--work", str(prepared), "--set", "longform", "--no-lock", "--ids", "lf2",
+                    "--arm", f"x|{fake}"]) == 0
+    done = sorted(p.name for p in (prepared / "decode" / "longform" / "x").glob("*.r0.json"))
+    assert done == ["lf2.r0.json"]
+    assert fe.main(["decode", "--work", str(prepared), "--set", "longform", "--no-lock", "--ids", "lf9",
+                    "--arm", f"x|{fake}"]) == 2
+    assert "not in the longform set: lf9" in capsys.readouterr().err
+
+
+# ---- abrupt starts -----------------------------------------------------------
+
+def tone(seconds: float, amplitude: int, period: int = 40) -> array.array:
+    return array.array("h", [amplitude if (i // (period // 2)) % 2 else -amplitude
+                             for i in range(int(seconds * 16000))])
+
+
+def quiet(seconds: float) -> array.array:
+    return array.array("h", bytes(2 * int(seconds * 16000)))
+
+
+def test_speech_onset_finds_the_first_loud_frame_on_a_frame_boundary():
+    samples = quiet(0.5) + tone(1.0, 8000)
+    assert fe.speech_onset(samples) == 8000                    # 0.5 s at 16 kHz
+    assert fe.speech_onset(tone(1.0, 8000)) == 0                # already starts at speech
+    assert fe.speech_onset(quiet(1.0)) == 0                     # nothing to find: leave it alone
+    assert fe.speech_onset(array.array("h")) == 0 and fe.speech_onset(array.array("h", [5] * 50)) == 0
+
+
+def test_speech_onset_tracks_the_recordings_own_level_and_ignores_a_noise_floor():
+    noise = tone(0.4, 30)                                       # a steady hiss, 0.4% of the speech level
+    samples = noise + tone(1.0, 8000)
+    assert fe.speech_onset(samples) == 6400                     # 0.4 s: the hiss is not speech
+    soft = noise + tone(1.0, 400)                               # a quiet speaker: the onset is relative
+    assert fe.speech_onset(soft) == 6400
+    loud_hiss = tone(0.4, 150) + tone(1.0, 8000)                # a noisier room: 150 is below 10% of 8000
+    assert fe.speech_onset(loud_hiss) == 6400
+    faint = tone(0.4, 3) + tone(1.0, 50)                        # a very quiet recording: 3 against 50
+    assert fe.speech_onset(faint) == 6400
+
+
+def test_trim_to_onset_keeps_every_sample_from_the_onset_on():
+    samples = quiet(0.3) + tone(0.5, 5000)
+    trimmed = fe.trim_to_onset(samples)
+    assert len(trimmed) == len(samples) - 4800
+    assert list(trimmed) == list(samples[4800:]) and trimmed[0] != 0
+
+
+def test_add_abrupt_writes_trimmed_copies_with_the_same_references(prepared, capsys):
+    manifest = json.loads((prepared / "manifest.json").read_text())
+    # The fixtures start with speech at sample 0, so make one with a lead-in to check the trim.
+    first = manifest["sets"]["subset"][0]
+    lead = quiet(0.5) + fe.read_pcm16_mono(Path(first["wav"]).read_bytes())[1]
+    Path(first["wav"]).write_bytes(fe.wav_bytes(lead))
+    assert fe.main(["add-abrupt", "--work", str(prepared), "--n", "3"]) == 0
+    out = capsys.readouterr().out
+    assert "3 abrupt-start utterances" in out
+    after = json.loads((prepared / "manifest.json").read_text())
+    abrupt = after["sets"]["abrupt"]
+    assert [a["id"] for a in abrupt] == [f"{s['id']}-abrupt" for s in after["sets"]["subset"][:3]]
+    assert abrupt[0]["ref"] == first["ref"] and abrupt[0]["trimmed_s"] == pytest.approx(0.5, abs=0.02)
+    assert abrupt[0]["wav"] != first["wav"]
+    trimmed_samples = fe.read_pcm16_mono(Path(abrupt[0]["wav"]).read_bytes())[1]
+    assert len(trimmed_samples) == len(lead) - 8000             # the file on disk has the lead-in cut off
+    assert abrupt[0]["duration_s"] == pytest.approx(first["duration_s"], abs=0.02)   # the lead-in is gone, the speech is whole
+    assert after["sets"]["subset"] == manifest["sets"]["subset"]          # the other sets are untouched
+    assert not (prepared / "manifest.json.tmp").exists()
+
+
+def test_abrupt_set_goes_through_decode_and_score(prepared, tmp_path, capsys):
+    fe.main(["add-abrupt", "--work", str(prepared), "--n", "2"])
+    fake = make_fake(tmp_path / "fake", "exact")
+    capsys.readouterr()
+    assert fe.main(["decode", "--work", str(prepared), "--set", "abrupt", "--no-lock", "--arm", f"x|{fake}"]) == 0
+    assert fe.main(["score", "--work", str(prepared), "--set", "abrupt", "--arm", "x"]) == 0
+    assert "| x | 2 |" in capsys.readouterr().out

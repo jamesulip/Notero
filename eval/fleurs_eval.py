@@ -339,6 +339,47 @@ def render_longform(clips: Sequence[array.array], gaps: Sequence[float]) -> tupl
 
 
 # --------------------------------------------------------------------------
+# Abrupt starts (pure)
+# --------------------------------------------------------------------------
+
+ONSET_FRAME_MS = 10
+ONSET_RELATIVE_LEVEL = 0.10      # a frame is speech when its RMS is 10% (-20 dB) of the loud frames'
+
+
+def speech_onset(samples: array.array, rate: int = SAMPLE_RATE) -> int:
+    """Index of the first sample of the first speech frame, or 0 if there is
+    none. Frames are 10 ms; a frame is speech when its RMS reaches 10% of the
+    95th-percentile frame RMS, which tracks the recording's own level and
+    noise floor and not a fixed number."""
+    frame = rate * ONSET_FRAME_MS // 1000
+    count = len(samples) // frame
+    if count == 0:
+        return 0
+    rms = []
+    for k in range(count):
+        chunk = samples[k * frame:(k + 1) * frame]
+        rms.append(math.sqrt(sum(x * x for x in chunk) / frame))
+    loud = sorted(rms)[int(0.95 * (count - 1))]
+    if loud <= 0:
+        return 0
+    threshold = ONSET_RELATIVE_LEVEL * loud
+    for k, level in enumerate(rms):
+        if level >= threshold:
+            return k * frame
+    return 0
+
+
+def trim_to_onset(samples: array.array, rate: int = SAMPLE_RATE) -> array.array:
+    """The same audio with everything before the first speech frame cut away,
+    so that speech begins at sample 0 with no lead-in. This is the condition
+    that made the first window of the synthetic clip collapse (docs/FINDINGS.md
+    15, 16): a decode whose first token is refused. Real recordings start this
+    way when a window begins at a hard cut: a range re-transcribed from the
+    middle of a meeting, a clip cut from a longer file."""
+    return samples[speech_onset(samples, rate):]
+
+
+# --------------------------------------------------------------------------
 # Scoring (pure)
 # --------------------------------------------------------------------------
 
@@ -773,6 +814,35 @@ def command_prepare(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_add_abrupt(args: argparse.Namespace) -> int:
+    """Add an 'abrupt' set: the first N subset utterances with the leading
+    silence cut away, same references. Rewrites the manifest atomically; the
+    existing sets and audio are untouched."""
+    manifest = load_manifest(args.work)
+    items = []
+    for entry in manifest["sets"]["subset"][: args.n]:
+        rate, samples = read_pcm16_mono(Path(entry["wav"]).read_bytes())
+        trimmed = trim_to_onset(samples, rate)
+        uid = entry["id"] + "-abrupt"
+        path = args.work / "audio" / f"{uid}.wav"
+        data = wav_bytes(trimmed)
+        path.write_bytes(data)
+        item = dict(entry)
+        item.update(id=uid, wav=str(path), sha256=hashlib.sha256(data).hexdigest(),
+                    duration_s=round(len(trimmed) / SAMPLE_RATE, 3),
+                    trimmed_s=round((len(samples) - len(trimmed)) / SAMPLE_RATE, 3))
+        items.append(item)
+    manifest["sets"]["abrupt"] = items
+    target = args.work / "manifest.json"
+    scratch = args.work / "manifest.json.tmp"
+    scratch.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
+    scratch.replace(target)
+    cut = sorted(i["trimmed_s"] for i in items)
+    print(f"{len(items)} abrupt-start utterances; leading audio removed: min {cut[0]:.2f} s, median "
+          f"{cut[len(cut) // 2]:.2f} s, max {cut[-1]:.2f} s")
+    return 0
+
+
 def command_manifest(args: argparse.Namespace) -> int:
     """Hashes and sizes of every source file, written next to the data."""
     audio_dir = find_audio_dir(args.src)
@@ -855,6 +925,13 @@ def command_decode(args: argparse.Namespace) -> int:
     manifest = load_manifest(args.work)
     items = {e["id"]: e for e in manifest["sets"][args.set]}
     ids = list(items)[: args.limit] if args.limit else list(items)
+    if args.ids:
+        wanted = args.ids.split(",")
+        unknown = [i for i in wanted if i not in items]
+        if unknown:
+            print(f"error: not in the {args.set} set: {', '.join(unknown)}", file=sys.stderr)
+            return 2
+        ids = wanted
     arm_specs = list(args.arm)
     arms = {name: (binary, extra) for name, binary, extra in map(parse_arm, arm_specs)}
     use_lock = LOCK_SCRIPT.exists() and not args.no_lock
@@ -1153,13 +1230,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--work", type=Path, required=True)
     p.set_defaults(func=command_import_references)
 
+    p = sub.add_parser("add-abrupt", help="add a set of subset utterances with the leading silence cut away")
+    p.add_argument("--work", type=Path, required=True)
+    p.add_argument("--n", type=int, default=40)
+    p.set_defaults(func=command_add_abrupt)
+
     p = sub.add_parser("decode", help="run `transcribe` over a set, arms interleaved")
     p.add_argument("--work", type=Path, required=True)
-    p.add_argument("--set", choices=["subset", "parts", "longform"], required=True)
+    p.add_argument("--set", choices=["subset", "parts", "longform", "abrupt"], required=True)
     p.add_argument("--arm", action="append", required=True,
                    help="'name|/path/to/transcribe|extra args'; repeat for each arm")
     p.add_argument("--repeats", type=int, default=1)
     p.add_argument("--limit", type=int, default=0, help="only the first N items of the set")
+    p.add_argument("--ids", help="only these items, comma separated (for example lf2,lf3)")
     p.add_argument("--timeout", type=float, default=1800)
     p.add_argument("--no-lock", action="store_true")
     p.add_argument("--lock-batch", type=int, default=1,
@@ -1170,7 +1253,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("score", help="WER, CER and per-class errors per arm")
     p.add_argument("--work", type=Path, required=True)
-    p.add_argument("--set", choices=["subset", "parts", "longform"], required=True)
+    p.add_argument("--set", choices=["subset", "parts", "longform", "abrupt"], required=True)
     p.add_argument("--arm", action="append", required=True)
     p.add_argument("--fleurs-norm", action="store_true", help="score against FLEURS's own normalization")
     p.add_argument("--json", type=Path)
@@ -1178,7 +1261,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("compare", help="paired comparison of two arms on one set")
     p.add_argument("--work", type=Path, required=True)
-    p.add_argument("--set", choices=["subset", "parts", "longform"], required=True)
+    p.add_argument("--set", choices=["subset", "parts", "longform", "abrupt"], required=True)
     p.add_argument("--a", required=True, help="the baseline arm")
     p.add_argument("--b", required=True, help="the candidate arm")
     p.add_argument("--json", type=Path)
