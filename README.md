@@ -125,7 +125,7 @@ Taglish test clip, with the default Balanced model:
 | --- | --- |
 | Whole-file real-time factor (RTF) | 0.09 to 0.14, which is 7 to 11 times faster than real time |
 | Word error rate (WER) | 24.2% in every run after the first-window fix, on this clip; 24% to 70% before it (see [FINDINGS.md](docs/FINDINGS.md) entries 15 and 16) |
-| Peak process memory | approximately 300 MB. This is the process footprint, and it does not include the model weights that Core ML holds outside the process (approximately 1.6 GB for the default model) |
+| Process memory | A lifetime peak footprint of about 150 MB. Core ML holds about 1.6 GB more for the default model on the Neural Engine, and that memory is not in the footprint ([docs/BENCHMARKS.md](docs/BENCHMARKS.md) says how each figure was measured) |
 
 **Read these numbers with their conditions.** The test clip is synthetic, the
 reference transcript is small, and the measurement Mac is faster than the 16 GB

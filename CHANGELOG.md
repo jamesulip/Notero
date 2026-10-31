@@ -50,6 +50,13 @@
   multi-speaker fixtures with known turn boundaries and score a diarization run
   with a frame-level DER, for A/B comparison. They are not an accuracy measure
   for real meetings.
+- **`eval/bench_runs.py` and `eval/residency.py`** run repeated, interleaved A/B
+  benchmarks with permutation and Fisher tests that refuse to call a result below
+  n = 8, and take a memory reading from outside the process.
+- **`transcribe` reports the memory it used properly.** Its "peak memory" line
+  was one reading at exit. It now prints the lifetime peak footprint and the Neural
+  Engine memory (about 1.6 GB for the default model), plus per-decode time and
+  commit latency in a live replay. Entry 22 gives the measurements.
 - FluidAudio is pinned to patch releases of 0.15.6. Entry 20 explains why 0.15.8
   and 0.18.0 were not adopted.
 

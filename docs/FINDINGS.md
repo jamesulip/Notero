@@ -706,6 +706,13 @@ in the lead's series, and from 0.110 to 0.084 and from 0.099 to 0.082 in the age
 Process footprint was 126–133 MB against 129–136 MB. Model residency was not
 measured.
 
+**The baseline collapse rate depends on the session.** The same shipping build
+collapsed in 1 of 12 offline runs in the benchmark agent's session (its own
+collapse rule), in 7 of 20 in the ASR agent's, and in 4 of 6 in the lead's. The
+agents used different collapse rules and the machine load differed, so the three
+rates cannot be pooled as if they were one measurement. The candidate collapsed in
+none of the runs in any session, and its transcript was the same each time.
+
 **Left open.** English filler that does not trip any gate can still pass the
 sampled ladder (1 of 30 baseline decodes, with a compression ratio of 0.81). A
 window with very few words is not caught either. Every number here is from one
@@ -837,6 +844,38 @@ during a 0.17 s search.
 `AppState.makeReader()` creates a `TranscriptReader` in the same way and probably has
 the same problem, which would mean the transcript loads that were described as off the
 main actor run on it. That was not measured and not changed.
+
+## 22. "Peak memory" was a footprint read once at exit, and the model is not in the footprint (2026-11-01)
+
+`transcribe` printed `phys_footprint` once, when it finished, under the label
+"peak memory". That is neither a peak nor the model's memory. Measured on the Mac
+mini M2 Pro with `footprint(1)` and `/usr/bin/time -l`: after the default model
+loaded, the footprint was 76–77 MB, while the Neural Engine memory that the process
+owned was 1580 MB (`footprint(1)` reported 1581 MB, as "neural, nofootprint"). The
+lifetime peak footprint over 24 runs was 150 MB (142–254), and the footprint at exit
+was 138 MB (89–248). The README's "approximately 300 MB" came from this reading. The
+tool now reports the lifetime peak footprint and the Neural Engine memory separately,
+and `eval/residency.py` takes an independent reading from outside the process. A
+smaller footprint is not lower model memory: the model is somewhere the footprint does
+not look. Compare footprints only between stages of one build, and quote the Neural
+Engine figure when the claim is about the model.
+
+## 23. Windows that needed the retry ladder scored better, and an A/A run was "significant" (2026-11-01)
+
+In 24 offline runs of the synthetic clip on the shipping build, 9 runs had a window go
+through the retry ladder and scored 21.1–28.9% WER. The other 15 did not and scored
+30.5–57.8%, and all four collapsed runs were among those 15. That is an association
+and it fits finding 16, which found the mechanism. It was measured before that fix.
+
+The harness (`eval/bench_runs.py`) was calibrated against itself. Two byte-identical
+binaries, live, n = 8 per arm, differed significantly on WER (+2.3 points, p = 0.041).
+A 17% timing difference between two builds at p = 0.003 in one session came out as 1%
+(p = 0.73) in a repeat, because the machine was shared and not because the builds
+differ. The verdict line now adds "CONFIRM BEFORE ACTING" to any significant result
+below 12 runs per arm. A result at n < 12 needs a second session before it is acted on.
+The fix in finding 16 was confirmed in a second session for this reason. All 24 live
+runs also contained no pause boundary, so the 12 s commit latency measured on this clip
+says nothing about a recording with pauses.
 
 ## Caveat: the audio was synthetic
 
