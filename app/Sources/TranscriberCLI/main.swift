@@ -370,7 +370,7 @@ if options.live {
     tokens = decoded.tokens
     detectedLanguage = decoded.detectedLanguage
     windowLanguages = decoded.windowLanguages
-    if decoded.retriedWindows > 0 { log("  \(decoded.retriedWindows) window(s) needed a warmer retry") }
+    if decoded.retriedWindows > 0 { log("  \(decoded.retriedWindows) window(s) needed a retry (a lead-in of silence, wider audio or half the window)") }
     if decoded.droppedWindows > 0 { log("  WARNING \(decoded.droppedWindows) window(s) never decoded — audio is missing from this transcript") }
     if options.language == "auto" {
         let seen = decoded.windowLanguages.compactMap { $0 }

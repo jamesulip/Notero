@@ -145,6 +145,44 @@ final class ArchiveCrashTests: XCTestCase {
         XCTAssertEqual(Double(rms), 0.5 / 2.0.squareRoot(), accuracy: 0.03, "a 0.5 sine has RMS 0.354")
     }
 
+    /// The room is channel 0 and the call is channel 1, and the transcription
+    /// of a two-lane meeting reads them apart on that basis. Every other
+    /// two-lane test wrote the same tone into both lanes, so a writer that
+    /// swapped the channels passed all of them (QA mutation survivor).
+    func testTheRoomIsChannelZeroAndTheCallIsChannelOne() throws {
+        func sine(_ hz: Double, seconds: Double = 1, rate: Double = 48_000) -> AVAudioPCMBuffer {
+            let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
+            let frames = AVAudioFrameCount(rate * seconds)
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
+            buffer.frameLength = frames
+            for index in 0..<Int(frames) {
+                buffer.floatChannelData![0][index] =
+                    Float(0.5 * sin(2 * Double.pi * hz * Double(index) / rate))
+            }
+            return buffer
+        }
+        let url = scratch.appendingPathComponent("lanes.m4a")
+        let writer = try ArchiveWriter(url: url, sampleRate: 48_000, lanes: [.room, .remote])
+        for _ in 0..<4 { writer.write([.room: sine(440), .remote: sine(1_760)]) }
+        writer.finish()
+
+        let file = try AVAudioFile(forReading: url)
+        XCTAssertEqual(file.fileFormat.channelCount, 2)
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                                    frameCapacity: 48_000))
+        file.framePosition = 2 * 48_000
+        try file.read(into: buffer, frameCount: 48_000)
+        func hertz(channel: Int) throws -> Double {
+            let samples = try XCTUnwrap(buffer.floatChannelData?[channel])
+            var crossings = 0
+            for index in 1..<Int(buffer.frameLength)
+            where (samples[index - 1] < 0) != (samples[index] < 0) { crossings += 1 }
+            return Double(crossings) / 2 / (Double(buffer.frameLength) / 48_000)
+        }
+        XCTAssertEqual(try hertz(channel: 0), 440, accuracy: 30, "channel 0 must carry the room")
+        XCTAssertEqual(try hertz(channel: 1), 1_760, accuracy: 60, "channel 1 must carry the call")
+    }
+
     // MARK: - Ways out of a recording
 
     func testARecordingThatCapturedNothingLeavesNoFileBehind() throws {

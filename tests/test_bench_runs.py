@@ -377,3 +377,11 @@ def test_lock_script_is_used_when_present(tmp_path):
     plain = br.build_command(Path("/b"), Path("/a.wav"), Path("/r.txt"), Path("/o.json"),
                              mode="offline", extra=[], use_lock=False, use_time=False)
     assert plain[0] == "/b" and "--live" not in plain
+
+
+def test_parse_stderr_reads_both_wordings_of_the_retry_line():
+    # Builds before 2026-11-01 said "a warmer retry"; the lead-in retry made that
+    # wrong, and the line now names what a retry is.
+    new = "  2 window(s) needed a retry (a lead-in of silence, wider audio or half the window)\n"
+    assert br.parse_stderr(new)["retried_windows"] == 2
+    assert br.parse_stderr("  1 window(s) needed a warmer retry\n")["retried_windows"] == 1

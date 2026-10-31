@@ -113,6 +113,25 @@ extension AppState {
     ///   saved), but the job that would follow does not start, because it
     ///   would die with the process.
     func stopRecording(quitting: Bool = false) async {
+        // One stop at a time, and a second request joins the first. The Stop
+        // button and a quit can both ask, and the state leaves `.recording`
+        // as soon as the first one starts, long before it has saved anything;
+        // a quit that looked only at `isRecording` went straight through that
+        // window and ended the process before `attachAudio` ran.
+        if let running = stopTask {
+            await running.value
+            return
+        }
+        let task = Task { await performStop(quitting: quitting) }
+        stopTask = task
+        await task.value
+        stopTask = nil
+    }
+
+    /// True from the moment Stop is pressed until everything it saves is saved.
+    var isStopping: Bool { stopTask != nil }
+
+    private func performStop(quitting: Bool) async {
         let finished = await live.stop()
         live.onCommitted = nil
         let persister = livePersister

@@ -165,6 +165,8 @@ final class AppState {
     /// Writes the live session's committed lines as they land, so a crash
     /// mid-meeting keeps everything up to the last commit.
     var livePersister: LiveTranscriptPersister?
+    /// The stop in progress, so that a second request waits for it.
+    var stopTask: Task<Void, Never>?
     /// When the current stage of each job began and the last estimate made
     /// from it. The estimate is smoothed against this.
     var stageClock: [UUID: StageClock] = [:]

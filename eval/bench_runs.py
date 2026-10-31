@@ -94,7 +94,7 @@ def parse_stderr(text: str) -> dict:
 
     grab(r"^speech: (\d+) regions", "regions")
     grab(r"regions, \S+ in (\d+) windows", "windows")
-    grab(r"^\s+(\d+) window\(s\) needed a warmer retry", "retried_windows")
+    grab(r"^\s+(\d+) window\(s\) needed a (?:warmer )?retry", "retried_windows")
     grab(r"WARNING (\d+) window\(s\) never decoded", "dropped_windows")
     grab(r"^model load (\d+) ms", "load_ms")
     # Old binaries print "peak memory N MB" (phys_footprint read once at exit).

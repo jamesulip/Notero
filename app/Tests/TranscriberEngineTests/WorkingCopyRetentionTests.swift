@@ -213,6 +213,19 @@ final class WorkingCopyRetentionTests: XCTestCase {
                       "codec padding is not a loss")
         XCTAssertFalse(WorkingCopyPolicy.archiveCovers(archiveMs: 60_000, workingCopyMs: 70_000))
         XCTAssertFalse(WorkingCopyPolicy.archiveCovers(archiveMs: nil, workingCopyMs: 1))
+        // Long recordings: the allowance does not grow with the length. At a
+        // share of the length, a working copy 72 s longer than a two-hour
+        // archive counted as covered and was deleted.
+        let twoHours = 2 * 60 * 60 * 1000
+        XCTAssertFalse(WorkingCopyPolicy.archiveCovers(archiveMs: twoHours,
+                                                       workingCopyMs: twoHours + 72_000),
+                       "audio the archive does not hold must keep its working copy")
+        XCTAssertFalse(WorkingCopyPolicy.archiveCovers(archiveMs: twoHours,
+                                                       workingCopyMs: twoHours + 5_000))
+        XCTAssertTrue(WorkingCopyPolicy.archiveCovers(archiveMs: twoHours,
+                                                      workingCopyMs: twoHours + 500))
+        XCTAssertTrue(WorkingCopyPolicy.isTruncated(workingCopyMs: twoHours - 72_000,
+                                                    archiveMs: twoHours))
         XCTAssertTrue(WorkingCopyPolicy.isTruncated(workingCopyMs: 5_000, archiveMs: 20_000))
         XCTAssertFalse(WorkingCopyPolicy.isTruncated(workingCopyMs: 19_000, archiveMs: 20_000))
         XCTAssertFalse(WorkingCopyPolicy.isTruncated(workingCopyMs: 5_000, archiveMs: nil),

@@ -128,7 +128,7 @@ stdout or to `--out`. It reports:
 - The model id that it loaded.
 - The speech regions and the windows that the voice detector found.
 - The number of decoded words, the decode time and the RTF.
-- The number of windows that needed a warmer retry.
+- The number of windows that needed a retry: a lead-in of silence, wider audio or half the window. Builds before 2026-11-01 printed "a warmer retry".
 - **A warning for each window that never decoded.** That audio is missing from
   the transcript. Finding 9 in [FINDINGS.md](FINDINGS.md) explains why this
   warning exists.

@@ -746,7 +746,16 @@ prototype). Power loss, because neither writer calls `fsync`. Archives that were
 made before this change and never closed stay unreadable, and only their working
 copy recovers them. A crashed two-lane recording keeps only the mixed working copy,
 so it transcribes as one lane. The quit gate is unit-tested through its seam, and a
-real ⌘Q during a recording was not driven.
+real ⌘Q during a recording was not driven. An independent review found three more
+limits. First, the 30 s quit timer runs on the main actor, and Stop calls
+`ArchiveWriter.finish()` synchronously on it, so a stalled encoder would freeze Stop
+and the quit past the timer. A probe with a 0.1 s timeout and a stop that blocked the
+main thread for 1.5 s replied after 1.51 s. Second, after a disk-low stop the archive
+holds only what was written before it (4.0 s in a probe) while `frameCount`, and so
+the stored duration, still reports the whole 60 s that was handed to it. Third, a
+quit between pressing Stop and the end of the save went straight through, because
+the gate read the state, which leaves `.recording` at once. That one is fixed: a
+second request now joins the stop in progress.
 
 Two smaller fixes in the same area. After a sleep the first buffer reports the
 whole sleep as a gap, and `fillGap` allocated it as one buffer per lane: an hour at
@@ -782,8 +791,10 @@ empty.
 
 The fixes insert before linking, save the final revision first, and then delete the
 partial revision by predicate. At 15,000 rows `completeTranscript` took 6.5 s and a
-250-row append 84 ms. These are single debug-build runs on an on-disk store by the
-agent that made the changes, so read them as the size of the effect and not as exact
+250-row append 84 ms. `TranscriptWriter` is built on the main actor in `AppState.init`,
+so it runs on the main thread (finding 21), and the 6.5 s at 15,000 rows still blocks
+the window at Stop. It was 159 s before. These are single debug-build runs on an
+on-disk store by the agent that made the changes, so read them as the size of the effect and not as exact
 timings. Related fixes in the same pass: a job whose transcript could not be saved is
 no longer marked complete (and a failed job keeps its reason), live lines that stop
 being saved are reported while recording, a running job steps aside and restarts when
@@ -841,9 +852,14 @@ catch it passed anyway, because its ticker never ran during the search and a gap
 call pattern restored it fails, and with the fix the longest main-actor gap was 15 ms
 during a 0.17 s search.
 
-`AppState.makeReader()` creates a `TranscriptReader` in the same way and probably has
-the same problem, which would mean the transcript loads that were described as off the
-main actor run on it. That was not measured and not changed.
+`AppState.makeReader()` creates a `TranscriptReader` in the same way, and the
+`TranscriptWriter` is built on the main actor in `AppState.init`. An independent review
+confirmed with the same probe that both run on the main thread, which means the
+transcript loads and writes described as off the main actor are not. Neither was
+changed here. Moving the writer off the main thread is the largest remaining item: the
+app has no UI tests, and the main context currently reads what the writer saved on the
+same thread. Whether a main-context read still sees a background save as soon as the
+writer returns has to be checked before the move.
 
 ## 22. "Peak memory" was a footprint read once at exit, and the model is not in the footprint (2026-11-01)
 

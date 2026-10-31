@@ -76,6 +76,28 @@ final class QuitGateTests: XCTestCase {
         XCTAssertEqual(replies, 2, "each waiting request is answered exactly once")
     }
 
+    /// The real state leaves `.recording` the moment Stop starts, long before
+    /// anything is saved, so `isRecording` is already false when a second quit
+    /// arrives. The gate has to remember that it is stopping; asking the state
+    /// again lets that quit through mid-save (QA finding S2).
+    func testAQuitAfterTheStateLeftRecordingStillWaitsForTheStopInProgress() async {
+        let stopper = Stopper()
+        let gate = QuitGate(isRecording: { stopper.recording }, stop: { await stopper.stop() })
+
+        var replies = 0
+        XCTAssertEqual(gate.requestQuit { replies += 1 }, .wait)
+        await settle()
+        stopper.recording = false
+
+        XCTAssertEqual(gate.requestQuit { replies += 1 }, .wait,
+                       "a stop is still running: this quit must not go through")
+        XCTAssertEqual(stopper.calls, 1)
+
+        stopper.release()
+        await settle()
+        XCTAssertEqual(replies, 2)
+    }
+
     func testAStopThatNeverReturnsDoesNotKeepTheAppOpenForever() async throws {
         let stopper = Stopper()
         let gate = QuitGate(timeout: .milliseconds(50),

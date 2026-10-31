@@ -82,7 +82,7 @@ struct TranscriberApp: App {
         delegate.onOpen = { urls in state.importFiles(urls) }
         delegate.onLaunch = { state.applyMenuBarSetting() }
         delegate.quitGate = QuitGate(
-            isRecording: { state.isRecording },
+            isRecording: { state.isRecording || state.isStopping },
             stop: { await state.stopRecording(quitting: true) }
         )
     }

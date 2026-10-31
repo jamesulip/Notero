@@ -46,9 +46,13 @@ public enum WorkingCopyPolicy {
 
     /// How much shorter than the archive a working copy may be and still
     /// count as complete: the two come from one tap, and codec padding makes
-    /// them differ by a few tens of milliseconds.
+    /// them differ by a few tens of milliseconds. A fixed two seconds, not a
+    /// share of the length: at 1% a two-hour recording let a working copy that
+    /// was 72 s longer than its archive be deleted as "covered", and the
+    /// archive cannot rebuild those seconds (QA finding S4). Measured, the two
+    /// stay within a fraction of a millisecond over six hours.
     public static func toleranceMs(archiveMs: Int) -> Int {
-        max(2_000, archiveMs / 100)
+        2_000
     }
 
     /// Whether the archive holds all of the working copy's audio, so that
