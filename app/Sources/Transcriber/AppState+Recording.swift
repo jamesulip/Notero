@@ -128,15 +128,26 @@ extension AppState {
             // The final list replaces the rows written during the recording,
             // through the same call the whole-file job uses; with no open
             // revision it stores a fresh one, as before.
-            if let persister {
-                _ = try? await persister.complete(segments: result.segments,
-                                                  processMs: result.stats.totalInferMs)
-            } else {
-                _ = try? await writer.storeTranscript(
-                    segments: result.segments, roster: [], modelId: result.modelId,
-                    language: result.language, processMs: result.stats.totalInferMs,
-                    didDiarize: false, for: result.recordingId
-                )
+            do {
+                if let persister {
+                    _ = try await persister.complete(segments: result.segments,
+                                                     processMs: result.stats.totalInferMs)
+                } else {
+                    _ = try await writer.storeTranscript(
+                        segments: result.segments, roster: [], modelId: result.modelId,
+                        language: result.language, processMs: result.stats.totalInferMs,
+                        didDiarize: false, for: result.recordingId
+                    )
+                }
+            } catch {
+                // Said, not swallowed: otherwise the recording reads as
+                // complete while its transcript stops at the last line the
+                // session happened to save, or is missing altogether.
+                let saved = "The transcript could not be saved "
+                    + "(\(error.localizedDescription)), so lines may be missing. "
+                    + "The audio was saved -- use Transcribe Again to recover it."
+                warnings[result.recordingId] = [warnings[result.recordingId], saved]
+                    .compactMap { $0 }.joined(separator: " ")
             }
         }
         try? await writer.attachAudio(
