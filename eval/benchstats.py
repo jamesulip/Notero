@@ -38,6 +38,13 @@ COLLAPSE_WER_FACTOR = 2.0
 #: ... or when it produced fewer than this fraction of the reference's words.
 COLLAPSE_MIN_WORD_FRACTION = 0.75
 
+#: A significant result with fewer runs than this per arm carries a warning to
+#: repeat it. An A/A comparison of two byte-identical binaries at n = 8 came out
+#: "significant" on WER (permutation p = 0.041; docs/BENCHMARKS.md), once in
+#: one try: that cannot give a false-positive rate, but it shows what one
+#: significant result at n = 8 is worth.
+CONFIRM_BELOW_RUNS = 12
+
 ALPHA = 0.05
 #: Exact permutation enumerates every arrangement up to this many; above it,
 #: Monte Carlo with `MC_PERMUTATIONS` seeded shuffles.
@@ -264,12 +271,14 @@ def verdict(*, n_a: int, n_b: int, wer_diff: float | None, wer_p: float | None,
                 "Re-run with `bench_runs.py run --interleave BASE CAND`.")
 
     parts = []
+    significant = False
     if wer_diff is None or wer_p is None or wer_ci is None:
         parts.append("WER: not computed")
     else:
         direction = "lower" if wer_diff < 0 else "higher" if wer_diff > 0 else "equal"
         ci_excludes_zero = wer_ci[0] > 0 or wer_ci[1] < 0
         if wer_p < ALPHA and ci_excludes_zero:
+            significant = True
             parts.append(
                 f"WER: candidate median is {abs(wer_diff) * 100:.1f} points {direction} "
                 f"(permutation p = {wer_p:.3f}, 95% CI {wer_ci[0] * 100:+.1f} to "
@@ -285,10 +294,16 @@ def verdict(*, n_a: int, n_b: int, wer_diff: float | None, wer_p: float | None,
     else:
         rate = (f"{collapsed_a}/{n_a} baseline vs {collapsed_b}/{n_b} candidate "
                 f"(Fisher exact p = {fisher_p:.3f})")
+        significant = significant or fisher_p < ALPHA
         parts.append(f"collapsed runs: {rate} — "
                      + (f"SIGNIFICANT at {ALPHA}" if fisher_p < ALPHA else "not significant"))
     prefix = "" if interleaved else "NOT INTERLEAVED, treat as indicative only. "
-    return "VERDICT: " + prefix + "; ".join(parts) + "."
+    text = "VERDICT: " + prefix + "; ".join(parts) + "."
+    if significant and smallest < CONFIRM_BELOW_RUNS:
+        text += (f" CONFIRM BEFORE ACTING: with fewer than {CONFIRM_BELOW_RUNS} runs per arm one "
+                 f"significant result is weak evidence. Repeat it in a second interleaved session. "
+                 f"Two byte-identical binaries gave p = 0.041 on WER at n = 8 (docs/BENCHMARKS.md).")
+    return text
 
 
 def interleave_schedule(runs: int, scheme: str = "abab") -> list[str]:

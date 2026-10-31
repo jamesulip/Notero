@@ -240,6 +240,18 @@ def test_verdict_calls_a_clear_difference_significant_at_n8():
     assert "10.0 points lower" in text
 
 
+def test_verdict_asks_for_a_repeat_when_significant_below_12_runs():
+    text = _verdict(n_a=8, n_b=8)
+    assert "SIGNIFICANT" in text and "CONFIRM BEFORE ACTING" in text
+    assert "0.041" in text
+    # Enough runs: no warning. Not significant: no warning either.
+    assert "CONFIRM" not in _verdict(n_a=12, n_b=12)
+    assert "CONFIRM" not in _verdict(wer_p=0.5, wer_ci=(-0.05, 0.05), fisher_p=0.5)
+    # A significant collapse count alone also triggers it.
+    only_collapse = _verdict(wer_p=0.5, wer_ci=(-0.05, 0.05), fisher_p=0.01)
+    assert "CONFIRM BEFORE ACTING" in only_collapse
+
+
 def test_verdict_needs_permutation_and_bootstrap_to_agree():
     # p < 0.05 but the interval touches zero -> not significant.
     text = _verdict(wer_p=0.04, wer_ci=(-0.12, 0.01))

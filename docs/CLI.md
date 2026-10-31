@@ -132,9 +132,22 @@ stdout or to `--out`. It reports:
 - **A warning for each window that never decoded.** That audio is missing from
   the transcript. Finding 9 in [FINDINGS.md](FINDINGS.md) explains why this
   warning exists.
+- The model load time, which no RTF includes.
+- The cost of each call to the recognizer, apart from the RTF: median, p95 and
+  maximum of the model's own time and of the wall time around it.
+- With `--live`, the **commit latency**: how far behind the audio each committed
+  word trails. With `--live --realtime`, the same against wall time.
 - The number of speakers and the time that speaker identification took.
 - The WER, if you gave `--reference`.
-- The peak memory and the total time.
+- **Memory, in two lines.** The footprint of this process at exit, its lifetime
+  peak footprint, and its footprint before and after the model loads. Then the
+  Neural Engine memory that the process owns, which the footprint does not
+  include. Until 2026-11-01 the tool printed one line, `peak memory N MB`. N was
+  `phys_footprint` read once at exit. It was not a peak and it was not the
+  model's memory: after the model loaded, the footprint was 77 MB and the Neural
+  Engine memory was 1581 MB. [BENCHMARKS.md](BENCHMARKS.md#which-number-is-which)
+  says which figure answers which question.
+- The total time.
 
 ### The WER
 
@@ -155,6 +168,21 @@ the language that you asked for, the language that the model detected, the
 language of each window, the duration, the decode time, the RTF, the word
 count, the transcript, each token, the WER, the live statistics and the live
 configuration.
+
+Five fields are for the benchmark harness, and each is optional: a report from an
+older binary lacks them, and a reader has to cope.
+
+| Field | Contents |
+| --- | --- |
+| `loadMs` | Wall time to load the model. |
+| `decodeTiming` | Per-call recognizer cost: `calls`, `inferRtf`, `wallRtf`, mean, median, p95 and maximum of `inferMs` and of the wall time. |
+| `commitLatency` | Live only. Words committed, with minimum, median, mean, p95 and maximum of (audio fed so far − the word's end time), and `aheadOfAudio`, the number of words that ended after the audio fed so far. |
+| `commitLatencyWall` | Live with `--realtime` only. The same, against wall time since the replay began. |
+| `memory` | A list of snapshots at the stages `start`, `beforeModelLoad`, `afterModelLoad`, `afterVADLoad`, `afterDecode` and `end`. Each holds `physFootprintMB`, `lifetimePeakFootprintMB`, `residentMB`, `internalMB`, `externalMB`, `compressedMB`, `neuralMB` and `neuralPeakMB`. |
+
+In a live report, `rtf` is the **replay** RTF, not a per-hop cost. With every
+decode awaited it is how fast the Mac replays the file. With `--realtime` it is
+about 1.0 by construction.
 
 ## Live mode
 
@@ -192,6 +220,22 @@ This runs `tl` and `auto` over `eval/manifest.json`, scores each run with
 
 **Do not build while a `--realtime` run is in progress.** The build competes
 for the machine and changes the drop count.
+
+### Repeated runs and an A/B comparison
+
+One run proves nothing: the offline pass is not deterministic (finding 15 in
+[FINDINGS.md](FINDINGS.md)). `eval/bench_runs.py` runs a binary several times, or
+two binaries interleaved, summarizes with the median and the range, counts the
+collapsed runs, and compares two builds with a permutation test and Fisher's
+exact test. Its verdict line refuses below 8 runs per arm.
+[BENCHMARKS.md](BENCHMARKS.md#compare-two-builds) gives the commands and the
+rules. `eval/residency.py` measures the memory of a run from outside the
+process, with `footprint(1)`.
+
+```bash
+python3 eval/bench_runs.py run --interleave BASE/transcribe CAND/transcribe \
+    --audio clip.wav --ref clip.txt --mode offline --runs 12 --out-dir /tmp/ab
+```
 
 ## Capture check
 
