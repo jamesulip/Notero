@@ -23,7 +23,13 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/argmaxinc/WhisperKit.git", exact: "1.1.0"),
         // Silero VAD and pyannote diarization as CoreML, ANE-resident.
-        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.15.6"),
+        //
+        // Patch releases only. FluidAudio is pre-1.0 and ships diarizer and
+        // model changes in minor releases, so `from:` would let one
+        // `swift package update` move speaker attribution to 0.18 untested.
+        // Move the minor deliberately, with a diarization comparison.
+        .package(url: "https://github.com/FluidInference/FluidAudio.git",
+                 .upToNextMinor(from: "0.15.6")),
     ],
     targets: [
         .target(
