@@ -7,6 +7,9 @@ on:
     paths:
       - "server/**"
       - "tests/**"
+      # The regression harness and the committed baselines are tested by tests/ and read
+      # by those tests; before this line a change to eval/*.py ran no check at all.
+      - "eval/**"
       - "requirements*.txt"
       - "pytest.ini"
       - ".github/workflows/server.yml"
@@ -14,6 +17,7 @@ on:
     paths:
       - "server/**"
       - "tests/**"
+      - "eval/**"
       - "requirements*.txt"
       - "pytest.ini"
       - ".github/workflows/server.yml"
