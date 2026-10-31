@@ -13,7 +13,43 @@ import TranscriberCore
 /// with no change above this file.
 public actor SpeakerEngine: SpeakerDiarizing {
 
+    /// Every number the speaker pipeline is tuned by.
+    ///
+    /// `shipping` is what the app runs and what the tests pin. The benchmark
+    /// tool builds the others, so a threshold can be measured against the
+    /// fixtures without editing the engine (see `eval/run_tuning_sweep.py`).
+    public struct Tuning: Sendable, Equatable {
+        /// FluidAudio's first pass drops a segment shorter than this, and a
+        /// segment shorter than this cannot found a speaker there either. A meeting
+        /// turn shorter than a second is almost always a backchannel ("oo",
+        /// "sige") landing inside someone else's sentence, and crediting it to
+        /// a new speaker fragments the transcript.
+        public var firstPassMinSpeechSeconds: Float = 1.0
+        /// Same-label spans closer than this are one span. Chunking splits a
+        /// turn at a window edge; this joins it again.
+        public var mergeGapMs: Int = 250
+        /// Slivers shorter than this come out of overlapping segmentation.
+        public var minSpanMs: Int = 120
+        /// Same-speaker distance for the WeSpeaker embeddings, matching
+        /// `DiarizerConfig.clusteringThreshold`'s default and scale (cosine
+        /// distance of L2-normalized vectors).
+        public var sameSpeakerDistance: Float = 0.7
+        /// How far apart two clusters may be and still be folded together when
+        /// the user's head-count says there are too many. Wider than
+        /// `sameSpeakerDistance`, because the count is evidence the threshold did
+        /// not have; narrower than "anything", because a real seventh voice must
+        /// survive a count of six.
+        public var consolidationDistance: Float = 0.85
+        /// A turn shorter than this may join an existing speaker but never found
+        /// a new one: a 1-2 s embedding is noisy enough that letting it open a
+        /// cluster is how phantom third speakers get invented.
+        public var foundingTurnMs: Int = 2_000
+        public static let shipping = Tuning()
+        public init() {}
+    }
+
     private let modelsDirectory: URL
+    private let tuning: Tuning
     private var manager: DiarizerManager?
 
     /// How much audio to hand the diarizer at a time.
@@ -31,8 +67,9 @@ public actor SpeakerEngine: SpeakerDiarizing {
     /// endings are not clipped by a detector tuned for transcription.
     static let speechPadMs = 1_000
 
-    public init(modelsDirectory: URL) {
+    public init(modelsDirectory: URL, tuning: Tuning = .shipping) {
         self.modelsDirectory = modelsDirectory
+        self.tuning = tuning
     }
 
     public var isAvailable: Bool { manager?.isAvailable ?? false }
@@ -45,11 +82,10 @@ public actor SpeakerEngine: SpeakerDiarizing {
                 to: modelsDirectory.appendingPathComponent("Diarizer", isDirectory: true)
             )
             var config = DiarizerConfig.default
-            // A meeting turn shorter than this is almost always a backchannel
-            // ("oo", "sige") landing inside someone else's sentence, and
-            // crediting it to a new speaker fragments the transcript.
-            config.minSpeechDuration = 1.0
-            config.minSilenceGap = 0.5
+            config.minSpeechDuration = tuning.firstPassMinSpeechSeconds
+            // FluidAudio 0.15.6 declares `minSilenceGap` and never reads it
+            // (the only mentions are the declaration and its CLI flags), so
+            // setting it here changed nothing. Left at its default.
             let manager = DiarizerManager(config: config)
             manager.initialize(models: consume models)
             self.manager = manager
@@ -152,20 +188,6 @@ public actor SpeakerEngine: SpeakerDiarizing {
 
     // MARK: - Second pass: one embedding per turn
 
-    /// Same-speaker distance for the WeSpeaker embeddings, matching
-    /// `DiarizerConfig.clusteringThreshold`'s default and scale (cosine
-    /// distance of L2-normalized vectors).
-    private static let sameSpeakerDistance: Float = 0.7
-    /// How far apart two clusters may be and still be folded together when
-    /// the user's head-count says there are too many. Wider than
-    /// `sameSpeakerDistance`, because the count is evidence the threshold did
-    /// not have; narrower than "anything", because a real seventh voice must
-    /// survive a count of six. Unmeasured: tune on the six-person room file.
-    private static let consolidationDistance: Float = 0.85
-    /// A turn shorter than this may join an existing speaker but never found a
-    /// new one: a 1-2 s embedding is noisy enough that letting it open a
-    /// cluster is how phantom third speakers get invented.
-    private static let foundingTurnMs = 2_000
     /// The embedding model reads at most one 10 s window; a longer turn is
     /// represented by its first 10 s, which is fine because a turn is one
     /// speaker by construction.
@@ -192,8 +214,8 @@ public actor SpeakerEngine: SpeakerDiarizing {
     ) throws -> [SpeakerSpan] {
         guard spans.count > 1 else { return spans }
 
-        var clusterer = TurnClusterer(sameSpeakerDistance: Self.sameSpeakerDistance,
-                                      foundingTurnMs: Self.foundingTurnMs)
+        var clusterer = TurnClusterer(sameSpeakerDistance: tuning.sameSpeakerDistance,
+                                      foundingTurnMs: tuning.foundingTurnMs)
         var out: [SpeakerSpan] = []
         out.reserveCapacity(spans.count)
         /// Which spans were placed by the clusterer, as opposed to keeping
@@ -226,7 +248,7 @@ public actor SpeakerEngine: SpeakerDiarizing {
 
         if let target = expectedSpeakers, target > 0 {
             let aliases = clusterer.consolidate(toward: target,
-                                                withinDistance: Self.consolidationDistance)
+                                                withinDistance: tuning.consolidationDistance)
             if !aliases.isEmpty {
                 out = out.map { span in
                     guard placed.contains(span.id), let to = aliases[span.speakerId] else { return span }
@@ -244,9 +266,9 @@ public actor SpeakerEngine: SpeakerDiarizing {
     private func merge(_ spans: [SpeakerSpan]) -> [SpeakerSpan] {
         let sorted = spans.sorted { $0.startMs < $1.startMs }
         var out: [SpeakerSpan] = []
-        for span in sorted where span.durationMs >= 120 {
+        for span in sorted where span.durationMs >= tuning.minSpanMs {
             if var last = out.last, last.speakerId == span.speakerId,
-               span.startMs - last.endMs <= 250 {
+               span.startMs - last.endMs <= tuning.mergeGapMs {
                 last.endMs = max(last.endMs, span.endMs)
                 out[out.count - 1] = last
             } else {

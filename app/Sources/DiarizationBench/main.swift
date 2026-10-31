@@ -12,7 +12,14 @@ import TranscriberEngine
 // Score the output with `eval/der.py`.
 //
 //   diarbench --audio F.wav --models DIR --json OUT.json
-//             [--mode accurate|fast] [--expected N] [--vad-regions none]
+//             [--mode accurate|fast] [--expected N]
+//             [--tune key=value,...]      e.g. mergeGapMs=120,foundingTurnMs=1500
+//             [--carry-from PREVIOUS.json]
+//
+// `--tune` builds the engine with other numbers than the app's (see
+// `SpeakerEngine.Tuning`); `--carry-from` matches this run's speakers to an
+// earlier run's the way a re-identification does and writes the result under
+// `carry`, which `eval/speaker_stability.py` scores.
 //
 // One run per process on purpose: peak footprint is a per-process maximum, so a
 // second run in the same process would inherit the first one's peak.
@@ -29,6 +36,8 @@ struct Options {
     var expected: Int?
     var engine = "turn"
     var label = ""
+    var tuning = SpeakerEngine.Tuning.shipping
+    var carryFrom: URL?
     /// Reference RTTM: switches to probe mode, which reports how far apart the
     /// per-turn embeddings of the reference speakers are. No diarization runs.
     var probeRef: URL?
@@ -55,6 +64,21 @@ func parse() -> Options {
         case "--engine": options.engine = value()
         case "--label": options.label = value()
         case "--probe-ref": options.probeRef = URL(fileURLWithPath: value())
+        case "--carry-from": options.carryFrom = URL(fileURLWithPath: value())
+        case "--tune":
+            for pair in value().split(separator: ",") {
+                let parts = pair.split(separator: "=", maxSplits: 1).map(String.init)
+                guard parts.count == 2 else { fail("--tune wants key=value pairs") }
+                switch (parts[0], Double(parts[1])) {
+                case ("firstPassMinSpeechSeconds", let v?): options.tuning.firstPassMinSpeechSeconds = Float(v)
+                case ("mergeGapMs", let v?): options.tuning.mergeGapMs = Int(v)
+                case ("minSpanMs", let v?): options.tuning.minSpanMs = Int(v)
+                case ("sameSpeakerDistance", let v?): options.tuning.sameSpeakerDistance = Float(v)
+                case ("consolidationDistance", let v?): options.tuning.consolidationDistance = Float(v)
+                case ("foundingTurnMs", let v?): options.tuning.foundingTurnMs = Int(v)
+                default: fail("unknown or non-numeric tuning \(pair)")
+                }
+            }
         case "--mode":
             switch value() {
             case "accurate": options.mode = .accurate
@@ -180,7 +204,7 @@ let clock = ContinuousClock()
 let engine: any SpeakerDiarizing
 switch options.engine {
 case "turn":
-    engine = SpeakerEngine(modelsDirectory: options.models)
+    engine = SpeakerEngine(modelsDirectory: options.models, tuning: options.tuning)
 default:
     fail("unknown --engine \(options.engine)")
 }
@@ -217,6 +241,13 @@ let end = footprint()
 // the label that has to be stable from run to run, so it is the one scored.
 let normalized = SegmentMerger.normalize(spans)
 
+/// What a re-identification would do with the names of the run before it.
+struct CarryOut: Encodable {
+    var inherited: [String: String]   // this run's label -> the earlier label it inherits
+    var labels: [String: String]      // this run's label -> the label it is stored under
+    var kept: [String]                // earlier labels with a name and no heir
+}
+
 struct Out: Encodable {
     struct Span: Encodable {
         var start: Double
@@ -238,6 +269,29 @@ struct Out: Encodable {
     var peakFootprintBytes: UInt64
     var footprintAfterPrepareBytes: UInt64
     var footprintAtEndBytes: UInt64
+    var tuning: [String: Double]
+    var carry: CarryOut?
+}
+
+var carryOut: CarryOut?
+if let previous = options.carryFrom {
+    struct Previous: Decodable {
+        struct Span: Decodable { var start: Double; var end: Double; var speaker: String }
+        var spans: [Span]
+    }
+    let earlier: Previous
+    do {
+        earlier = try JSONDecoder().decode(Previous.self, from: Data(contentsOf: previous))
+    } catch { fail("could not read \(previous.path): \(error.localizedDescription)") }
+    let old = earlier.spans.map {
+        SpeakerSpan(speakerId: $0.speaker, startMs: Int($0.start * 1000), endMs: Int($0.end * 1000))
+    }
+    // A person named every speaker of the earlier run, which is the case with
+    // the most to lose: every label is reserved unless somebody inherits it.
+    let carry = SpeakerMatching.carry(old: old, new: normalized.spans,
+                                      newOrder: normalized.roster.map(\.id),
+                                      named: Set(old.map(\.speakerId)))
+    carryOut = CarryOut(inherited: carry.inherited, labels: carry.labels, kept: carry.kept)
 }
 
 let outSpans = normalized.spans.sorted { $0.startMs < $1.startMs }.map { span in
@@ -256,7 +310,16 @@ let result = Out(
     secondPassMs: firstPassMs.map { diarizeMs - $0 },
     peakFootprintBytes: end.peak,
     footprintAfterPrepareBytes: afterPrepare.current,
-    footprintAtEndBytes: end.current
+    footprintAtEndBytes: end.current,
+    tuning: [
+        "firstPassMinSpeechSeconds": Double(options.tuning.firstPassMinSpeechSeconds),
+        "mergeGapMs": Double(options.tuning.mergeGapMs),
+        "minSpanMs": Double(options.tuning.minSpanMs),
+        "sameSpeakerDistance": Double(options.tuning.sameSpeakerDistance),
+        "consolidationDistance": Double(options.tuning.consolidationDistance),
+        "foundingTurnMs": Double(options.tuning.foundingTurnMs),
+    ],
+    carry: carryOut
 )
 
 await engine.unload()
