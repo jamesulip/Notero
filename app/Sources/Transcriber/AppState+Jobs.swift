@@ -119,8 +119,13 @@ extension AppState {
             transcriptTicks[id, default: 0] += 1
 
         case .diarized(let id, let spans, let roster):
-            _ = await ledger.succeeded(.speakers, for: id) {
+            let applied = await ledger.attempt(.speakers, for: id) {
                 try await writer.applySpeakers(spans: spans, roster: roster, for: id)
+            }
+            if applied == false {
+                await appendWarning(
+                    "Speaker identification found no speech to label, so the speaker "
+                    + "labels that were already on this transcript were kept.", for: id)
             }
             transcriptTicks[id, default: 0] += 1
 

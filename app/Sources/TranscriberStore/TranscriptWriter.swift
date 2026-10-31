@@ -244,9 +244,16 @@ public actor TranscriptWriter {
     }
 
     /// Stamps speakers onto an existing transcript after diarization finishes.
+    ///
+    /// A pass that found nothing (no spans and no roster) changes nothing and
+    /// answers false. Applied literally it took the label off every line and
+    /// deleted every name that a person had typed, and the only thing that had
+    /// happened was that the voice detector found no speech.
+    @discardableResult
     public func applySpeakers(spans: [SpeakerSpan], roster: [SpeakerLabel],
-                              policy: SegmentPolicy = .default, for id: UUID) throws {
-        guard let recording = try find(id), let transcript = recording.transcript else { return }
+                              policy: SegmentPolicy = .default, for id: UUID) throws -> Bool {
+        guard let recording = try find(id), let transcript = recording.transcript else { return false }
+        guard !spans.isEmpty || !roster.isEmpty else { return false }
         let sorted = spans.sorted { $0.startMs < $1.startMs }
         for row in transcript.orderedSegments {
             row.speakerId = SegmentMerger.dominantSpeaker(
@@ -258,9 +265,19 @@ public actor TranscriptWriter {
         syncSpeakers(roster, on: recording)
         recording.updatedAt = Date()
         try modelContext.save()
+        return true
     }
 
+    /// Makes the roster rows match what the transcript uses, and leaves the
+    /// names a person chose alone.
+    ///
+    /// An empty roster means no speaker identification ran (it is off in
+    /// Settings, or a live transcript is being finished and identifies later),
+    /// which says nothing about who was in the room. It used to delete every
+    /// row, and Transcribe Again with identification off took every name with
+    /// it, while the earlier revision still pointed at those labels.
     private func syncSpeakers(_ roster: [SpeakerLabel], on recording: StoredRecording) {
+        guard !roster.isEmpty else { return }
         var existing = Dictionary(
             (recording.speakers ?? []).map { ($0.speakerId, $0) },
             uniquingKeysWith: { first, _ in first }
