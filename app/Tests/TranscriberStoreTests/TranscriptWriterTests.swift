@@ -125,3 +125,28 @@ extension TranscriptWriterTests {
         XCTAssertNil(try fetch(id)?.warningMessage)
     }
 }
+
+extension TranscriptWriterTests {
+    func testAttachingAudioKeepsTheLanesAndTheLengthThroughTheWriterAndOnTheRow() async throws {
+        let id = try RecordingStore.create(kind: .meeting, in: container.mainContext).id
+        let writer = TranscriptWriter(modelContainer: container)
+
+        try await writer.attachAudio(fileName: "2026/10/a.m4a", sampleRate: 48_000,
+                                     durationMs: 5_400_000, waveform: [0.1, 0.4],
+                                     lanes: [.room, .remote], for: id)
+        let stored = try XCTUnwrap(try fetch(id))
+        XCTAssertEqual(stored.lanes, [.room, .remote])
+        XCTAssertEqual(stored.durationMs, 5_400_000)
+
+        // The second try, on the row the app holds, does the same thing.
+        let other = try RecordingStore.create(kind: .meeting, in: container.mainContext)
+        other.applyCapturedAudio(fileName: "2026/10/b.m4a", sampleRate: 44_100,
+                                 durationMs: 60_000, waveform: nil, lanes: [.room, .remote])
+        XCTAssertEqual(other.lanes, [.room, .remote], "a two-lane recording stays two-lane")
+        XCTAssertEqual(other.audioSampleRate, 44_100)
+
+        other.applyCapturedAudio(fileName: "", sampleRate: 1, durationMs: 1, waveform: nil,
+                                 lanes: [.remote])
+        XCTAssertEqual(other.durationMs, 60_000, "an empty file name changes nothing")
+    }
+}

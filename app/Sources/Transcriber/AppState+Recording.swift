@@ -83,6 +83,13 @@ extension AppState {
                     writer: writer, recordingId: id,
                     modelId: settings.liveModelId, language: settings.language
                 )
+                // Said while the recording runs, once: until Stop these rows
+                // are the only protection against a crash, so a person who
+                // cannot have them has to know.
+                persister.onDegraded = { [weak self] note in
+                    guard let self else { return }
+                    warnings[id] = [warnings[id], note].compactMap { $0 }.joined(separator: " ")
+                }
                 await persister.open()
                 live.onCommitted = { [weak persister] segments in
                     persister?.append(segments)
@@ -154,14 +161,38 @@ extension AppState {
                     .compactMap { $0 }.joined(separator: " ")
             }
         }
-        try? await writer.attachAudio(
-            fileName: result.archiveFileName ?? "",
-            sampleRate: result.archiveSampleRate,
-            durationMs: result.durationMs,
-            waveform: result.waveform.isEmpty ? nil : result.waveform,
-            lanes: result.lanes,
-            for: result.recordingId
-        )
+        let attached = await ledger.succeeded(.status, for: result.recordingId) {
+            try await writer.attachAudio(
+                fileName: result.archiveFileName ?? "",
+                sampleRate: result.archiveSampleRate,
+                durationMs: result.durationMs,
+                waveform: result.waveform.isEmpty ? nil : result.waveform,
+                lanes: result.lanes,
+                for: result.recordingId
+            )
+        }
+        if !attached {
+            // Without these a two-lane recording is transcribed as one, and the
+            // library shows no length. The row the app holds is a second way
+            // to the same store; only if that fails too is the person told.
+            var saved = false
+            if let row = recording(result.recordingId) {
+                row.applyCapturedAudio(
+                    fileName: result.archiveFileName ?? "", sampleRate: result.archiveSampleRate,
+                    durationMs: result.durationMs,
+                    waveform: result.waveform.isEmpty ? nil : result.waveform,
+                    lanes: result.lanes)
+                saved = (try? context.save()) != nil
+            }
+            if !saved {
+                warnings[result.recordingId] = [
+                    warnings[result.recordingId],
+                    "The length and the channels of this recording could not be saved, "
+                        + "so a recording of two lanes would be transcribed as one. "
+                        + "Restart the app before you use Transcribe Again.",
+                ].compactMap { $0 }.joined(separator: " ")
+            }
+        }
 
         // A two-lane recording always gets the whole-file pass, even when the
         // live decoder already produced a transcript. Live decoding runs on
@@ -212,7 +243,16 @@ extension AppState {
                 queuedJobs[job.id] = job
                 await queue.enqueue(job)
             case .finished:
-                try? await writer.updateStatus(.completed, progress: 1, for: result.recordingId)
+                let marked = await ledger.succeeded(.status, for: result.recordingId) {
+                    try await writer.updateStatus(.completed, progress: 1, for: result.recordingId)
+                }
+                if !marked {
+                    warnings[result.recordingId] = [
+                        warnings[result.recordingId],
+                        "The app could not record that this finished, so it may still look "
+                            + "as if it is recording. Restart the app if it does.",
+                    ].compactMap { $0 }.joined(separator: " ")
+                }
                 // Only when the archive can stand in for it: a recording file
                 // that did not close, or that holds less than the copy, leaves
                 // the copy as the only audio.

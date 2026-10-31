@@ -31,13 +31,9 @@ public actor TranscriptWriter {
     public func attachAudio(fileName: String, sampleRate: Int, durationMs: Int,
                             waveform: [Float]?, lanes: [CaptureLane] = [.room],
                             for id: UUID) throws {
-        guard let recording = try find(id), !fileName.isEmpty else { return }
-        recording.audioFileName = fileName
-        if sampleRate > 0 { recording.audioSampleRate = sampleRate }
-        if !lanes.isEmpty { recording.lanes = lanes }
-        recording.durationMs = durationMs
-        if let waveform { recording.waveform = waveform }
-        recording.updatedAt = Date()
+        guard let recording = try find(id) else { return }
+        recording.applyCapturedAudio(fileName: fileName, sampleRate: sampleRate,
+                                     durationMs: durationMs, waveform: waveform, lanes: lanes)
         try modelContext.save()
     }
 
@@ -305,5 +301,25 @@ extension RecordingStore {
         parts.append(contentsOf: (recording.items ?? []).map(\.text))
         parts.append(contentsOf: (recording.bookmarks ?? []).map(\.label))
         recording.searchText = parts.filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+}
+
+extension StoredRecording {
+    /// What a finished capture says about its file: the name, the rate, how
+    /// long it ran, what it looks like and which lane each channel holds.
+    ///
+    /// One function for the writer and for the app's second try on the main
+    /// context. When the writer failed, the lanes were left at their default,
+    /// a single room channel, and a two-lane recording was then transcribed as
+    /// one.
+    public func applyCapturedAudio(fileName: String, sampleRate: Int, durationMs: Int,
+                                   waveform: [Float]?, lanes: [CaptureLane]) {
+        guard !fileName.isEmpty else { return }
+        audioFileName = fileName
+        if sampleRate > 0 { audioSampleRate = sampleRate }
+        if !lanes.isEmpty { self.lanes = lanes }
+        self.durationMs = durationMs
+        if let waveform { self.waveform = waveform }
+        updatedAt = Date()
     }
 }
