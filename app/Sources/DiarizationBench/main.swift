@@ -73,6 +73,7 @@ func parse() -> Options {
                 case ("firstPassMinSpeechSeconds", let v?): options.tuning.firstPassMinSpeechSeconds = Float(v)
                 case ("mergeGapMs", let v?): options.tuning.mergeGapMs = Int(v)
                 case ("minSpanMs", let v?): options.tuning.minSpanMs = Int(v)
+                case ("finalMergeGapMs", let v?): options.tuning.finalMergeGapMs = Int(v)
                 case ("sameSpeakerDistance", let v?): options.tuning.sameSpeakerDistance = Float(v)
                 case ("consolidationDistance", let v?): options.tuning.consolidationDistance = Float(v)
                 case ("foundingTurnMs", let v?): options.tuning.foundingTurnMs = Int(v)
@@ -315,6 +316,7 @@ let result = Out(
         "firstPassMinSpeechSeconds": Double(options.tuning.firstPassMinSpeechSeconds),
         "mergeGapMs": Double(options.tuning.mergeGapMs),
         "minSpanMs": Double(options.tuning.minSpanMs),
+        "finalMergeGapMs": Double(options.tuning.finalMergeGapMs),
         "sameSpeakerDistance": Double(options.tuning.sameSpeakerDistance),
         "consolidationDistance": Double(options.tuning.consolidationDistance),
         "foundingTurnMs": Double(options.tuning.foundingTurnMs),

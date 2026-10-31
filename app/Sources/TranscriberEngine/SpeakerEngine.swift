@@ -30,6 +30,12 @@ public actor SpeakerEngine: SpeakerDiarizing {
         public var mergeGapMs: Int = 250
         /// Slivers shorter than this come out of overlapping segmentation.
         public var minSpanMs: Int = 120
+        /// After the second pass, same-speaker spans closer than this are joined
+        /// again. Zero (the shipping value) leaves them alone. Exists so the merge
+        /// before clustering can be switched off (`mergeGapMs` 0), which keeps a
+        /// turn boundary the first pass bridged for the embeddings to see, without
+        /// losing the speech that bridging used to cover.
+        public var finalMergeGapMs: Int = 0
         /// Same-speaker distance for the WeSpeaker embeddings, matching
         /// `DiarizerConfig.clusteringThreshold`'s default and scale (cosine
         /// distance of L2-normalized vectors).
@@ -136,10 +142,12 @@ public actor SpeakerEngine: SpeakerDiarizing {
         }
         let merged = merge(spans)
         guard mode == .accurate else { return merged }
-        return try recluster(merged, in: source, using: manager,
-                             expectedSpeakers: expectedSpeakers) { fraction in
+        let placed = try recluster(merged, in: source, using: manager,
+                                   expectedSpeakers: expectedSpeakers) { fraction in
             progress?(0.7 + 0.3 * fraction)
         }
+        return tuning.finalMergeGapMs > 0
+            ? Self.join(placed, gapMs: tuning.finalMergeGapMs) : placed
     }
 
     /// Continuous ranges handed to FluidAudio. VAD is advisory: nil falls
@@ -265,10 +273,19 @@ public actor SpeakerEngine: SpeakerDiarizing {
     /// sub-frame slivers that come out of overlapping segmentation.
     private func merge(_ spans: [SpeakerSpan]) -> [SpeakerSpan] {
         let sorted = spans.sorted { $0.startMs < $1.startMs }
+            .filter { $0.durationMs >= tuning.minSpanMs }
+        return Self.join(sorted, gapMs: tuning.mergeGapMs)
+    }
+
+    /// Consecutive spans of one speaker that are no further apart than `gapMs`
+    /// become one. `sorted` is in start order. Only the span directly before
+    /// is considered, so a span of another speaker in between keeps two apart.
+    static func join(_ sorted: [SpeakerSpan], gapMs: Int) -> [SpeakerSpan] {
         var out: [SpeakerSpan] = []
-        for span in sorted where span.durationMs >= tuning.minSpanMs {
+        out.reserveCapacity(sorted.count)
+        for span in sorted {
             if var last = out.last, last.speakerId == span.speakerId,
-               span.startMs - last.endMs <= tuning.mergeGapMs {
+               span.startMs - last.endMs <= gapMs {
                 last.endMs = max(last.endMs, span.endMs)
                 out[out.count - 1] = last
             } else {

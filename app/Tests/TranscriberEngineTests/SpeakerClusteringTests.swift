@@ -147,4 +147,43 @@ final class SpeakerClusteringTests: XCTestCase {
         XCTAssertTrue(clusterer.consolidate(toward: 0, withinDistance: 0.85).isEmpty)
         XCTAssertEqual(clusterer.clusters.count, 2)
     }
+
+    // MARK: - Joining spans
+
+    private func span(_ id: String, _ start: Int, _ end: Int) -> SpeakerSpan {
+        SpeakerSpan(speakerId: id, startMs: start, endMs: end)
+    }
+
+    func testSameSpeakerSpansWithinTheGapAreJoinedAndOthersAreNot() {
+        let spans = [span("A", 0, 1_000), span("A", 1_200, 2_000), span("A", 2_500, 3_000),
+                     span("B", 3_100, 4_000), span("A", 4_200, 5_000)]
+        let joined = SpeakerEngine.join(spans, gapMs: 250)
+        XCTAssertEqual(joined.map(\.speakerId), ["A", "A", "B", "A"])
+        XCTAssertEqual(joined[0].startMs, 0)
+        XCTAssertEqual(joined[0].endMs, 2_000, "200 ms apart is within 250")
+        XCTAssertEqual(joined[1].startMs, 2_500, "500 ms apart is not")
+    }
+
+    func testAGapOfZeroJoinsOnlyTouchingSpansAndNothingJoinsAcrossAnotherSpeaker() {
+        let spans = [span("A", 0, 1_000), span("A", 1_000, 2_000), span("B", 2_000, 3_000),
+                     span("A", 3_000, 4_000)]
+        XCTAssertEqual(SpeakerEngine.join(spans, gapMs: 0).map { [$0.startMs, $0.endMs] },
+                       [[0, 2_000], [2_000, 3_000], [3_000, 4_000]])
+    }
+
+    func testJoiningKeepsTheLongerEndWhenASpanIsInsideAnother() {
+        let spans = [span("A", 0, 5_000), span("A", 1_000, 2_000)]
+        XCTAssertEqual(SpeakerEngine.join(spans, gapMs: 0).map { [$0.startMs, $0.endMs] }, [[0, 5_000]])
+    }
+
+    func testShippingTuningJoinsAndDropsExactlyAsTheEngineAlwaysDid() {
+        let tuning = SpeakerEngine.Tuning.shipping
+        XCTAssertEqual(tuning.mergeGapMs, 250)
+        XCTAssertEqual(tuning.minSpanMs, 120)
+        XCTAssertEqual(tuning.firstPassMinSpeechSeconds, 1.0)
+        XCTAssertEqual(tuning.sameSpeakerDistance, 0.7)
+        XCTAssertEqual(tuning.consolidationDistance, 0.85)
+        XCTAssertEqual(tuning.foundingTurnMs, 2_000)
+        XCTAssertEqual(tuning.finalMergeGapMs, 0, "off: the engine did not join after clustering")
+    }
 }
