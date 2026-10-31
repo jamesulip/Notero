@@ -545,6 +545,10 @@ def test_confirmation_is_refused_for_a_different_pair_and_for_the_session_itself
     _, _, other = run_compare(world, good, good, "--confirm-with", str(first_dir / "report.json"), out="s3")
     assert other["confirmation"]["refused"].startswith("the first session compared different binaries")
     assert other["confirmation"]["confirmed"] == [] and "REFUSED" in (world / "s3" / "report.md").read_text()
+    # the same candidate against a different BASE is a different pair as well:
+    third = fake_binary(world, "third", rtf=0.3)
+    _, _, other_base = run_compare(world, third, broken, "--confirm-with", str(first_dir / "report.json"), out="s4")
+    assert other_base["confirmation"]["refused"].startswith("the first session compared different binaries")
     # a session cannot confirm itself:
     assert rg.main(["reanalyze", str(first_dir), "--confirm-with", str(first_dir / "report.json")]) == 0
     itself = json.loads((first_dir / "report.json").read_text())
