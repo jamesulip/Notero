@@ -5,9 +5,11 @@ some: it renders turns with different macOS `say` voices, trims each clip to its
 audible extent, lays them on one timeline and writes the exact boundaries beside
 the audio. Score a diarizer against them with `eval/der.py`.
 
-    python3 eval/make_multispeaker.py                    # all fixtures
+    python3 eval/make_multispeaker.py                    # the tuning fixtures
+    python3 eval/make_multispeaker.py --set holdout      # the hold-out fixtures
     python3 eval/make_multispeaker.py --only four-voices
     python3 eval/make_multispeaker.py --list
+    python3 eval/make_multispeaker.py --pair Daniel Tessa --seed 191
 
 Output (default `eval/audio/multispeaker/`, which git ignores):
 
@@ -208,6 +210,42 @@ FIXTURES = [
 ]
 
 
+# The HOLD-OUT set: the same structures as above with voices and seeds the tuning set
+# never used, for checking that a threshold chosen on the first set is not fitted to
+# its voices (see eval/tuning_verdict.py). Voices were chosen from `--survey` by how far
+# apart the embedding model puts them (nearest turn pair 0.72-0.99), never by what any
+# diarizer did with them, which is how the tuning set's voices were chosen too. A bare
+# `say` name such as "Sandy" has several locales; the names here are the full ones, which
+# are the variants a bare name resolved to on the machine that ran the survey.
+HOLDOUT = [
+    Fixture(
+        "h-two-distinct", ("Sandy (English (UK))", "Fred"), 90, seed=211,
+        weights=(0.20, 0.40, 0.25, 0.15),
+        note="Hold-out: two separable voices, long and short turns.",
+    ),
+    Fixture(
+        "h-two-short-turns", ("Tara (English (India))", "Ralph"), 100, seed=212,
+        weights=(0.05, 0.30, 0.40, 0.25), gap_s=(0.3, 0.8),
+        note="Hold-out: two separable voices trading short turns in shared chunks.",
+    ),
+    Fixture(
+        "h-three-voices", ("Sandy (English (UK))", "Tara (English (India))", "Fred"), 120, seed=213,
+        weights=(0.15, 0.35, 0.25, 0.25),
+        note="Hold-out: three speakers with frequent backchannels.",
+    ),
+    Fixture(
+        "h-four-voices", ("Sandy (English (UK))", "Tara (English (India))", "Ralph", "Shelley (English (UK))"), 160, seed=214,
+        weights=(0.20, 0.35, 0.25, 0.20),
+        note="Hold-out: four speakers, longer file.",
+    ),
+    Fixture(
+        "h-three-overlap", ("Rocko (English (UK))", "Sandy (English (UK))", "Tara (English (India))"), 90, seed=215,
+        weights=(0.10, 0.30, 0.30, 0.30), overlap_chance=0.7,
+        note="Hold-out: three speakers; a short turn often starts before the last ends.",
+    ),
+]
+
+
 # --- audio helpers --------------------------------------------------------------
 
 def render(voice: str, text: str, workdir: Path) -> list[float]:
@@ -377,6 +415,10 @@ def main(argv: list[str] | None = None) -> int:
                         default=Path(__file__).resolve().parent / "audio" / "multispeaker")
     parser.add_argument("--only", action="append", help="fixture name; repeatable")
     parser.add_argument("--list", action="store_true", help="list fixtures and exit")
+    parser.add_argument("--set", choices=["tuning", "holdout"], default="tuning",
+                        help="which fixture set to build (default: the tuning set)")
+    parser.add_argument("--seed", type=int, default=91,
+                        help="seed of a --pair fixture (default 91, the tuning pairs')")
     parser.add_argument("--pair", nargs=2, metavar="VOICE",
                         help="write one short-turn fixture for this pair of voices, named "
                              "pair-<a>-<b>, to look for pairs a method fuses")
@@ -384,8 +426,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="write survey.wav/.rttm with these voices instead of the fixtures")
     args = parser.parse_args(argv)
 
+    pool = HOLDOUT if args.set == "holdout" else FIXTURES
     if args.list:
-        for f in FIXTURES:
+        for f in pool:
             print(f"{f.name:14} {len(f.voices)} voices {f.target_s:4.0f}s  {f.note}")
         return 0
     if not shutil.which("say") or not shutil.which("afconvert"):
@@ -400,13 +443,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.pair:
         a, b = args.pair
-        FIXTURES.append(Fixture(
-            f"pair-{a}-{b}".replace(" ", "_"), (a, b), 80, seed=91,
+        pool.append(Fixture(
+            re.sub(r"[^A-Za-z0-9-]+", "_", f"pair-{a}-{b}").strip("_"), (a, b), 80, seed=args.seed,
             weights=(0.05, 0.30, 0.40, 0.25), gap_s=(0.3, 0.8),
             note=f"Short turns between {a} and {b}."))
-        args.only = [FIXTURES[-1].name]
+        args.only = [pool[-1].name]
 
-    chosen = [f for f in FIXTURES if not args.only or f.name in args.only]
+    chosen = [f for f in pool if not args.only or f.name in args.only]
     if not chosen:
         print(f"error: no fixture matches {args.only}", file=sys.stderr)
         return 2
