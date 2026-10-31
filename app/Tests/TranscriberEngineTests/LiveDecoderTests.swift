@@ -126,6 +126,36 @@ final class LiveDecoderTests: XCTestCase {
         XCTAssertEqual(decoder.committedEndMs, 4_200)
     }
 
+    // MARK: - A detector that throws
+
+    func testABrokenVoiceDetectorIsCountedAndTheSessionCarriesOn() async throws {
+        // `try?` used to drop the batch without a trace: a detector that threw
+        // on every batch ended looking like a quiet room.
+        let asr = OracleRecognizer(words: quotation)
+        let vad = ThrowingVAD()
+        let decoder = LiveDecoder(config: config(), recognizer: asr, vad: vad)
+        var clock = 0
+        await feed(decoder, &clock, to: 8_000)
+
+        let pushes = await vad.pushes
+        XCTAssertGreaterThan(pushes, 0)
+        XCTAssertEqual(decoder.stats.vadFailures, pushes, "every failed batch is counted")
+        let calls = await asr.calls
+        XCTAssertFalse(calls.isEmpty, "hops still decode without the detector")
+    }
+
+    func testOnlyTheBatchesThatFailedAreCounted() async throws {
+        let asr = OracleRecognizer(words: quotation)
+        let vad = ThrowingVAD(failOn: [2, 5])
+        let decoder = LiveDecoder(config: config(), recognizer: asr, vad: vad)
+        var clock = 0
+        await feed(decoder, &clock, to: 8_000)
+
+        let pushes = await vad.pushes
+        XCTAssertGreaterThanOrEqual(pushes, 5)
+        XCTAssertEqual(decoder.stats.vadFailures, 2)
+    }
+
     // MARK: - The live path keeps Whisper's own ladder
 
     func testTheLivePathNeverTakesTheLadderApart() async throws {

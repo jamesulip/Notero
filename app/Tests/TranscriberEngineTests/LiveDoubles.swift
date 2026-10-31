@@ -194,3 +194,25 @@ actor ScriptedVAD: VoiceActivityDetecting {
                                     trailingSilenceMs: trailingSilenceMs, speechMs: speechMs)
     }
 }
+
+/// A detector that throws, to see what the live path does with a broken one.
+/// Fails every push, or only the ones whose 1-based index is in `failOn`.
+actor ThrowingVAD: VoiceActivityDetecting {
+    struct Broken: Error {}
+
+    private let failOn: Set<Int>?
+    private(set) var pushes = 0
+
+    init(failOn: Set<Int>? = nil) { self.failOn = failOn }
+
+    func prepare(progress: ProgressReport?) async throws {}
+    func regions(in samples: [Float]) async throws -> [SpeechRegion] { [] }
+    func clearSpeechCounter() {}
+    func reset() {}
+
+    func push(_ samples: [Float]) async throws -> VoiceActivityReading {
+        pushes += 1
+        if failOn == nil || failOn!.contains(pushes) { throw Broken() }
+        return VoiceActivityReading(isSpeech: false, probability: 0, trailingSilenceMs: 0, speechMs: 0)
+    }
+}
