@@ -134,11 +134,22 @@ struct RunMetricsTests {
         #expect(during.stage == "during")
     }
 
+    @Test("Neural memory is reported apart from the footprint and never negative")
+    func neuralMemoryIsSeparate() {
+        let snapshot = MemorySnapshot.current(stage: "now")
+        // This test process loads no model, so it owns no Neural Engine memory
+        // to speak of; the point is that the fields exist, are sane, and the
+        // peak never trails the current value.
+        #expect(snapshot.neuralMB >= 0)
+        #expect(snapshot.neuralPeakMB >= snapshot.neuralMB)
+    }
+
     @Test("A snapshot round-trips through the JSON the CLI writes")
     func memorySnapshotCodable() throws {
         let snapshot = MemorySnapshot(stage: "afterModelLoad", physFootprintMB: 300,
                                       lifetimePeakFootprintMB: 410, residentMB: 900,
-                                      internalMB: 200, externalMB: 700, compressedMB: 5)
+                                      internalMB: 200, externalMB: 700, compressedMB: 5,
+                                      neuralMB: 1_581, neuralPeakMB: 1_581)
         let data = try JSONEncoder().encode(snapshot)
         #expect(try JSONDecoder().decode(MemorySnapshot.self, from: data) == snapshot)
     }

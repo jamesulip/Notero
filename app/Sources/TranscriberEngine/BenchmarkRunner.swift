@@ -158,14 +158,15 @@ public enum RunStats {
 
 /// One reading of this process's memory accounting, in megabytes.
 ///
-/// **This is the footprint of one process, not the residency of a model.**
-/// `phys_footprint` is dirty plus compressed pages plus some IOKit mappings.
-/// File-backed pages that are merely mapped, which is how CoreML holds compiled
-/// weights, do not count until they are dirtied, and memory that the Neural
-/// Engine owns is accounted to the kernel and to other processes. A model can
-/// be 1.6 GB on disk and in use, and a snapshot here can still say 300.
-/// Compare snapshots across stages of one build; never read a smaller number
-/// as "this build needs less memory for the model".
+/// **`physFootprintMB` is the footprint of one process, not the residency of a
+/// model.** `phys_footprint` is dirty plus compressed pages plus some IOKit
+/// mappings. Memory that CoreML places on the Neural Engine is owned by this
+/// process but accounted separately, as "neural, nofootprint": measured on the
+/// synthetic clip, the footprint after loading large-v3-turbo was 77 MB while
+/// `neuralMB` was 1581 MB. `neuralMB` is the residency-style figure; the
+/// footprint is not. A build that shows a smaller footprint has not shown that
+/// it needs less memory for the model. Compare snapshots across stages of one
+/// build, and read `neuralMB` beside the footprint.
 public struct MemorySnapshot: Codable, Sendable, Equatable {
     public var stage: String
     /// `phys_footprint` now. What Activity Monitor calls Memory.
@@ -179,9 +180,15 @@ public struct MemorySnapshot: Codable, Sendable, Equatable {
     /// File-backed and other external pages now.
     public var externalMB: Int
     public var compressedMB: Int
+    /// Neural Engine memory owned by this process now. **Not in
+    /// `physFootprintMB`.** Zero on a kernel that does not report it.
+    public var neuralMB: Int
+    /// The highest `neuralMB` this process has reached.
+    public var neuralPeakMB: Int
 
     public init(stage: String, physFootprintMB: Int, lifetimePeakFootprintMB: Int,
-                residentMB: Int, internalMB: Int, externalMB: Int, compressedMB: Int) {
+                residentMB: Int, internalMB: Int, externalMB: Int, compressedMB: Int,
+                neuralMB: Int = 0, neuralPeakMB: Int = 0) {
         self.stage = stage
         self.physFootprintMB = physFootprintMB
         self.lifetimePeakFootprintMB = lifetimePeakFootprintMB
@@ -189,6 +196,8 @@ public struct MemorySnapshot: Codable, Sendable, Equatable {
         self.internalMB = internalMB
         self.externalMB = externalMB
         self.compressedMB = compressedMB
+        self.neuralMB = neuralMB
+        self.neuralPeakMB = neuralPeakMB
     }
 
     public static func current(stage: String) -> MemorySnapshot {
@@ -212,7 +221,9 @@ public struct MemorySnapshot: Codable, Sendable, Equatable {
             residentMB: mb(info.resident_size),
             internalMB: mb(info.internal),
             externalMB: mb(info.external),
-            compressedMB: mb(info.compressed)
+            compressedMB: mb(info.compressed),
+            neuralMB: mb(UInt64(max(0, info.ledger_tag_neural_nofootprint_total))),
+            neuralPeakMB: mb(UInt64(max(0, info.ledger_tag_neural_nofootprint_peak)))
         )
     }
 }

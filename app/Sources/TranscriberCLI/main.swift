@@ -513,4 +513,8 @@ log("memory (one process, not model residency): footprint at exit \(atExit.physF
     + "lifetime peak footprint \(atExit.lifetimePeakFootprintMB) MB, "
     + "resident \(atExit.residentMB) MB; after model load \(memory.first { $0.stage == "afterModelLoad" }?.physFootprintMB ?? 0) MB "
     + "(before \(memory.first { $0.stage == "beforeModelLoad" }?.physFootprintMB ?? 0) MB)")
+log("neural engine memory owned by this process, NOT in the footprint: \(atExit.neuralMB) MB now, "
+    + "\(atExit.neuralPeakMB) MB peak; after model load "
+    + "\(memory.first { $0.stage == "afterModelLoad" }?.neuralMB ?? 0) MB "
+    + "(before \(memory.first { $0.stage == "beforeModelLoad" }?.neuralMB ?? 0) MB)")
 log("total \(TimeFormat.short(ms: Int(Date().timeIntervalSince(started) * 1000)))")
