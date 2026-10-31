@@ -265,7 +265,7 @@ public final class AudioCapture: @unchecked Sendable {
     ///
     /// `frames` is read after the close, and is what the file holds: every frame
     /// handed over on a clean close, and less after a disk-low stop or a failed
-    /// write (finding 32).
+    /// write (finding 33).
     @discardableResult
     public func stop(closeWithin timeout: TimeInterval? = nil)
         -> (frames: AVAudioFramePosition, sampleRate: Int, closed: Bool) {

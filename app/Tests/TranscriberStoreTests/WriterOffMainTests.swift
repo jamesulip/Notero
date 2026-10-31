@@ -277,6 +277,31 @@ final class WriterOffMainTests: XCTestCase {
                           "if a held row were current without a refresh, this call would be unnecessary")
     }
 
+    /// `refresh` runs on the main actor for every decoded window, so it must not
+    /// grow with the length of the meeting: it fetches the recording, its transcripts
+    /// and its speakers, never the segments.
+    func testRefreshDoesNotCostMoreOnALongMeeting() async throws {
+        let main = container.mainContext
+        let id = try RecordingStore.create(kind: .recording, in: main).id
+        let writer = TranscriptWriter(modelContainer: container)
+        for revision in 0..<3 {
+            try await writer.storeTranscript(
+                segments: (0..<2_000).map { segment($0, "r\(revision)") },
+                roster: [SpeakerLabel(id: "S1", displayName: "Speaker 1")],
+                modelId: "m", language: "tl", processMs: 1, didDiarize: false, for: id)
+        }
+        func average(_ calls: Int) -> Double {
+            let started = ContinuousClock.now
+            for _ in 0..<calls { RecordingStore.refresh(id, in: main) }
+            let took = ContinuousClock.now - started
+            return (Double(took.components.seconds) * 1000 + Double(took.components.attoseconds) / 1e15) / Double(calls)
+        }
+        _ = average(3)   // the first calls load the rows
+        let ms = average(20)
+        print("refresh on a recording with 6,000 rows over 3 revisions: \(String(format: "%.2f", ms)) ms a call")
+        XCTAssertLessThan(ms, 50, "refresh must not walk the segments")
+    }
+
     /// The revision swap and the edits that follow a transcript: after each call
     /// the main context must show the new rows, the one transcript that remains
     /// and its flags.
