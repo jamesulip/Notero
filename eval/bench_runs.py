@@ -242,6 +242,7 @@ def summarize_records(records: list[dict], *, meta: dict) -> dict:
             "decode_ms": report.get("decodeMs"),
             "collapsed": flag,
             "filler_markers": record["score"]["filler_markers"],
+            "loadavg_1m": record.get("loadavg_1m_at_launch"),
             "retried_windows": record["stderr_info"].get("retried_windows"),
             "dropped_windows": record["stderr_info"].get("dropped_windows"),
         })
@@ -263,6 +264,7 @@ def summarize_records(records: list[dict], *, meta: dict) -> dict:
             "collapsed_runs": sum(flags),
             "collapsed_indices": [p["index"] for p in per_run if p["collapsed"]],
             "runs_with_filler_markers": sum(1 for p in per_run if p["filler_markers"]),
+            "runs_with_retried_window": sum(1 for p in per_run if p["retried_windows"]),
             "windows_retried_total": sum(p["retried_windows"] or 0 for p in per_run),
             "windows_never_decoded_total": sum(p["dropped_windows"] or 0 for p in per_run),
         },
@@ -277,6 +279,7 @@ def summarize_records(records: list[dict], *, meta: dict) -> dict:
                         "Not a per-hop cost; see live.mean_decode_rtf"),
         "decode_ms": bs.describe(_values(ok, lambda r: r["report"].get("decodeMs"))),
         "load_ms": bs.describe(_values(ok, lambda r: r["report"].get("loadMs"))),
+        "loadavg_1m_at_launch": bs.describe(_values(ok, lambda r: r.get("loadavg_1m_at_launch"))),
         "tl_error_rate": bs.describe(_values(ok, lambda r: r["score"].get("tl_error_rate"))),
         "en_error_rate": bs.describe(_values(ok, lambda r: r["score"].get("en_error_rate"))),
         "per_run": per_run,
@@ -608,6 +611,9 @@ def run_once(*, binary: Path, audio: Path, ref: Path, reference_text: str, out_d
     record: dict = {"schema": SCHEMA, "index": index, "arm": arm, "mode": mode,
                     "cmd": cmd, "lock": use_lock, "started_utc":
                         datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    # The lock serializes measured runs only. Builds and tests by other people
+    # do not take it, and they move RTF, so record how busy the machine was.
+    record["loadavg_1m_at_launch"] = round(os.getloadavg()[0], 2)
     began = time.monotonic()
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
                             start_new_session=True)
@@ -681,7 +687,10 @@ def format_summary(summary: dict) -> str:
              f"  collapsed runs       {c['collapsed_runs']}/{summary['runs_ok']} "
              f"(threshold WER > {c['wer_threshold'] * 100:.1f}% or words < {c['word_floor']:.0f}) "
              f"indices {c['collapsed_indices']}" if summary["runs_ok"] else "  no successful runs",
-             f"  rule: {c['rule']}"]
+             f"  rule: {c['rule']}",
+             f"  runs with invented-filler phrases: {c['runs_with_filler_markers']}; "
+             f"runs with a window that needed the retry ladder: {c['runs_with_retried_window']}; "
+             f"windows never decoded: {c['windows_never_decoded_total']}"]
     if "live" in summary:
         live = summary["live"]
         for key, scale, unit in (("dropped_hops", 1, ""), ("forced_commits", 1, ""),

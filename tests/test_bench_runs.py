@@ -130,6 +130,8 @@ def test_summary_counts_the_collapsed_run_and_keeps_the_rest_honest():
     assert summary["collapse"]["collapsed_runs"] == 1
     assert summary["collapse"]["collapsed_indices"] == [8]
     assert summary["collapse"]["runs_with_filler_markers"] == 1
+    assert summary["collapse"]["runs_with_retried_window"] == 8
+    assert "runs with invented-filler phrases: 1" in br.format_summary(summary)
     assert summary["collapse"]["rule"] == bs.COLLAPSE_RULE
     # sorted: .25 .25 .255 .26 .26 .27 .30 .57 -> median of the 4th and 5th = 0.26
     assert summary["wer"]["median"] == pytest.approx(0.26)
