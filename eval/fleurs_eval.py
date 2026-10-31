@@ -408,9 +408,29 @@ def cer_counts(reference: str, hypothesis: str) -> tuple[int, int]:
     return edit_distance(ref, hyp), len(ref)
 
 
-def score_utterance(reference: str, hypothesis: str) -> dict:
+def load_collisions(path: Path) -> frozenset[str]:
+    """The audited Tagalog-collision list: one token per line, '#' comments."""
+    return frozenset(line.strip().lower() for line in path.read_text(encoding="utf8").splitlines()
+                     if line.strip() and not line.lstrip().startswith("#"))
+
+
+def audited_english(reference: str, hypothesis: str, tagalog: frozenset[str]) -> tuple[int, int]:
+    """(English reference tokens, how many of them were substituted or deleted),
+    where a token `langscore` calls English but the audit lists as Tagalog does
+    not count. Same alignment as `langscore.score`."""
+    ref = langscore.normalize(reference)
+    hyp = langscore.normalize(hypothesis)
+    classes = langscore.classify_words(ref)
+    english = [c == "en" and w not in tagalog for w, c in zip(ref, classes)]
+    ops = langscore.align(ref, hyp)
+    wrong = {ri for op, ri, _ in ops if op in ("sub", "del") and ri is not None}
+    return sum(english), sum(1 for i, flag in enumerate(english) if flag and i in wrong)
+
+
+def score_utterance(reference: str, hypothesis: str, tagalog: frozenset[str] = frozenset()) -> dict:
     """Everything one utterance contributes to a pooled score, as integers, so
-    that pooling is a sum and not an average of averages."""
+    that pooling is a sum and not an average of averages. `tagalog` is the
+    audited collision list; without it the audited English count equals langscore's."""
     ref_words = normalize(reference)
     hyp_words = normalize(hypothesis)
     subs, dels, ins = levenshtein(ref_words, hyp_words)
@@ -420,6 +440,7 @@ def score_utterance(reference: str, hypothesis: str) -> dict:
     lang = langscore.score(reference, hypothesis)
     classes = {c: {"ref": v["ref_words"], "err": v["errors"], "ins": v["insertions"]}
                for c, v in lang["by_class"].items()}
+    en_ref, en_err = audited_english(reference, hypothesis, tagalog)
     return {
         "ref_words": len(ref_words), "hyp_words": len(hyp_words),
         "sub": subs, "del": dels, "ins": ins,
@@ -427,6 +448,7 @@ def score_utterance(reference: str, hypothesis: str) -> dict:
         "langscore_errors": lang["sub"] + lang["del"] + lang["ins"],
         "langscore_ref_words": lang["ref_words"],
         "classes": classes,
+        "en_audited_ref": en_ref, "en_audited_err": en_err,
         "switch_positions": lang["code_switch"]["positions"],
         "switch_errors": lang["code_switch"]["errors"],
     }
@@ -459,6 +481,10 @@ def pooled(rows: Sequence[dict]) -> dict:
         "cer_skipped_rows": sum(1 for r in rows if r["cer_skipped"]),
         "langscore_wer": sum(r["langscore_errors"] for r in rows) / lang_words if lang_words else None,
         "classes": classes,
+        "en_audited": {"ref_words": sum(r["en_audited_ref"] for r in rows),
+                       "errors": sum(r["en_audited_err"] for r in rows),
+                       "error_rate": (sum(r["en_audited_err"] for r in rows) / sum(r["en_audited_ref"] for r in rows))
+                       if sum(r["en_audited_ref"] for r in rows) else None},
         "code_switch": {"positions": switches, "errors": sum(r["switch_errors"] for r in rows),
                         "error_rate": (sum(r["switch_errors"] for r in rows) / switches) if switches else None},
         "empty_transcripts": sum(1 for r in rows if r["hyp_words"] == 0),
@@ -890,7 +916,11 @@ def command_decode(args: argparse.Namespace) -> int:
     return 0
 
 
-def load_arm_rows(work: Path, set_name: str, arm: str, *, norm_field: str = "ref") -> tuple[dict, list[dict]]:
+COLLISIONS_FILE = EVAL_DIR / "fleurs_tagalog_collisions.txt"
+
+
+def load_arm_rows(work: Path, set_name: str, arm: str, *, norm_field: str = "ref",
+                  tagalog: frozenset[str] = frozenset()) -> tuple[dict, list[dict]]:
     """Scored rows for each (item, repeat) of one arm. Returns ({id: repeat-0 row}, all records)."""
     manifest = load_manifest(work)
     items = {e["id"]: e for e in manifest["sets"][set_name]}
@@ -905,7 +935,7 @@ def load_arm_rows(work: Path, set_name: str, arm: str, *, norm_field: str = "ref
             continue
         record["item"] = item_id
         record["rep"] = int(rep)
-        record["score"] = score_utterance(items[item_id][norm_field], record["transcript"])
+        record["score"] = score_utterance(items[item_id][norm_field], record["transcript"], tagalog)
         records.append(record)
     first = {r["item"]: r["score"] for r in records if r["rep"] == 0}
     return first, records
@@ -968,8 +998,8 @@ def run_to_run(records: list[dict]) -> dict:
 
 def format_summary_table(name_to_summary: dict[str, dict]) -> str:
     head = ("| arm | utts | ref words | WER | 95% CI | CER | median utt WER | tl err | en err (n) | "
-            "switch err (n) | retried / dropped windows | empty | RTF med (range) | load |\n"
-            "|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---|---:|---|---|\n")
+            "en* err (n) | switch err (n) | retried / dropped windows | empty | RTF med (range) | load |\n"
+            "|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---|---:|---|---|\n")
     lines = []
     for name, s in name_to_summary.items():
         en = s["classes"]["en"]
@@ -983,6 +1013,7 @@ def format_summary_table(name_to_summary: dict[str, dict]) -> str:
             f"{fmt_pct(ci[0]) + '-' + fmt_pct(ci[1]) if ci else 'n/a'} | {fmt_pct(s['cer'])} | "
             f"{fmt_pct(s['wer_median_per_utterance'])} | {fmt_pct(s['classes']['tl']['error_rate'])} | "
             f"{fmt_pct(en['error_rate'])} ({en['ref_words']}) | "
+            f"{fmt_pct(s['en_audited']['error_rate'])} ({s['en_audited']['ref_words']}) | "
             f"{fmt_pct(s['code_switch']['error_rate'])} ({s['code_switch']['positions']}) | "
             f"{s['windows_retried']} / {s['windows_dropped']} | {s['empty_transcripts']} | {rtf} | {load} |")
     return head + "\n".join(lines)
@@ -994,8 +1025,10 @@ def command_score(args: argparse.Namespace) -> int:
     field = "ref_fleurs_norm" if args.fleurs_norm else "ref"
     summaries: dict[str, dict] = {}
     detail: dict[str, dict] = {}
+    fleurs = manifest["source"].get("dataset") == "google/fleurs"
+    tagalog = load_collisions(COLLISIONS_FILE) if fleurs else frozenset()
     for arm in args.arm:
-        _, records = load_arm_rows(args.work, args.set, arm, norm_field=field)
+        _, records = load_arm_rows(args.work, args.set, arm, norm_field=field, tagalog=tagalog)
         if not records:
             print(f"no decoded records for arm {arm}", file=sys.stderr)
             continue
@@ -1016,9 +1049,15 @@ def command_score(args: argparse.Namespace) -> int:
             for k, (lo, hi) in sorted(r["spread"].items()):
                 print(f"    {k}: WER {lo * 100:.1f}%-{hi * 100:.1f}%")
     tokens = english_tokens([e[field] for e in items])
-    print(f"\n`langscore` 'English' tokens in these {len(items)} references: {sum(tokens.values())} tokens, "
+    audited = Counter({w: c for w, c in tokens.items() if w not in tagalog})
+    print(f"\n`langscore` 'English' tokens in these {len(items)} references (en): {sum(tokens.values())} tokens, "
           f"{len(tokens)} distinct. Most frequent: "
-          + ", ".join(f"{w}({c})" for w, c in tokens.most_common(25)))
+          + ", ".join(f"{w}({c})" for w, c in tokens.most_common(15)))
+    if tagalog:
+        print(f"After removing {len(tagalog)} hand-audited Tagalog collisions (en*): {sum(audited.values())} tokens, "
+              f"{len(audited)} distinct. These are English words, technical terms and foreign proper names, "
+              f"read inside Tagalog sentences; they are not code-switching. Most frequent: "
+              + ", ".join(f"{w}({c})" for w, c in audited.most_common(15)))
     if args.json:
         args.json.write_text(json.dumps({"set": args.set, "summaries": summaries, "detail": detail},
                                         indent=2, default=str))

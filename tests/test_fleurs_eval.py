@@ -638,3 +638,27 @@ def test_an_imported_reference_set_goes_through_decode_and_score(tmp_path, capsy
     capsys.readouterr()
     assert fe.main(["score", "--work", str(work), "--set", "subset", "--arm", "x"]) == 0
     assert "| x | 1 | 8 |" in capsys.readouterr().out
+
+
+# ---- the audited English count ----------------------------------------------
+
+def test_audited_english_drops_tagalog_words_that_spell_like_english(english, monkeypatch):
+    # "report" is English; "iba" is a Tagalog word that happens to be in an English word list.
+    monkeypatch.setattr(langscore, "_LEXICON", {"meeting", "report", "send", "iba"})
+    ref = "may iba pang report"
+    assert fe.audited_english(ref, ref, frozenset()) == (2, 0)                 # langscore counts "iba" as English
+    assert fe.audited_english(ref, ref, frozenset({"iba"})) == (1, 0)
+    assert fe.audited_english(ref, "may pang", frozenset({"iba"})) == (1, 1)    # "report" lost: one audited error
+    assert fe.audited_english(ref, "may pang report", frozenset({"iba"})) == (1, 0)   # "iba" lost: not an English error
+    row = fe.score_utterance(ref, "may pang report", frozenset({"iba"}))
+    assert (row["en_audited_ref"], row["en_audited_err"]) == (1, 0) and row["classes"]["en"]["ref"] == 2
+    pool = fe.pooled([row])
+    assert pool["en_audited"] == {"ref_words": 1, "errors": 0, "error_rate": 0.0}
+    assert fe.pooled([fe.score_utterance("ang bata", "ang bata")])["en_audited"]["error_rate"] is None
+
+
+def test_the_collision_file_loads_without_its_comments():
+    tokens = fe.load_collisions(fe.COLLISIONS_FILE)
+    assert {"pa", "iba", "tubig", "halos"} <= tokens
+    assert not any(t.startswith("#") or t != t.lower() or " " in t for t in tokens)
+    assert "greenland" not in tokens and "hydrogen" not in tokens     # foreign names and English terms stay English
