@@ -20,7 +20,7 @@ public final class LiveTranscriptPersister {
 
     public static let defaultFlushIntervalMs = 1_000
 
-    private let writer: TranscriptWriter
+    private let writer: any LiveTranscriptWriting
     private let recordingId: UUID
     private let modelId: String
     private let language: String
@@ -36,11 +36,21 @@ public final class LiveTranscriptPersister {
     public private(set) var writes = 0
     public private(set) var failedWrites = 0
 
+    /// Set once, the first time the store could not take a row: the revision
+    /// would not open, or a batch would not save. Until Stop the rows are the
+    /// only protection against a crash, so a person has to be told that they
+    /// are not being kept. Nothing is lost while the app runs, because Stop
+    /// writes the whole transcript regardless.
+    public private(set) var degradedReason: String?
+    /// Called once, with the sentence for the person, when `degradedReason`
+    /// is first set.
+    public var onDegraded: (@MainActor (String) -> Void)?
+
     private var pending: [Segment] = []
     private var flushTask: Task<Void, Never>?
     private var closed = false
 
-    public init(writer: TranscriptWriter, recordingId: UUID, modelId: String,
+    public init(writer: any LiveTranscriptWriting, recordingId: UUID, modelId: String,
                 language: String, flushIntervalMs: Int = defaultFlushIntervalMs) {
         self.writer = writer
         self.recordingId = recordingId
@@ -52,9 +62,25 @@ public final class LiveTranscriptPersister {
     /// Opens the revision segments will be appended to.
     public func open() async {
         guard transcriptId == nil, !closed else { return }
-        transcriptId = try? await writer.openPartialTranscript(
-            modelId: modelId, language: language, for: recordingId
-        )
+        do {
+            transcriptId = try await writer.openPartialTranscript(
+                modelId: modelId, language: language, for: recordingId
+            )
+            if transcriptId == nil {
+                degrade("the recording could not be found")
+            }
+        } catch {
+            degrade(error.localizedDescription)
+        }
+    }
+
+    private func degrade(_ reason: String) {
+        guard degradedReason == nil else { return }
+        let sentence = "The live lines are not being saved as the recording goes "
+            + "(\(reason)). If the app stops unexpectedly, the transcript so far would "
+            + "be lost. The audio is still being recorded, and Stop saves everything."
+        degradedReason = sentence
+        onDegraded?(sentence)
     }
 
     /// Queues segments for the next flush. Returns at once.
@@ -87,7 +113,7 @@ public final class LiveTranscriptPersister {
         return try await writer.completeTranscript(
             transcriptId, segments: segments, roster: [], modelId: modelId,
             language: language, processMs: processMs, didDiarize: didDiarize,
-            for: recordingId
+            performanceJSON: nil, for: recordingId
         )
     }
 
@@ -110,6 +136,7 @@ public final class LiveTranscriptPersister {
             // writes the whole transcript regardless, so the queue is dropped
             // rather than rescheduled forever.
             pending = []
+            degrade("no transcript was open to add to")
             return
         }
         let batch = pending
@@ -119,6 +146,22 @@ public final class LiveTranscriptPersister {
             writes += 1
         } catch {
             failedWrites += 1
+            degrade(error.localizedDescription)
         }
     }
 }
+
+/// What the persister needs of the writer. `TranscriptWriter` is the real one;
+/// a test passes one that fails.
+public protocol LiveTranscriptWriting: Sendable {
+    func openPartialTranscript(modelId: String, language: String,
+                               for id: UUID) async throws -> UUID?
+    func appendPartial(_ segments: [Segment], to transcriptId: UUID) async throws
+    func completeTranscript(
+        _ transcriptId: UUID?, segments: [Segment], roster: [SpeakerLabel],
+        modelId: String, language: String, processMs: Int, didDiarize: Bool,
+        performanceJSON: String?, for id: UUID
+    ) async throws -> Int
+}
+
+extension TranscriptWriter: LiveTranscriptWriting {}

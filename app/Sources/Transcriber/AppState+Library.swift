@@ -119,6 +119,7 @@ extension AppState {
         )
         progress[recording.id] = JobProgress(status: .pending, fraction: 0)
         queuedJobs[recording.id] = job
+        requestedJobs[recording.id] = job
         Task { await queue.enqueue(job) }
     }
 
@@ -154,6 +155,7 @@ extension AppState {
         )
         progress[recording.id] = JobProgress(status: .pending, fraction: 0)
         queuedJobs[recording.id] = job
+        requestedJobs[recording.id] = job
         Task { await queue.enqueue(job) }
     }
 

@@ -60,7 +60,7 @@ struct SearchView: View {
         .onAppear {
             focused = true
             state.focusSearch = false
-            runSearch()
+            Task { await runSearch() }
         }
         // Debounced: search walks every matching recording's segments, and
         // running that per keystroke makes typing feel like wading.
@@ -68,7 +68,7 @@ struct SearchView: View {
             guard !state.searchText.isEmpty else { hits = []; return }
             try? await Task.sleep(for: .milliseconds(160))
             guard !Task.isCancelled else { return }
-            runSearch()
+            await runSearch()
         }
         .onChange(of: state.focusSearch) { _, wanted in
             if wanted { focused = true; state.focusSearch = false }
@@ -141,7 +141,13 @@ struct SearchView: View {
         }
     }
 
-    private func runSearch() {
-        hits = (try? SearchService.search(state.searchText, in: context)) ?? []
+    /// Off the main actor: a library with a long meeting in it made each
+    /// search a half-second stall of the window. The answer is dropped if the
+    /// text moved on while it ran.
+    private func runSearch() async {
+        let query = state.searchText
+        let found = (try? await state.makeSearcher().search(query)) ?? []
+        guard !Task.isCancelled, query == state.searchText else { return }
+        hits = found
     }
 }
