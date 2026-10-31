@@ -354,6 +354,21 @@ final class SpeakerCarryOverTests: XCTestCase {
         XCTAssertEqual(after.map(\.startMs), [0, 5_000, 10_000, 15_000])
     }
 
+    func testARenameMadeAfterTheWriterLastLookedIsStillSeen() async throws {
+        // The name is typed on the main context; the writer has its own, which
+        // already holds the speaker rows from the pass before. A rename it did
+        // not see would be treated as a default name, and a default name that
+        // nobody inherits is deleted.
+        let (id, writer) = try await seed(["S1", "S2", "S1", "S2", "S1", "S2"])
+        try await identifyAgain(writer, id, ["S1", "S2", "S1", "S2", "S1", "S2"])   // the writer loads the rows
+        try rename("S1", to: "Maria", in: id)
+
+        try await identifyAgain(writer, id, ["S1", "S1", "S1", "S1", "S1", "S1"])   // everyone fused
+
+        let kept = Set((try recording(id).speakers ?? []).map(\.displayName))
+        XCTAssertTrue(kept.contains("Maria"), "the writer did not see the rename: \(kept)")
+    }
+
     func testAPersonsRenameIsNeverDeletedByAnyOfTheseOutcomes() async throws {
         // The strictest reading of "never delete a rename": whatever the new
         // run looks like, the typed names are still in the roster afterwards.
@@ -474,8 +489,11 @@ final class SpeakerCarryOverTests: XCTestCase {
 
         let ignored = try await writer.carriedSpeakers(
             segments: transcribedAgain(labels), roster: roster, for: id)
-        XCTAssertEqual(ignored.segments.map(\.speakerId), labels,
-                       "with the empty revision as evidence there is nothing to match")
+        XCTAssertNotEqual(ignored.segments.map(\.speakerId), ["S1", "S2", "S1", "S2"],
+                          "with the empty revision as evidence nothing is matched, so Maria's "
+                          + "voice is not found, and her label is not handed to somebody else")
+        XCTAssertFalse(ignored.segments.compactMap(\.speakerId).contains("S1"),
+                       "S1 is Maria's, and nobody inherited it")
 
         let carried = try await writer.carriedSpeakers(
             segments: transcribedAgain(labels), roster: roster, for: id, excluding: [newest.id])
