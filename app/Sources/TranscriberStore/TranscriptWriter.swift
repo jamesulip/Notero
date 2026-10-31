@@ -254,15 +254,22 @@ public actor TranscriptWriter {
                               policy: SegmentPolicy = .default, for id: UUID) throws -> Bool {
         guard let recording = try find(id), let transcript = recording.transcript else { return false }
         guard !spans.isEmpty || !roster.isEmpty else { return false }
-        let sorted = spans.sorted { $0.startMs < $1.startMs }
-        for row in transcript.orderedSegments {
+        // Labels are numbered by who speaks first, which can differ between two
+        // runs over the same audio. Match the new speakers to the ones already
+        // on the transcript so a name and a colour follow the voice, not the
+        // number (see `SpeakerMatching`).
+        let rows = transcript.orderedSegments
+        let plan = speakerCarryPlan(rows: rows, recording: recording, spans: spans, roster: roster)
+        let sorted = plan.relabel(spans).sorted { $0.startMs < $1.startMs }
+        for row in rows {
             row.speakerId = SegmentMerger.dominantSpeaker(
                 startMs: row.startMs, endMs: row.endMs,
                 spans: sorted, minShare: policy.minSpeakerShare
             )?.speakerId
         }
         transcript.didDiarize = true
-        syncSpeakers(roster, on: recording)
+        syncSpeakers(plan.relabel(roster), on: recording)
+        restoreColours(plan, on: recording)
         recording.updatedAt = Date()
         try modelContext.save()
         return true

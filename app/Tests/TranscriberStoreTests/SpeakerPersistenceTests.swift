@@ -186,7 +186,7 @@ final class SpeakerPersistenceTests: XCTestCase {
 
     // MARK: - Merging, then identifying again
 
-    func testMergedAwaySpeakerComesBackWithItsDefaultNameAndTheTargetKeepsItsOwn() async throws {
+    func testMergedAwaySpeakerComesBackWithItsDefaultNameAndAnEvenSplitDoesNotInheritTheTargetsName() async throws {
         let (id, writer) = try await seedDiarized()
         let context = container.mainContext
         let live = try recording(id, in: context)
@@ -201,7 +201,15 @@ final class SpeakerPersistenceTests: XCTestCase {
                                        roster: roster, for: id)
 
         // Documented: a new pass starts from a fresh roster. The name of the
-        // speaker that was merged away is gone, and S2 is a new person.
-        XCTAssertEqual(names(try recording(id)), ["S1": "Maria", "S2": "Speaker 2"])
+        // speaker that was merged away is gone, and the new S2 is a new person.
+        // Maria now holds every line, and the new run splits them three and
+        // three: which half is Maria is a coin flip, so neither inherits her
+        // name. It stays in the roster, with no lines, for a person to place.
+        let after = try recording(id)
+        XCTAssertEqual(Set(names(after).values), ["Maria", "Speaker 2", "Speaker 3"])
+        XCTAssertEqual(names(after)["S1"], "Maria", "the name keeps its label")
+        XCTAssertEqual(after.speakers?.first { $0.speakerId == "S1" }?.speechMs, 0)
+        let lines = Set((after.transcript?.orderedSegments ?? []).compactMap(\.speakerId))
+        XCTAssertFalse(lines.contains("S1"), "no line is given to Maria by a guess")
     }
 }
