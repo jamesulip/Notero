@@ -82,7 +82,18 @@ def _per_fixture(rows: list[dict], arm: str) -> dict[str, dict]:
     return out
 
 
-def judge(rows: list[dict], base: str, candidate: str) -> Verdict:
+def mean_time(rows: list[dict], arm: str, fixtures: set[str] | None = None) -> float | None:
+    """Mean over fixtures of the per-fixture median speaker-processing time."""
+    per = _per_fixture(rows, arm)
+    chosen = [per[f]["ms"] for f in per if fixtures is None or f in fixtures]
+    return statistics.mean(chosen) if chosen else None
+
+
+def judge(rows: list[dict], base: str, candidate: str,
+          time_rows: list[dict] | None = None) -> Verdict:
+    """`time_rows` lets the time condition come from a run made under the benchmark lock,
+    one process at a time, when `rows` were collected several at once for speed. The
+    thresholds are the same either way."""
     b, c = _per_fixture(rows, base), _per_fixture(rows, candidate)
     fixtures = sorted(set(b) & set(c))
     if not fixtures:
@@ -122,8 +133,15 @@ def judge(rows: list[dict], base: str, candidate: str) -> Verdict:
     if regress:
         fail("DER regression on " + ", ".join(
             f"{f} ({c[f]['der'] - b[f]['der']:+.1f})" for f in regress))
-    base_ms = statistics.mean(b[f]["ms"] for f in fixtures)
-    cand_ms = statistics.mean(c[f]["ms"] for f in fixtures)
+    if time_rows is None:
+        base_ms = statistics.mean(b[f]["ms"] for f in fixtures)
+        cand_ms = statistics.mean(c[f]["ms"] for f in fixtures)
+    else:
+        tb, tc = mean_time(time_rows, base), mean_time(time_rows, candidate)
+        if tb is None or tc is None:
+            fail("time: the timing rows do not hold both arms")
+            return verdict
+        base_ms, cand_ms = tb, tc
     if cand_ms > TIME_FACTOR * base_ms:
         fail(f"time {cand_ms:.0f} ms against {base_ms:.0f} ms (limit {TIME_FACTOR:.2f}x)")
     else:
@@ -147,10 +165,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--candidate", required=True)
     parser.add_argument("--tuning", type=Path, required=True)
     parser.add_argument("--holdout", type=Path)
+    parser.add_argument("--timing", type=Path,
+                        help="rows.jsonl of a lock-held run to judge the time condition on")
     args = parser.parse_args(argv)
 
-    t = judge(load_rows(args.tuning), args.base, args.candidate)
-    h = judge(load_rows(args.holdout), args.base, args.candidate) if args.holdout else None
+    timing = load_rows(args.timing) if args.timing else None
+    t = judge(load_rows(args.tuning), args.base, args.candidate, timing)
+    h = judge(load_rows(args.holdout), args.base, args.candidate, timing) if args.holdout else None
     for name, v in (("tuning", t), ("hold-out", h)):
         if v is None:
             continue

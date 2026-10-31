@@ -111,3 +111,20 @@ def test_overfit_is_a_pass_on_tuning_and_a_fail_on_holdout():
 def test_no_shared_fixture_is_not_a_pass():
     data = runs("base", "a", 10) + runs("cand", "b", 5)
     assert not tv.judge(data, "base", "cand").passed
+
+
+def test_the_time_condition_can_come_from_a_separate_locked_run():
+    accuracy = rows({"a": 10}, {"a": 5}, base={"ms": 1000}, cand={"ms": 5000})      # noisy: parallel
+    locked_ok = rows({"a": 10}, {"a": 5}, base={"ms": 1000}, cand={"ms": 1050})
+    locked_slow = rows({"a": 10}, {"a": 5}, base={"ms": 1000}, cand={"ms": 1300})
+    assert not tv.judge(accuracy, "base", "cand").passed
+    assert tv.judge(accuracy, "base", "cand", time_rows=locked_ok).passed
+    assert not tv.judge(accuracy, "base", "cand", time_rows=locked_slow).passed
+
+
+def test_timing_rows_that_lack_an_arm_fail_rather_than_pass_quietly():
+    accuracy = rows({"a": 10}, {"a": 5})
+    only_base = runs("base", "a", 10)
+    v = tv.judge(accuracy, "base", "cand", time_rows=only_base)
+    assert not v.passed and any(r.startswith("time") for r in v.reasons)
+
