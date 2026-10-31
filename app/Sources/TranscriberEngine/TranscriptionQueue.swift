@@ -288,7 +288,19 @@ public actor TranscriptionQueue {
     }
 
     private func execute(_ job: TranscriptionJob) async -> JobEnd {
-        guard let runner else { return await run(job) }
+        guard let runner else {
+            let end = await run(job)
+            // Every way out of `run` passes through here, and the speaker models
+            // must not outlive the job on any of them. The releases inside `run`
+            // sit on the success path only: a diarization that is cancelled (by
+            // the user, or by a recording that wants the Neural Engine) rethrows
+            // before them, and so does a failure in the second lane after the
+            // first lane diarized. Each of those left about 200 MB resident until
+            // the user pressed "Release the Models" in Settings (F13). The release
+            // is cheap and does nothing when nothing is loaded.
+            await engines.releaseDiarizer()
+            return end
+        }
         return await runner(job) { self.sink.yield($0) }
     }
 

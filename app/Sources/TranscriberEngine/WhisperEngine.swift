@@ -23,12 +23,35 @@ public actor WhisperEngine: SpeechRecognizing {
     private var currentModel: String?
     public private(set) var loadMs: Int = 0
 
+    /// How a load that other callers waited on ended, as each of them sees it.
+    private enum LoadOutcome {
+        case loaded
+        /// The load failed. The failure belongs to callers that asked for the
+        /// same model.
+        case failed(Error)
+        /// The caller that was running the load was cancelled. That says
+        /// nothing about the callers waiting behind it, which load for
+        /// themselves.
+        case ownerCancelled
+    }
+
+    private struct Waiter {
+        var id: Int
+        var continuation: CheckedContinuation<LoadOutcome, Error>
+    }
+
     /// The load in progress, and the callers waiting for it.
     private struct LoadInFlight {
         var model: String
-        var waiters: [CheckedContinuation<Void, Error>] = []
+        var waiters: [Waiter] = []
     }
     private var inFlight: LoadInFlight?
+    private var nextWaiterId = 0
+
+    /// The model that a switch replaces, kept until the new one is loaded so a
+    /// failed switch can put it back. Held on the actor and not in a local so
+    /// that `unload()` can drop it while the switch is still loading.
+    private var replaced: (pipeline: WhisperKit, model: String)?
 
     public init(modelsDirectory: URL) {
         self.modelsDirectory = modelsDirectory
@@ -59,57 +82,91 @@ public actor WhisperEngine: SpeechRecognizing {
     /// waits its turn, because two loads at once cannot both leave `pipeline`
     /// as the caller asked.
     public func load(model: String, progress: ProgressReport?) async throws {
+        // Not a cancellable load: once a load has started it runs to its end.
+        // This only refuses to start one for a caller that has already gone.
+        try Task.checkCancellation()
         while true {
             if pipeline != nil, currentModel == model { return }
             guard let running = inFlight else { break }
-            do {
-                try await waitForLoad()
-            } catch {
+            // Throws only if *this* caller is cancelled while it waits.
+            switch try await waitForLoad() {
+            case .failed(let error):
                 // The failure belongs to whoever asked for that model.
                 if running.model == model { throw error }
-            }
-            if running.model == model, pipeline != nil, currentModel == model {
-                progress?("Ready", 1)
+            case .loaded:
+                if running.model == model, pipeline != nil, currentModel == model {
+                    progress?("Ready", 1)
+                }
+            case .ownerCancelled:
+                break
             }
         }
 
         inFlight = LoadInFlight(model: model)
-        let previous = pipeline
-        let previousName = currentModel
+        if let previous = pipeline, let previousName = currentModel {
+            replaced = (previous, previousName)
+        }
         pipeline = nil
 
         let started = Date()
         do {
             let loaded = try await makePipeline(model, modelsDirectory, progress)
+            replaced = nil
             pipeline = loaded
             currentModel = model
             loadMs = Int(Date().timeIntervalSince(started) * 1000)
             progress?("Ready", 1)
-            finishLoad(nil)
+            finishLoad(.loaded)
         } catch {
             // Leave the working model in place rather than no model at all --
-            // a failed switch should not take the session down with it.
-            pipeline = previous
-            currentModel = previousName
-            finishLoad(error)
+            // a failed switch should not take the session down with it. Unless
+            // `unload()` ran meanwhile: that dropped `replaced`, and a model
+            // someone asked to release is not brought back by a failure.
+            if let back = replaced {
+                pipeline = back.pipeline
+                currentModel = back.model
+            }
+            replaced = nil
+            // A cancelled owner may report its cancellation as another error
+            // (a URLSession task, a Core ML wrapper), so the task is asked too.
+            let cancelled = error is CancellationError || Task.isCancelled
+            finishLoad(cancelled ? .ownerCancelled : .failed(error))
             throw error
         }
     }
 
-    private func waitForLoad() async throws {
-        try await withCheckedThrowingContinuation { continuation in
-            // Runs on the actor before any suspension, so `inFlight` is still
-            // the load that was seen a line ago.
-            inFlight?.waiters.append(continuation)
+    /// Parks the caller behind the load in progress. A caller that is cancelled
+    /// while parked leaves at once; it used to stay until the load finished, which
+    /// for a first compile is minutes, and `setLiveActive` waits on the job that
+    /// it belongs to.
+    private func waitForLoad() async throws -> LoadOutcome {
+        let id = nextWaiterId
+        nextWaiterId += 1
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                // Runs on the actor before any suspension, so `inFlight` is still
+                // the load that was seen a line ago.
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                } else {
+                    inFlight?.waiters.append(Waiter(id: id, continuation: continuation))
+                }
+            }
+        } onCancel: {
+            Task { await self.abandonWait(id) }
         }
     }
 
-    private func finishLoad(_ error: Error?) {
+    private func abandonWait(_ id: Int) {
+        guard let index = inFlight?.waiters.firstIndex(where: { $0.id == id }),
+              let waiter = inFlight?.waiters.remove(at: index) else { return }
+        waiter.continuation.resume(throwing: CancellationError())
+    }
+
+    private func finishLoad(_ outcome: LoadOutcome) {
         let waiters = inFlight?.waiters ?? []
         inFlight = nil
-        for waiter in waiters {
-            if let error { waiter.resume(throwing: error) } else { waiter.resume() }
-        }
+        for waiter in waiters { waiter.continuation.resume(returning: outcome) }
     }
 
     private static func loadPipeline(model: String, modelsDirectory: URL,
@@ -143,6 +200,7 @@ public actor WhisperEngine: SpeechRecognizing {
     public func unload() {
         pipeline = nil
         currentModel = nil
+        replaced = nil
         loadMs = 0
     }
 

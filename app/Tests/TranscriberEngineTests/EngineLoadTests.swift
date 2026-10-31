@@ -17,8 +17,12 @@ final class EngineLoadTests: XCTestCase {
         private(set) var running = 0
         private(set) var peakRunning = 0
         var failing: Set<String> = []
+        /// How many of the next loads end in a CancellationError, as a load whose
+        /// caller was cancelled does.
+        private var cancellations = 0
 
         func setFailing(_ models: Set<String>) { failing = models }
+        func cancelNextLoads(_ count: Int) { cancellations = count }
 
         func enter(_ model: String) async throws {
             started.append(model)
@@ -27,6 +31,10 @@ final class EngineLoadTests: XCTestCase {
             if !open { await withCheckedContinuation { waiters.append($0) } }
             running -= 1
             finished.append(model)
+            if cancellations > 0 {
+                cancellations -= 1
+                throw CancellationError()
+            }
             if failing.contains(model) { throw EngineError.backendUnavailable("no \(model)") }
         }
 
@@ -143,5 +151,159 @@ final class EngineLoadTests: XCTestCase {
         try await engine.load(model: "bad", progress: nil)
         let nowLoaded = await engine.loadedModel
         XCTAssertEqual(nowLoaded, "bad")
+    }
+
+    // MARK: - Cancellation and release while a load is in flight
+
+    /// What a caller saw, written from the task that made the call.
+    private actor Outcome {
+        enum Result { case done, cancelled, failed(String) }
+        private(set) var result: Result?
+        func set(_ result: Result) { self.result = result }
+    }
+
+    private func call(_ engine: WhisperEngine, model: String, into outcome: Outcome) -> Task<Void, Never> {
+        Task {
+            do {
+                try await engine.load(model: model, progress: nil)
+                await outcome.set(.done)
+            } catch is CancellationError {
+                await outcome.set(.cancelled)
+            } catch {
+                await outcome.set(.failed("\(error)"))
+            }
+        }
+    }
+
+    private func eventually(_ what: String, timeout: Double = 2,
+                            _ condition: () async -> Bool) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !(await condition()) {
+            if Date() > deadline { XCTFail("timed out waiting for \(what)"); return false }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        return true
+    }
+
+    /// N2. A job parked behind a load is cancelled when a recording steps it
+    /// aside, and `setLiveActive` waits for the job to end. A waiter that stayed
+    /// parked until the load finished held the Record button for as long as the
+    /// load took, which for a first compile is minutes.
+    func testACancelledWaiterLeavesWithoutWaitingForTheLoad() async throws {
+        let gate = Gate()
+        let engine = engine(gate)
+
+        let owner = Outcome()
+        let ownerTask = call(engine, model: "m", into: owner)
+        await waitUntilStarted(gate, 1)
+        let waiter = Outcome()
+        let waiterTask = call(engine, model: "m", into: waiter)
+        await park(engine, waiters: 1)
+        let parked = await engine.waitingLoads
+        XCTAssertEqual(parked, 1, "the second call never parked behind the load")
+
+        waiterTask.cancel()
+        let left = await eventually("the cancelled waiter to leave") { await waiter.result != nil }
+        let finishedWhileWaiting = await gate.finished
+        XCTAssertEqual(finishedWhileWaiting, [], "the load ended first, so this proves nothing")
+        if left, case .cancelled? = await waiter.result {} else if left {
+            XCTFail("a cancelled waiter should end as cancelled, not \(String(describing: await waiter.result))")
+        }
+        let stillParked = await engine.waitingLoads
+        XCTAssertEqual(stillParked, 0)
+
+        // The load itself was not touched: it finishes and the engine has the model.
+        await gate.release()
+        await ownerTask.value
+        await waiterTask.value
+        let loaded = await engine.loadedModel
+        XCTAssertEqual(loaded, "m")
+        if case .done? = await owner.result {} else { XCTFail("the owner's load should have finished") }
+    }
+
+    /// N2, second half. The owner's CancellationError belongs to the owner. A
+    /// waiter that was not cancelled took it as its own, so a job that merely
+    /// shared a load with a cancelled one ended as cancelled.
+    func testAWaiterThatWasNotCancelledLoadsForItselfWhenTheOwnerIsCancelled() async throws {
+        let gate = Gate()
+        let engine = engine(gate)
+        await gate.cancelNextLoads(1)
+
+        let owner = Outcome()
+        let ownerTask = call(engine, model: "m", into: owner)
+        await waitUntilStarted(gate, 1)
+        let waiter = Outcome()
+        let waiterTask = call(engine, model: "m", into: waiter)
+        await park(engine, waiters: 1)
+        await gate.release()
+        await ownerTask.value
+        await waiterTask.value
+
+        if case .cancelled? = await owner.result {} else {
+            XCTFail("the owner's load was meant to end cancelled: \(String(describing: await owner.result))")
+        }
+        if case .done? = await waiter.result {} else {
+            XCTFail("a waiter that was not cancelled inherited the owner's cancellation: "
+                    + "\(String(describing: await waiter.result))")
+        }
+        let loaded = await engine.loadedModel
+        XCTAssertEqual(loaded, "m", "the waiter should have loaded the model itself")
+        let started = await gate.started
+        XCTAssertEqual(started, ["m", "m"])
+    }
+
+    /// A model that was released while a switch was loading stays released when
+    /// the switch fails. The failure used to put the old model back, so "release
+    /// the models" did nothing for the one that mattered, and removing a model
+    /// whose files were just deleted brought it back in memory.
+    func testAFailedSwitchDoesNotBringBackAModelThatWasReleasedMeanwhile() async throws {
+        let gate = Gate()
+        let engine = engine(gate)
+        await gate.release()
+        try await engine.load(model: "good", progress: nil)
+        let before = await engine.loadedModel
+        XCTAssertEqual(before, "good")
+
+        await gate.close()
+        await gate.setFailing(["bad"])
+        let outcome = Outcome()
+        let task = call(engine, model: "bad", into: outcome)
+        await waitUntilStarted(gate, 2)
+        await engine.unload()
+        await gate.release()
+        await task.value
+
+        if case .failed? = await outcome.result {} else {
+            XCTFail("the switch was meant to fail: \(String(describing: await outcome.result))")
+        }
+        let loaded = await engine.loadedModel
+        XCTAssertNil(loaded, "a failed switch put back a model that was released while it loaded")
+    }
+
+    /// A caller that is already cancelled does not start a 1.6 GB load.
+    func testACancelledCallerDoesNotStartALoad() async throws {
+        let gate = Gate()
+        await gate.release()
+        let engine = engine(gate)
+
+        let outcome = Outcome()
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            do {
+                try await engine.load(model: "m", progress: nil)
+                await outcome.set(.done)
+            } catch is CancellationError {
+                await outcome.set(.cancelled)
+            } catch {
+                await outcome.set(.failed("\(error)"))
+            }
+        }
+        await task.value
+
+        let started = await gate.started
+        XCTAssertEqual(started, [], "a cancelled caller started a load")
+        if case .cancelled? = await outcome.result {} else {
+            XCTFail("expected cancelled, got \(String(describing: await outcome.result))")
+        }
     }
 }

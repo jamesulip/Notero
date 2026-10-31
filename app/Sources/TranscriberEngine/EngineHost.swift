@@ -12,9 +12,9 @@ import WhisperKit
 public actor EngineHost {
 
     public let modelsDirectory: URL
-    private let asr: WhisperEngine
+    private let asr: any SpeechRecognizing
     private let vad: VADEngine
-    private let diarizer: SpeakerEngine
+    private let diarizer: any SpeakerDiarizing
 
     /// True while a recording is in progress. The queue refuses to start work
     /// during one: a background decode competing for the ANE is what turns a
@@ -22,10 +22,25 @@ public actor EngineHost {
     public private(set) var isLiveActive = false
 
     public init(modelsDirectory: URL, preferNeuralVAD: Bool = true) {
+        self.init(
+            modelsDirectory: modelsDirectory,
+            asr: WhisperEngine(modelsDirectory: modelsDirectory),
+            vad: VADEngine(modelsDirectory: modelsDirectory, preferNeural: preferNeuralVAD),
+            diarizer: SpeakerEngine(modelsDirectory: modelsDirectory)
+        )
+    }
+
+    /// The same host over engines that are handed in. A seam for tests: the
+    /// queue's release of the diarizer on every way out of a job could only be
+    /// checked against the real 200 MB models, and a test cannot depend on
+    /// weights. The public initializer passes the real engines, so nothing
+    /// outside a test sees a difference.
+    init(modelsDirectory: URL, asr: any SpeechRecognizing, vad: VADEngine,
+         diarizer: any SpeakerDiarizing) {
         self.modelsDirectory = modelsDirectory
-        self.asr = WhisperEngine(modelsDirectory: modelsDirectory)
-        self.vad = VADEngine(modelsDirectory: modelsDirectory, preferNeural: preferNeuralVAD)
-        self.diarizer = SpeakerEngine(modelsDirectory: modelsDirectory)
+        self.asr = asr
+        self.vad = vad
+        self.diarizer = diarizer
     }
 
     // MARK: - Speech recognition
