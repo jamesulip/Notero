@@ -16,8 +16,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// shortcuts register here: the Carbon event target exists by then.
     var onLaunch: (() -> Void)?
 
+    /// Holds a quit while a recording stops and its files close. Without it
+    /// Command-Q went straight through, the AAC archive was never closed, and
+    /// the file could not be opened afterwards (finding 16).
+    var quitGate: QuitGate?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         onLaunch?()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let quitGate else { return .terminateNow }
+        let decision = quitGate.requestQuit {
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return decision == .wait ? .terminateLater : .terminateNow
     }
 
     var onOpen: (([URL]) -> Void)? {
@@ -68,6 +81,10 @@ struct TranscriberApp: App {
         _startupFailure = State(initialValue: failure)
         delegate.onOpen = { urls in state.importFiles(urls) }
         delegate.onLaunch = { state.applyMenuBarSetting() }
+        delegate.quitGate = QuitGate(
+            isRecording: { state.isRecording },
+            stop: { await state.stopRecording(quitting: true) }
+        )
     }
 
     var body: some Scene {
