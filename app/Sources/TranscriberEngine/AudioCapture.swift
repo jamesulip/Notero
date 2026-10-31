@@ -62,6 +62,8 @@ public final class AudioCapture: @unchecked Sendable {
 
     public private(set) var isRunning = false
     public private(set) var archiveFormat: AVAudioFormat?
+    /// The rate the device delivers, which `fillGap` counts its frames in.
+    private var captureRate: Double = 0
 
     /// Muted capture writes silence rather than dropping frames, so timestamps
     /// stay pinned to wall-clock and the transcript never desyncs from audio.
@@ -119,13 +121,33 @@ public final class AudioCapture: @unchecked Sendable {
     ///   - microphoneUID: which microphone, or nil to follow the system
     ///     default. A UID rather than a device id, because ids are reassigned
     ///     across reboots and a saved preference outlives one.
-    public init?(source: CaptureSource = .default, microphoneUID: String? = nil) {
+    public convenience init?(source: CaptureSource = .default, microphoneUID: String? = nil) {
+        self.init(source: source, microphoneUID: microphoneUID,
+                  makeInput: AudioCapture.hardwareInput)
+    }
+
+    /// The seam tests use: the lane source is built by `makeInput` instead of
+    /// being the microphone or the system tap, so the whole chain from a
+    /// buffer to the archive and the working-copy bytes runs with no device.
+    init(source: CaptureSource, microphoneUID: String?,
+         makeInput: @escaping @Sendable (CaptureSource, String?) -> any LaneCapturing) {
         self.source = source
         self.lanes = source.lanes
         self.microphoneUID = microphoneUID
+        self.makeInput = makeInput
     }
 
     private let microphoneUID: String?
+    private let makeInput: @Sendable (CaptureSource, String?) -> any LaneCapturing
+
+    private static func hardwareInput(_ source: CaptureSource,
+                                      _ microphoneUID: String?) -> any LaneCapturing {
+        switch source {
+        case .microphone: MicrophoneInput(deviceUID: microphoneUID)
+        case .systemAudio: TapInput(withMicrophone: false, microphoneUID: nil)
+        case .both: TapInput(withMicrophone: true, microphoneUID: microphoneUID)
+        }
+    }
 
     /// Called when something changed under the recording that the user has
     /// to be told about: the microphone was unplugged and replaced, the
@@ -155,11 +177,7 @@ public final class AudioCapture: @unchecked Sendable {
         guard !isRunning else { return }
         self.onAudio = onAudio
 
-        let input: any LaneCapturing = switch source {
-        case .microphone: MicrophoneInput(deviceUID: microphoneUID)
-        case .systemAudio: TapInput(withMicrophone: false, microphoneUID: nil)
-        case .both: TapInput(withMicrophone: true, microphoneUID: microphoneUID)
-        }
+        let input = makeInput(source, microphoneUID)
         try input.prepare()
         let rate = input.sampleRate
         guard rate > 0 else { throw CaptureError.noInputDevice }
@@ -172,6 +190,7 @@ public final class AudioCapture: @unchecked Sendable {
                                                 channels: AVAudioChannelCount(lanes.count))
         else { throw CaptureError.unsupportedFormat(rate) }
         self.archiveFormat = archiveFormat
+        self.captureRate = rate
 
         var chains: [CaptureLane: LaneChain] = [:]
         for lane in lanes {
@@ -189,6 +208,9 @@ public final class AudioCapture: @unchecked Sendable {
         writer?.onFailure = { [weak self] error in
             self?.onNotice?(.recordingNotSaved(error.localizedDescription))
         }
+        // What the file holds, which is not the device's rate when the device
+        // runs faster than the encoder can.
+        if let writer { self.archiveFormat = writer.fileFormat }
         stateLock.withLock {
             self.input = input
             self.chains = chains
@@ -235,6 +257,13 @@ public final class AudioCapture: @unchecked Sendable {
         closing?.finish()
         isRunning = false
         return (frames, rate)
+    }
+
+    /// Returns once the archive has taken everything handed to it so far. For
+    /// tests that run hours of audio faster than real time and would otherwise
+    /// outrun the encoder, which real time never does.
+    func settle() {
+        stateLock.withLock { archive }?.settle()
     }
 
     // MARK: - The chain
@@ -313,6 +342,21 @@ public final class AudioCapture: @unchecked Sendable {
                               lanes: pcm, peaks: peaks))
     }
 
+    /// The longest stretch of silence written as one buffer.
+    ///
+    /// A gap can be as long as the Mac was asleep: the first buffer after a
+    /// wake reports everything since the last one. As a single buffer that is
+    /// the length of the sleep in float samples, per lane -- measured, one hour
+    /// at 48 kHz raised the footprint by 770 MB, produced one 115 MB chunk for
+    /// the live path, and held the capture thread for 19 s while it did. A
+    /// second at a time costs the same silence in the same total time, and a
+    /// bounded amount of memory.
+    private static let gapSliceSeconds = 1.0
+
+    /// The shortest gap worth a line to the user. A device change normally
+    /// costs a fraction of a second, which nobody can hear or read back.
+    private static let reportedGapSeconds = 1.0
+
     /// Silence for a gap in a lane, so later timestamps stay where they were.
     ///
     /// The output device changing mid-recording tears the tap down and builds
@@ -331,27 +375,43 @@ public final class AudioCapture: @unchecked Sendable {
         // recorded in that time anyway.
         guard let onAudio, frames > 0, !paused else { return }
 
-        var buffers: [CaptureLane: AVAudioPCMBuffer] = [:]
-        for lane in lanes {
-            guard let chain = chains[lane],
-                  let buffer = AVAudioPCMBuffer(pcmFormat: chain.monoFormat,
-                                                frameCapacity: AVAudioFrameCount(frames))
-            else { continue }
-            buffer.frameLength = AVAudioFrameCount(frames)
-            if let channel = buffer.floatChannelData?[0] {
-                for index in 0..<frames { channel[index] = 0 }
-            }
-            buffers[lane] = buffer
+        // Said, not only filled: the recording is on the wall clock again, but
+        // it holds silence where audio was, and a same-device recovery after a
+        // sleep raises no other notice.
+        let rate = captureRate > 0 ? captureRate : 48_000
+        let seconds = Double(frames) / rate
+        if seconds >= Self.reportedGapSeconds {
+            onNotice?(.audioGap(seconds: Int(seconds.rounded())))
         }
-        archive?.write(buffers)
 
-        var pcm: [CaptureLane: Data] = [:]
-        for (lane, buffer) in buffers {
-            if let narrow = chains[lane]?.toInference(buffer) { pcm[lane] = narrow }
+        let slice = max(1, Int(rate * Self.gapSliceSeconds))
+        var remaining = frames
+        while remaining > 0 {
+            let count = min(remaining, slice)
+            remaining -= count
+
+            var buffers: [CaptureLane: AVAudioPCMBuffer] = [:]
+            for lane in lanes {
+                guard let chain = chains[lane],
+                      let buffer = AVAudioPCMBuffer(pcmFormat: chain.monoFormat,
+                                                    frameCapacity: AVAudioFrameCount(count))
+                else { continue }
+                buffer.frameLength = AVAudioFrameCount(count)
+                if let channel = buffer.floatChannelData?[0] {
+                    for index in 0..<count { channel[index] = 0 }
+                }
+                buffers[lane] = buffer
+            }
+            archive?.write(buffers)
+
+            var pcm: [CaptureLane: Data] = [:]
+            for (lane, buffer) in buffers {
+                if let narrow = chains[lane]?.toInference(buffer) { pcm[lane] = narrow }
+            }
+            guard !pcm.isEmpty else { continue }
+            onAudio(CapturedAudio(pcm: Self.mix(pcm, order: lanes), peak: 0,
+                                  lanes: pcm, peaks: [:]))
         }
-        guard !pcm.isEmpty else { return }
-        onAudio(CapturedAudio(pcm: Self.mix(pcm, order: lanes), peak: 0,
-                              lanes: pcm, peaks: [:]))
     }
 
     /// Sums the lanes for the single-transcript path.

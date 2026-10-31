@@ -317,13 +317,25 @@ public final class WavWriter: @unchecked Sendable {
         }
     }
 
+    /// The 44-byte header for `dataBytes` of audio.
+    ///
+    /// A RIFF size is 32 bits, so a file past 4 GiB -- 37 hours at 16 kHz,
+    /// which a Mac left recording over a weekend reaches -- cannot say how long
+    /// it is. `UInt32(36 + dataBytes)` is a trap there, and it was in `close()`:
+    /// the app terminated at Stop with the audio written and the header
+    /// unfinished. Such a file is marked the way a stream is, with every size
+    /// all ones, which `MappedPCM` reads as "everything after the header".
     static func header(dataBytes: Int) -> Data {
         let channels: UInt16 = 1, bits: UInt16 = 16
         let rate = UInt32(Audio.sampleRate)
         let blockAlign = channels * bits / 8
+        let limit = Int(UInt32.max) - 36
+        let known = dataBytes <= limit
+        let riffSize = known ? UInt32(36 + dataBytes) : UInt32.max
+        let dataSize = known ? UInt32(dataBytes) : UInt32.max
 
         var data = Data("RIFF".utf8)
-        data.append(littleEndian: UInt32(36 + dataBytes))
+        data.append(littleEndian: riffSize)
         data.append(Data("WAVEfmt ".utf8))
         data.append(littleEndian: UInt32(16))
         data.append(littleEndian: UInt16(1))         // PCM
@@ -333,7 +345,7 @@ public final class WavWriter: @unchecked Sendable {
         data.append(littleEndian: blockAlign)
         data.append(littleEndian: bits)
         data.append(Data("data".utf8))
-        data.append(littleEndian: UInt32(dataBytes))
+        data.append(littleEndian: dataSize)
         return data
     }
 }
@@ -368,7 +380,9 @@ public struct MappedPCM: @unchecked Sendable {
                 // mid-recording never got its header rewritten and still claims
                 // zero bytes, while the audio is all sitting right there -- and
                 // recovering it is the entire reason the header is written last.
-                let declared = (size == 0 || size > remaining) ? remaining : size
+                // All ones is the size of a file too long for 32 bits.
+                let declared = (size == 0 || size == Int(UInt32.max) || size > remaining)
+                    ? remaining : size
                 found = (cursor + 8, declared)
                 break
             }

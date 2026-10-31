@@ -131,7 +131,7 @@ final class MicrophoneInput: LaneCapturing, @unchecked Sendable {
         guard let hardwareFormat, let toMono else {
             throw AudioCapture.CaptureError.noInputDevice
         }
-        self.onFrames = onFrames
+        stateLock.withLock { self.onFrames = onFrames }
         try run(format: hardwareFormat, converter: toMono)
         stateLock.withLock { running = true }
         observeConfigurationChanges()
@@ -145,7 +145,9 @@ final class MicrophoneInput: LaneCapturing, @unchecked Sendable {
         configurationObserver = nil
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        onFrames = nil
+        // Under the lock: the tap callback reads it on the audio thread, and
+        // `removeTap` does not wait for one that is already running.
+        stateLock.withLock { onFrames = nil }
     }
 
     /// Installs the tap and starts the engine against `format`, converting to
@@ -168,8 +170,12 @@ final class MicrophoneInput: LaneCapturing, @unchecked Sendable {
                 if lost > 0 { self.onGap?(lost) }
             }
             guard let mono = Self.downmix(buffer, with: converter) else { return }
-            self.stateLock.withLock { self.lastDelivery = Date() }
-            self.onFrames?([.room: mono])
+            let deliver: (@Sendable ([CaptureLane: AVAudioPCMBuffer]) -> Void)? =
+                self.stateLock.withLock {
+                    self.lastDelivery = Date()
+                    return self.onFrames
+                }
+            deliver?([.room: mono])
         }
         engine.prepare()
         do {
@@ -244,6 +250,15 @@ final class MicrophoneInput: LaneCapturing, @unchecked Sendable {
                 resumedAfter = nil
             }
             onNotice?(.captureFailed(error.localizedDescription))
+            return
+        }
+        // `stop()` can land while this restart is between its first check and
+        // the engine start. The engine it just started would then run on with
+        // nothing listening -- the microphone indicator on after the recording
+        // ended -- so a restart that finds the session stopped undoes itself.
+        guard stateLock.withLock({ running }) else {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
             return
         }
         hardwareFormat = format
@@ -363,9 +378,12 @@ final class TapInput: LaneCapturing, @unchecked Sendable {
     }
 
     func stop() {
+        // `scratch` and `resamplers` are not cleared here: the tap callback
+        // mutates them on its own queue, and neither `AudioDeviceStop` nor the
+        // IOProc teardown is documented to wait for a callback already running.
+        // They are released with this object, after the callback's own strong
+        // reference to it is gone.
         tap.stop()
-        scratch = [:]
-        resamplers = [:]
     }
 
     /// Mono at the aggregate's current rate: the session format itself until
