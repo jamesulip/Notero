@@ -122,6 +122,19 @@ public actor TranscriptWriter {
     /// same way it does after a re-transcription. With no open revision
     /// (nothing was decoded, or the job predates this path) it stores a new
     /// one as `storeTranscript` does.
+    ///
+    /// The order is what keeps the transcript safe. The final rows are saved,
+    /// complete, as the newest revision *beside* the open one, in one save.
+    /// Only then does the open revision go. The old order deleted the partial
+    /// rows and saved, then inserted the final rows and saved again, and a
+    /// quit, a crash or a failed second save (a full disk, say) between the
+    /// two left a transcript with nothing in it while the live rows were gone.
+    /// Deleting by relationship also made the delete's save cost grow with the
+    /// square of the rows (159 s for 15,000 rows, a six-hour meeting), where
+    /// deleting by predicate costs 50 ms (finding 16).
+    ///
+    /// If the cleanup after the final save fails, the open revision stays as
+    /// an older revision. That is clutter and not a loss.
     @discardableResult
     public func completeTranscript(
         _ transcriptId: UUID?, segments: [Segment], roster: [SpeakerLabel],
@@ -130,8 +143,8 @@ public actor TranscriptWriter {
         for id: UUID
     ) throws -> Int {
         guard let transcriptId,
-              let transcript = try findTranscript(transcriptId),
-              let recording = transcript.recording
+              let open = try findTranscript(transcriptId),
+              let recording = open.recording
         else {
             return try storeTranscript(segments: segments, roster: roster, modelId: modelId,
                                        language: language, processMs: processMs,
@@ -139,24 +152,38 @@ public actor TranscriptWriter {
                                        performanceJSON: performanceJSON, for: id)
         }
 
-        for row in transcript.segments ?? [] { modelContext.delete(row) }
-        // Saved before the inserts, so the relationship the reindex walks
-        // holds only the final rows.
-        try modelContext.save()
-
-        insert(segments, into: transcript)
-        transcript.modelId = modelId
-        transcript.language = language
-        transcript.processMs = processMs
-        transcript.performanceJSON = performanceJSON
-        transcript.didDiarize = didDiarize
-        transcript.isComplete = true
+        let openRevision = open.revision
+        let openId = open.id
+        let final = StoredTranscript(
+            revision: ((recording.transcripts ?? []).map(\.revision).max() ?? 0) + 1,
+            modelId: modelId, language: language
+        )
+        final.processMs = processMs
+        final.performanceJSON = performanceJSON
+        final.didDiarize = didDiarize
+        final.isComplete = true
+        modelContext.insert(final)
+        final.recording = recording
+        insert(segments, into: final)
 
         syncSpeakers(roster, on: recording)
         recording.updatedAt = Date()
         RecordingStore.reindexOffMain(recording)
         try modelContext.save()
-        return transcript.revision
+
+        // The final rows are safe. Now the partial ones go: by predicate, which
+        // is one statement where a delete of each row is a walk of the
+        // relationship for each row.
+        do {
+            try modelContext.delete(model: StoredSegment.self,
+                                    where: #Predicate { $0.transcript?.id == openId })
+            if let stale = try findTranscript(openId) { modelContext.delete(stale) }
+            final.revision = openRevision
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+        }
+        return final.revision
     }
 
     /// Replaces the rows of the latest transcript that start inside a range
@@ -166,6 +193,10 @@ public actor TranscriptWriter {
     ///
     /// The rows are renumbered afterwards, so `index` stays the order.
     /// Returns how many rows went out.
+    ///
+    /// One save for the delete, the insert and the renumbering. Saving the
+    /// delete first meant that a failure before the second save left the turn
+    /// out of the transcript altogether, with the old text already gone.
     @discardableResult
     public func replaceSegments(fromMs: Int, toMs: Int, with segments: [Segment],
                                 for id: UUID) throws -> Int {
@@ -176,12 +207,12 @@ public actor TranscriptWriter {
             modelContext.delete(row)
             removed += 1
         }
-        // Saved before the inserts, so the renumbering below walks only the
-        // rows that stay.
-        try modelContext.save()
         insert(segments, into: transcript)
-        for (index, row) in try TranscriptReader.segmentRows(ofTranscript: transcript.id,
-                                                              in: modelContext).enumerated() {
+        // The rows that stay and the rows that arrived, in time order. A row
+        // that is only marked for deletion still comes back from a fetch.
+        let kept = try TranscriptReader.segmentRows(ofTranscript: transcript.id, in: modelContext)
+            .filter { !$0.isDeleted }
+        for (index, row) in kept.enumerated() where row.index != index {
             row.index = index
         }
         recording.updatedAt = Date()
@@ -200,9 +231,9 @@ public actor TranscriptWriter {
             )
             // Inserted before it is linked. Linking an unmanaged row first
             // makes SwiftData update the transcript's `segments` for every
-            // row already in it, so a batch of 250 took 3.6 s with 3000 rows
+            // row already in it, so a batch of 250 took 4.5 s with 4000 rows
             // saved and the whole job grew quadratically; the other order
-            // costs 84 ms for the same batch (finding 16).
+            // costs 35 ms for the same batch (finding 16).
             modelContext.insert(row)
             row.transcript = transcript
         }
