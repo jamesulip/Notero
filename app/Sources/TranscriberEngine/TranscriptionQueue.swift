@@ -155,6 +155,9 @@ public actor TranscriptionQueue {
     }
 
     private let engines: EngineHost
+    /// How long the audio in an archive file is. Injected so a test can stand
+    /// in for the file that a crash left unclosed.
+    private let archiveProbe: @Sendable (URL) async -> Int?
     private var pending: [TranscriptionJob] = []
     private var running: (job: TranscriptionJob, task: Task<Void, Never>)?
     private var liveActive = false
@@ -170,8 +173,10 @@ public actor TranscriptionQueue {
     /// sequence, so the bar could jump backwards.
     private nonisolated let sink: AsyncStream<JobEvent>.Continuation
 
-    public init(engines: EngineHost) {
+    public init(engines: EngineHost,
+                archiveProbe: (@Sendable (URL) async -> Int?)? = nil) {
         self.engines = engines
+        self.archiveProbe = archiveProbe ?? { url in await ArchiveProbe.durationMs(of: url) }
         var continuation: AsyncStream<JobEvent>.Continuation!
         events = AsyncStream(bufferingPolicy: .unbounded) { continuation = $0 }
         sink = continuation
@@ -250,7 +255,7 @@ public actor TranscriptionQueue {
             if case .range(let request) = job.work {
                 try await transcribeRange(job, request: request,
                                           source: job.roomMode ? HighPassPCM(source) : source)
-                if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
+                await discardWorkingCopy(of: job)
                 return
             }
 
@@ -439,7 +444,7 @@ public actor TranscriptionQueue {
                 metrics: metrics
             )))
             emit(.stage(id: job.id, status: .completed, progress: 1))
-            if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
+            await discardWorkingCopy(of: job)
         } catch is CancellationError {
             // Cancellation is deliberate and terminal. Calling it pending
             // makes a relaunch "recover" it as an interrupted failure and
@@ -527,7 +532,7 @@ public actor TranscriptionQueue {
             emit(.stage(id: job.id, status: .completed, progress: 1))
         }
         await engines.releaseDiarizer()
-        if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
+        await discardWorkingCopy(of: job)
     }
 
     // MARK: - Two lanes
@@ -681,7 +686,7 @@ public actor TranscriptionQueue {
             metrics: metrics
         )))
         emit(.stage(id: job.id, status: .completed, progress: 1))
-        if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
+        await discardWorkingCopy(of: job)
     }
 
     /// One lane's 16 kHz working copy, taken from its own channel of the
@@ -701,12 +706,50 @@ public actor TranscriptionQueue {
         return try MappedPCM(contentsOf: url)
     }
 
+    /// Deletes the 16 kHz working copy when the job asked for that and the
+    /// archive can rebuild it. When the archive cannot be read, or holds less
+    /// audio than the copy, the copy is the audio and stays. Refer to
+    /// `WorkingCopyPolicy`.
+    private func discardWorkingCopy(of job: TranscriptionJob) async {
+        guard job.discardCacheWhenDone else { return }
+        guard await WorkingCopyPolicy.canDiscard(
+            workingCopy: job.cacheURL, archive: job.sourceURL, probe: archiveProbe
+        ) else { return }
+        try? FileManager.default.removeItem(at: job.cacheURL)
+    }
+
+    /// A working copy that is shorter than its archive was cut off: a writer
+    /// that stopped on a low disk leaves one, and a capture-only session
+    /// transcribed it and then deleted it, which lost the end for good. Built
+    /// again beside the old one, and kept only if it is longer: an archive
+    /// that is itself cut short must not replace a better copy.
+    private func lengthenedIfTruncated(_ copy: MappedPCM,
+                                       for job: TranscriptionJob) async -> MappedPCM {
+        guard let sourceURL = job.sourceURL else { return copy }
+        let archiveMs = await archiveProbe(sourceURL)
+        guard WorkingCopyPolicy.isTruncated(workingCopyMs: copy.durationMs,
+                                            archiveMs: archiveMs) else { return copy }
+        let beside = job.cacheURL.appendingPathExtension("rebuilt")
+        defer { try? FileManager.default.removeItem(at: beside) }
+        do {
+            _ = try await AudioCache.build(from: sourceURL, to: beside) { fraction in
+                self.emit(.stage(id: job.id, status: .preparing, progress: fraction))
+            }
+            let longer = try MappedPCM(contentsOf: beside)
+            guard longer.durationMs > copy.durationMs else { return copy }
+            _ = try FileManager.default.replaceItemAt(job.cacheURL, withItemAt: beside)
+            return try MappedPCM(contentsOf: job.cacheURL)
+        } catch {
+            return copy
+        }
+    }
+
     /// The 16 kHz working copy, rebuilt from the original if it has been
     /// cleaned up since the recording was made.
     private func workingCopy(for job: TranscriptionJob) async throws -> MappedPCM {
         if FileManager.default.fileExists(atPath: job.cacheURL.path),
            let mapped = try? MappedPCM(contentsOf: job.cacheURL), mapped.sampleCount > 0 {
-            return mapped
+            return await lengthenedIfTruncated(mapped, for: job)
         }
         guard let sourceURL = job.sourceURL else {
             throw EngineError.audioUnreadable("no audio to work from")
