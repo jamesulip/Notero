@@ -61,13 +61,44 @@ def test_best_half_median():
         bs.best_half_median([])
 
 
-def test_collapse_rule_flags_the_filler_run_and_only_it():
-    # FINDINGS 15 shape: seven runs near 26%, one at 57%. Best half (4 lowest)
-    # has median 0.255, threshold 0.51; 0.57 is above it, 0.30 is not.
-    wers = [0.25, 0.26, 0.25, 0.27, 0.26, 0.30, 0.255, 0.57]
-    flags, threshold = bs.classify_collapsed(wers, [120] * 8, ref_words=123)
-    assert threshold == pytest.approx(2 * bs.best_half_median(wers))
-    assert flags == [False] * 7 + [True]
+# The runs below are the REAL offline series of the P6 baseline (12 runs of the pure
+# f022c6e build, FINDINGS 15), in WER and normalized-word count, from
+# eval/baselines/p6-f022c6e-synthetic-taglish.json. Run 8 is the 57.0% run in which
+# Whisper invented a filler phrase. The old rule (2x the best-half median) put its
+# threshold at 61.7% and never counted it.
+P6_OFFLINE_PURE_WER = [0.3125, 0.3671875, 0.578125, 0.3203125, 0.3671875, 0.3359375,
+                       0.34375, 0.5703125, 0.2421875, 0.3515625, 0.2109375, 0.3046875]
+P6_OFFLINE_PURE_WORDS = [119, 121, 78, 120, 115, 123, 122, 116, 119, 121, 121, 121]
+
+
+def test_collapse_rule_flags_the_57_percent_filler_run_the_old_rule_missed():
+    flags, threshold = bs.classify_collapsed(P6_OFFLINE_PURE_WER, P6_OFFLINE_PURE_WORDS, ref_words=128)
+    collapsed = [i + 1 for i, f in enumerate(flags) if f]
+    assert collapsed == [3, 8]
+    # run 3 is caught by WER and by the word floor (78 of 128 words), run 8 by WER alone:
+    reasons, _ = bs.collapse_reasons(P6_OFFLINE_PURE_WER, P6_OFFLINE_PURE_WORDS, ref_words=128)
+    assert reasons[2] == ["wer", "words"] and reasons[7] == ["wer"]
+    # The P6 rule, reproduced here so the test states what it replaces:
+    old_threshold = 2.0 * bs.best_half_median(P6_OFFLINE_PURE_WER)
+    assert P6_OFFLINE_PURE_WER[7] < old_threshold          # 57.0% under a 61.7% threshold
+    assert threshold == pytest.approx(bs.best_half_median(P6_OFFLINE_PURE_WER) + 0.15)
+
+
+def test_collapse_rule_margin_is_the_gap_in_the_p6_data():
+    # No run that nobody calls collapsed is more than 10.9 points above its level, and
+    # the filler run is 26.2 above: 15 points sits inside that gap (docs/BENCHMARKS.md).
+    level = bs.best_half_median(P6_OFFLINE_PURE_WER)
+    excess = sorted(w - level for w in P6_OFFLINE_PURE_WER)
+    assert excess[-1] == pytest.approx(0.578125 - level)       # the worst run
+    assert excess[-3] < bs.COLLAPSE_EXCESS < excess[-2]        # normal runs below, collapsed above
+    assert excess[-2] == pytest.approx(0.5703125 - level)
+
+
+def test_collapse_rule_boundary_is_strictly_more_than_15_points():
+    # level 0.30 (best half of these four is [0.30, 0.30]); threshold 0.45.
+    flags, threshold = bs.classify_collapsed([0.30, 0.30, 0.45, 0.46], [100] * 4, ref_words=100)
+    assert threshold == pytest.approx(0.45)
+    assert flags == [False, False, False, True]
 
 
 def test_collapse_rule_short_transcript_is_collapsed_even_at_low_wer():
@@ -76,28 +107,49 @@ def test_collapse_rule_short_transcript_is_collapsed_even_at_low_wer():
     assert flags == [True, False, False]
 
 
-def test_collapse_rule_boundary_is_strictly_greater_than_twice():
-    # best half of [0.1, 0.1, 0.2, 0.3] is [0.1, 0.1] -> 0.1, threshold 0.2.
-    # 0.2 is not MORE than 2x; 0.3 is.
-    flags, threshold = bs.classify_collapsed([0.1, 0.1, 0.2, 0.3], [100] * 4, ref_words=100)
-    assert threshold == pytest.approx(0.2)
-    assert flags == [False, False, False, True]
+def test_collapse_rule_counts_an_invented_filler_phrase_at_any_wer():
+    # A filler phrase in a window that cost only 4 points of WER is still a collapsed window.
+    flags, _ = bs.classify_collapsed([0.25, 0.25, 0.29], [100] * 3, ref_words=100,
+                                     filler=[False, False, True])
+    assert flags == [False, False, True]
+    reasons, _ = bs.collapse_reasons([0.25, 0.25, 0.29], [100] * 3, 100, filler=[False, False, True])
+    assert reasons[2] == ["filler"]
 
 
-def test_collapse_threshold_can_be_supplied_to_judge_a_second_arm():
-    # An arm that is bad in every run has no collapsed run against itself ...
-    uniformly_bad = [0.60, 0.61, 0.59, 0.60]
-    own, _ = bs.classify_collapsed(uniformly_bad, [100] * 4, ref_words=100)
-    assert own == [False] * 4
-    # ... but is collapsed against a baseline whose threshold is 0.5.
-    shared, threshold = bs.classify_collapsed(uniformly_bad, [100] * 4, ref_words=100,
-                                              wer_threshold=0.5)
-    assert threshold == 0.5 and shared == [True] * 4
+def test_reference_level_pools_the_arms_so_a_uniformly_bad_arm_is_judged_by_the_good_one():
+    good = [0.25, 0.26, 0.25, 0.27, 0.26, 0.25, 0.26, 0.27]
+    bad = [0.60, 0.61, 0.62, 0.60, 0.59, 0.61, 0.60, 0.62]
+    # Alone, the bad arm is not collapsed: its own level is 0.60.
+    own, _ = bs.classify_collapsed(bad, [100] * 8, ref_words=100)
+    assert own == [False] * 8
+    level = bs.reference_level(good, bad)
+    assert level == pytest.approx(bs.median(good))   # the lowest half of the pool IS the good arm
+    shared, _ = bs.classify_collapsed(bad, [100] * 8, ref_words=100, level=level)
+    assert shared == [True] * 8
+    # Symmetric: which arm is called baseline does not change the level.
+    assert bs.reference_level(bad, good) == level
+
+
+def test_collapse_rule_catches_the_lead_ab_pre_p6_runs():
+    # lead A/B (docs/BENCHMARKS.md): main gave 35.2, 60.9, 63.3, 59.4, 29.7, 57.0 % and the
+    # P6 branch 24.2 six times. Pooled level 24.2 -> threshold 39.2: four of main's six.
+    main = [0.3515625, 0.609375, 0.6328125, 0.59375, 0.296875, 0.5703125]
+    branch = [0.2421875] * 6
+    level = bs.reference_level(main, branch)
+    flags, threshold = bs.classify_collapsed(main, [120, 134, 121, 123, 118, 90], 128, level=level)
+    assert threshold == pytest.approx(0.2421875 + 0.15)
+    assert flags == [False, True, True, True, False, True]
+    assert bs.classify_collapsed(branch, [120] * 6, 128, level=level)[0] == [False] * 6
+
+
+def test_explicit_wer_threshold_overrides_the_level():
+    flags, threshold = bs.classify_collapsed([0.60, 0.61, 0.59], [100] * 3, 100, wer_threshold=0.5)
+    assert threshold == 0.5 and flags == [True] * 3
 
 
 def test_collapse_rule_text_states_the_numbers():
-    assert "2x" in bs.COLLAPSE_RULE and "75%" in bs.COLLAPSE_RULE
-    assert "best half" in bs.COLLAPSE_RULE
+    assert "15 points" in bs.COLLAPSE_RULE and "75%" in bs.COLLAPSE_RULE
+    assert "best half" in bs.COLLAPSE_RULE and "filler" in bs.COLLAPSE_RULE
 
 
 # ---- permutation test ----------------------------------------------------
@@ -295,3 +347,244 @@ def test_interleave_schedule_rejects_bad_input():
         bs.interleave_schedule(0)
     with pytest.raises(ValueError):
         bs.interleave_schedule(2, "aabb")
+
+
+# ---- rank-sum permutation test --------------------------------------------
+
+def test_rank_sum_exact_p_matches_hand_enumeration():
+    # a = [1, 2], b = [3, 4]: ranks 1..4, six arrangements, A's rank sums are
+    # 3, 4, 5, 5, 6, 7 around the expectation 5. |S - 5| >= 2 for 3 and 7 -> 2/6.
+    p, method = bs.rank_sum_p_value([1, 2], [3, 4])
+    assert method == "exact" and p == pytest.approx(2 / 6)
+
+
+def test_rank_sum_ties_use_midranks_and_identical_samples_give_one():
+    assert bs.rank_sum_p_value([1] * 8, [1] * 8)[0] == 1.0
+    assert bs.midranks([5, 1, 5, 3]) == [3.5, 1.0, 3.5, 2.0]
+
+
+def test_rank_sum_can_reach_far_smaller_p_than_the_median_difference_at_n8():
+    separated_a, separated_b = list(range(8)), list(range(10, 18))
+    p_rank, _ = bs.rank_sum_p_value(separated_a, separated_b)
+    p_median, _ = bs.permutation_p_value(separated_a, separated_b)
+    assert p_rank == pytest.approx(2 / math.comb(16, 8))     # 0.000155
+    # The reason `decide` uses the rank sum: the difference-of-medians statistic ties on
+    # 40 arrangements even for completely separated samples, so its smallest p is 0.0031 and
+    # Holm over 17 or more tests (alpha / 17 = 0.0029) could never flag anything at n = 8.
+    assert 0.0030 < p_median < 0.0032
+    assert bs.ALPHA / 17 < p_median
+
+
+def test_rank_sum_is_symmetric_and_monte_carlo_agrees_with_exact():
+    a, b = [1, 3, 5, 7, 9, 11], [2, 4, 6, 8, 10, 30]
+    assert bs.rank_sum_p_value(a, b)[0] == pytest.approx(bs.rank_sum_p_value(b, a)[0])
+    exact, _ = bs.rank_sum_p_value(a, b)
+    estimate, method = bs.rank_sum_p_value(a, b, max_exact=10, monte_carlo=40_000)
+    assert method == "monte-carlo" and estimate == pytest.approx(exact, abs=0.02)
+
+
+def test_exact_permutation_matches_a_plain_enumeration():
+    # The optimized exact test must give the answer of the obvious loop.
+    import itertools
+    a, b = [0.3, 0.1, 0.25, 0.4, 0.2], [0.35, 0.5, 0.45, 0.15, 0.6, 0.55]
+    pooled = a + b
+    observed = abs(bs.median(b) - bs.median(a))
+    hits = total = 0
+    for chosen in itertools.combinations(range(len(pooled)), len(a)):
+        group_a = [pooled[i] for i in chosen]
+        group_b = [pooled[i] for i in range(len(pooled)) if i not in chosen]
+        total += 1
+        hits += abs(bs.median(group_b) - bs.median(group_a)) >= observed - 1e-12
+    assert bs.permutation_p_value(a, b)[0] == pytest.approx(hits / total)
+
+
+# ---- Holm ------------------------------------------------------------------
+
+def test_holm_adjusts_in_order_and_keeps_none():
+    # sorted 0.01, 0.03, 0.04 times 3, 2, 1 -> 0.03, 0.06, 0.04; the running maximum lifts the last to 0.06.
+    assert bs.holm_adjust([0.01, 0.04, 0.03, None]) == pytest.approx([0.03, 0.06, 0.06, None])
+    assert bs.holm_adjust([0.5]) == [0.5]
+    assert bs.holm_adjust([0.9, 0.8]) == [1.0, 1.0]       # capped at 1
+
+
+# ---- load assessment ----------------------------------------------------------
+
+def test_assess_load_quiet_and_balanced_is_reliable():
+    load = bs.assess_load([0.5, 0.7, 1.1], [0.6, 0.8, 0.9])
+    assert load["recorded"] and load["quiet"] and load["balanced"] and load["reliable"]
+    assert load["reason"] is None and load["median_a"] == 0.7
+
+
+def test_assess_load_busy_machine_is_not_reliable_and_says_why():
+    load = bs.assess_load([4.0, 4.5, 3.9], [4.2, 4.4, 4.1])
+    assert not load["reliable"] and "busy" in load["reason"] and "2" in load["reason"]
+
+
+def test_assess_load_arms_under_different_load_are_not_reliable():
+    load = bs.assess_load([0.2, 0.3, 0.2], [1.9, 1.8, 1.9])    # both quiet, 1.6 apart
+    assert load["quiet"] and not load["balanced"] and not load["reliable"]
+    assert "different load" in load["reason"]
+
+
+def test_assess_load_missing_record_is_a_finding_not_an_error():
+    load = bs.assess_load([0.5, None], [0.5, 0.6])
+    assert not load["recorded"] and not load["reliable"] and "not recorded" in load["reason"]
+    assert bs.assess_load([], [])["reliable"] is False
+
+
+# ---- the decision rule ------------------------------------------------------------
+
+def separated(low, high, n=8, jitter=0.0005):
+    return ([low + i * jitter for i in range(n)], [high + i * jitter for i in range(n)])
+
+
+def build_family(series, **metrics):
+    return [bs.metric_test(key, a, b, series=series) for key, (a, b) in metrics.items()]
+
+
+QUIET = {"s": {"recorded": True, "reliable": True, "reason": None}}
+
+
+def test_decide_flags_a_large_wer_regression_and_is_suspected_not_confirmed():
+    a, b = separated(0.25, 0.35)
+    flat = [1.0 + i * 0.001 for i in range(8)]
+    result = bs.decide(build_family("s", wer=(a, b), rtf=(flat, list(flat))), load=QUIET)
+    wer = next(t for t in result["tests"] if t["key"] == "wer")
+    assert wer["status"] == "regression" and wer["p_holm"] < bs.ALPHA
+    assert next(t for t in result["tests"] if t["key"] == "rtf")["status"] == "not-significant"
+    assert "SUSPECTED REGRESSION" in result["headline"] and "CONFIRMED" not in result["headline"]
+    assert "second" in result["headline"]
+
+
+def test_decide_does_not_flag_fourteen_p_values_of_0_04_that_a_naive_reading_would():
+    # Fourteen independent metrics each at p = 0.04: the chance that at least one is below
+    # 0.05 by luck is 1 - 0.95^14 = 51%. After Holm none is.
+    flat = [1.0 + i * 0.001 for i in range(8)]
+    keys = ["wer", "hyp_words", "rtf", "live.dropped_hops", "live.forced_commits",
+            "live.unagreed_tail_words", "live.mean_decode_rtf", "live.infer_ms_per_hop",
+            "live.commit_latency_median_ms"] * 2
+    tests = [bs.metric_test(k, flat, [x + 0.5 for x in flat], series=f"s{i}", p=0.04, p_method="given")
+             for i, k in enumerate(keys[:14])]
+    assert all(t["p"] < bs.ALPHA for t in tests)                     # naive: all "significant"
+    result = bs.decide(tests)
+    assert result["flagged"] == [] and result["family_size"] == 14
+    assert all(t["status"] == "not-significant" for t in result["tests"])
+
+
+def test_decide_significant_but_below_the_floor_is_not_flagged():
+    a, b = separated(0.250, 0.255)            # a 0.5-point difference, completely separated
+    result = bs.decide(build_family("s", wer=(a, b)), load=QUIET)
+    t = result["tests"][0]
+    assert t["p_holm"] < bs.ALPHA and not t["floor_met"] and t["status"] == "below-floor"
+    assert result["flagged"] == []
+
+
+def test_decide_refuses_below_the_minimum_n():
+    a, b = separated(0.25, 0.60, n=7)
+    result = bs.decide(build_family("s", wer=(a, b)), load=QUIET)
+    assert result["tests"][0]["status"] == "no-verdict" and result["headline"].startswith("NO VERDICT")
+
+
+def test_decide_refuses_arms_that_were_not_interleaved():
+    a, b = separated(0.25, 0.60)
+    result = bs.decide(build_family("s", wer=(a, b)), interleaved=False)
+    assert result["tests"][0]["status"] == "no-verdict" and "not interleaved" in result["headline"]
+
+
+def test_decide_timing_difference_needs_a_quiet_balanced_machine():
+    a, b = separated(0.90, 1.10, jitter=0.001)       # +22% RTF, completely separated
+    unrecorded = bs.decide(build_family("s", rtf=(a, b)))
+    t = unrecorded["tests"][0]
+    assert t["status"] == "indicative" and t["would_be"] == "regression"
+    assert unrecorded["flagged"] == [] and "INDICATIVE ONLY" in unrecorded["headline"]
+    busy = bs.decide(build_family("s", rtf=(a, b)),
+                     load={"s": bs.assess_load([5.0] * 8, [5.0] * 8)})
+    assert busy["tests"][0]["status"] == "indicative" and "busy" in busy["tests"][0]["load_reason"]
+    quiet = bs.decide(build_family("s", rtf=(a, b)), load={"s": bs.assess_load([0.4] * 8, [0.5] * 8)})
+    assert quiet["tests"][0]["status"] == "regression"
+    # A WER difference never needs a load record:
+    wa, wb = separated(0.25, 0.35)
+    assert bs.decide(build_family("s", wer=(wa, wb)))["tests"][0]["status"] == "regression"
+
+
+def test_decide_improvement_and_the_neutral_metric_direction():
+    a, b = separated(0.35, 0.25)
+    assert bs.decide(build_family("s", wer=(a, b)))["tests"][0]["status"] == "improvement"
+    words_a, words_b = separated(100, 120, jitter=0.1)
+    assert bs.decide(build_family("s", hyp_words=(words_a, words_b)))["tests"][0]["status"] == "changed"
+
+
+def test_decide_untested_metrics_stay_out_of_the_family():
+    a, b = separated(6000, 7000, jitter=1)
+    result = bs.decide(build_family("s", decode_ms=(a, b), wer=separated(0.25, 0.25)))
+    assert next(t for t in result["tests"] if t["key"] == "decode_ms")["status"] == "untested"
+    assert result["family_size"] == 1
+
+
+def test_confirm_requires_the_same_metric_in_the_same_direction_again():
+    a, b = separated(0.25, 0.35)
+    first = bs.decide(build_family("s", wer=(a, b)), load=QUIET)
+    same = bs.decide(build_family("s", wer=separated(0.26, 0.36)), load=QUIET)
+    assert [r["label"] for r in bs.confirm(first, same["tests"])["confirmed"]] == ["WER"]
+    flipped = bs.decide(build_family("s", wer=separated(0.36, 0.26)), load=QUIET)
+    assert bs.confirm(first, flipped["tests"])["confirmed"] == []          # opposite direction
+    flat = [0.3 + i * 0.001 for i in range(8)]
+    quiet = bs.decide(build_family("s", wer=(flat, list(flat))), load=QUIET)
+    result = bs.confirm(first, quiet["tests"])
+    assert result["confirmed"] == [] and not result["not_reproduced"][0]["reproduced"]
+    missing = bs.confirm(first, [])                                          # metric absent in session 2
+    assert missing["confirmed"] == [] and len(missing["not_reproduced"]) == 1
+
+
+def test_metric_test_floor_is_the_larger_of_absolute_and_relative():
+    # words: floor 4 words and 3% of the baseline median (120 -> 3.6): the larger, 4.
+    assert not bs.metric_test("hyp_words", [120] * 8, [123] * 8)["floor_met"]
+    assert bs.metric_test("hyp_words", [120] * 8, [124] * 8)["floor_met"]
+    # RTF: 5% of the baseline median.
+    assert not bs.metric_test("rtf", [1.0] * 8, [1.04] * 8)["floor_met"]
+    assert bs.metric_test("rtf", [1.0] * 8, [1.06] * 8)["floor_met"]
+
+
+def test_decide_can_still_flag_a_completely_separated_metric_among_twenty_tests():
+    # The reason the decision rule uses the rank sum: with 20 tests Holm needs p < 0.0025 for the
+    # smallest one. Completely separated samples at n = 8 give 0.000155 under the rank sum (x 20 =
+    # 0.0031, flagged) but 0.0031 under the difference of medians (x 20 = 0.062, NEVER flagged).
+    flat = [1.0 + i * 0.001 for i in range(8)]
+    a, b = separated(0.25, 0.35)
+    tests = [bs.metric_test("wer", a, b, series="s0")]
+    tests += [bs.metric_test("wer", flat, list(flat), series=f"s{i}") for i in range(1, 20)]
+    result = bs.decide(tests)
+    assert result["family_size"] == 20
+    assert result["tests"][0]["status"] == "regression" and result["tests"][0]["p_holm"] < bs.ALPHA
+    assert 20 * bs.permutation_p_value(a, b)[0] > bs.ALPHA       # the alternative could not have done it
+
+
+def test_confirm_does_not_confirm_a_timing_result_from_a_busy_second_session():
+    a, b = separated(0.90, 1.10, jitter=0.001)                 # +22% RTF, completely separated
+    quiet = {"s": bs.assess_load([0.4] * 8, [0.5] * 8)}
+    busy = {"s": bs.assess_load([6.0] * 8, [6.0] * 8)}
+    first = bs.decide(build_family("s", rtf=(a, b)), load=quiet)
+    assert first["tests"][0]["status"] == "regression"
+    second = bs.decide(build_family("s", rtf=separated(0.91, 1.11, jitter=0.001)), load=busy)
+    assert second["tests"][0]["status"] == "indicative"        # the second session does not believe it ...
+    result = bs.confirm(first, second["tests"], load=busy)
+    assert result["confirmed"] == []                           # ... so it cannot confirm it (it used to)
+    assert "not quiet" in result["not_reproduced"][0]["why_not"]
+    again = bs.confirm(first, second["tests"], load=quiet)     # the same numbers on a quiet machine do
+    assert [r["label"] for r in again["confirmed"]] == ["RTF"]
+
+
+def test_confirm_counts_a_flagged_metric_the_second_session_could_not_test():
+    # Two metrics flagged in session 1; session 2 can test only one of them. Holm over BOTH
+    # (the missing one with p = 1) doubles the surviving p-value instead of leaving it alone.
+    a, b = separated(0.25, 0.35)
+    wa, wb = separated(100, 130, jitter=0.1)
+    first = bs.decide(build_family("s", wer=(a, b), hyp_words=(wa, wb)), load=QUIET)
+    assert {t["key"] for t in first["flagged"]} == {"wer", "hyp_words"}
+    second = bs.decide(build_family("s", wer=separated(0.26, 0.36)), load=QUIET)
+    result = bs.confirm(first, second["tests"], load=QUIET)
+    wer = next(r for r in result["results"] if r["label"] == "WER")
+    raw = next(t for t in second["tests"] if t["key"] == "wer")["p"]
+    assert wer["second_p_holm"] == pytest.approx(2 * raw) and wer["reproduced"]
+    missing = next(r for r in result["results"] if r["key"] == "hyp_words")
+    assert not missing["reproduced"] and "no usable test" in missing["why_not"]
