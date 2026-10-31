@@ -1,36 +1,64 @@
 @preconcurrency import AVFoundation
+import CoreMedia
 import Foundation
 import TranscriberCore
 
 /// Writes the archival AAC file off the audio thread.
 ///
-/// `AVAudioFile.write` encodes and hits the disk. Doing that inside the capture
-/// callback is a real-time violation: a stalled write shows up as dropped
-/// frames, and dropped frames are unrecoverable.
+/// `AVAssetWriter.append` encodes and hits the disk. Doing that inside the
+/// capture callback is a real-time violation: a stalled write shows up as
+/// dropped frames, and dropped frames are unrecoverable.
 ///
 /// One channel per lane. A two-lane meeting is a stereo file whose channels are
 /// the room and the call rather than left and right -- one file, one clock, and
 /// no way for the two to drift apart. Anything that cannot read the lanes still
 /// plays the meeting.
 ///
+/// **The file is written as movie fragments, and that is what makes it survive
+/// the app.** A plain MPEG-4 file is readable only once its index -- the `moov`
+/// atom -- has been written, and that happens at close. A quit, a crash, a
+/// SIGKILL or a power cut never gets there: measured, an `AVAudioFile` archive
+/// killed at 30 s had every byte of audio on disk and could not be opened by
+/// `afinfo`, `ffprobe` or `AVAudioFile` (finding 16). A fragmented file carries
+/// its own index in each fragment, so the same kill leaves everything up to the
+/// last complete fragment playable; the loss is bounded by `fragmentSeconds`,
+/// not by the length of the recording. A clean close still produces a file with
+/// exactly the frames that were written.
+///
 /// Writing stops early, and the file is closed while it still can be, when the
-/// disk runs low or a write fails. An MPEG-4 file whose index was never written
-/// cannot be opened at all, so pressing on into a full disk loses the whole
-/// recording rather than its end (FINDINGS §14). `onFailure` says so once.
+/// disk runs low or a write fails (FINDINGS §14). `onFailure` says so once.
 final class ArchiveWriter: @unchecked Sendable {
+
+    /// Seconds of audio between fragments, which is also the most a kill can
+    /// cost. Five seconds adds about 4% to the file; the index is 1.2 KB a
+    /// fragment.
+    static let fragmentSeconds = 5.0
+
+    /// How long `commit` waits for the encoder to take a buffer before the
+    /// writer is declared stuck. A healthy encoder takes one in milliseconds.
+    private static let stallLimit: TimeInterval = 30
+
     /// Touched only on `queue`, after `init`.
-    private var file: AVAudioFile?
+    private var writer: AVAssetWriter?
+    private var input: AVAssetWriterInput?
+    private var framesAppended: Int64 = 0
     private let queue = DispatchQueue(label: "transcriber.archive", qos: .utility)
     private let lock = NSLock()
     private var frames: AVAudioFramePosition = 0
     private let lanes: [CaptureLane]
     private let format: AVAudioFormat
+    private let description: CMAudioFormatDescription
     private let url: URL
     private let disk: DiskSpace
     /// Touched only on `queue`.
     private var framesSinceDiskCheck: AVAudioFramePosition = 0
     private var _failure: (any Error)?
     private var _onFailure: (@Sendable (any Error) -> Void)?
+
+    /// The writer could not take a buffer, or took none for too long.
+    struct Stalled: LocalizedError {
+        var errorDescription: String? { "the audio encoder stopped accepting audio" }
+    }
 
     init(url: URL, sampleRate: Double, lanes: [CaptureLane], disk: DiskSpace = .system) throws {
         self.lanes = lanes
@@ -40,6 +68,15 @@ final class ArchiveWriter: @unchecked Sendable {
                                          channels: AVAudioChannelCount(lanes.count))
         else { throw AudioCapture.CaptureError.unsupportedFormat(sampleRate) }
         self.format = format
+
+        var asbd = format.streamDescription.pointee
+        var description: CMAudioFormatDescription?
+        guard CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault, asbd: &asbd, layoutSize: 0, layout: nil,
+            magicCookieSize: 0, magicCookie: nil, extensions: nil,
+            formatDescriptionOut: &description) == noErr, let description
+        else { throw AudioCapture.CaptureError.unsupportedFormat(sampleRate) }
+        self.description = description
 
         // 64 kbps a channel: transparent for speech, and about 28 MB an hour
         // mono against the 345 MB that raw 48 kHz float would cost.
@@ -65,8 +102,48 @@ final class ArchiveWriter: @unchecked Sendable {
             throw EngineError.cannotSaveAudio(
                 DiskSpace.Low(availableBytes: free).localizedDescription)
         }
-        file = try AVAudioFile(forWriting: url, settings: settings,
-                               commonFormat: .pcmFormatFloat32, interleaved: false)
+
+        // `AVAssetWriter` raises an Objective-C exception, which Swift cannot
+        // catch, for settings the encoder does not take -- a 96 kHz interface
+        // is one. Asked first, so the answer is an error and not a crash.
+        let writer: AVAssetWriter
+        do {
+            writer = try AVAssetWriter(outputURL: Self.freshURL(url), fileType: .m4a)
+        } catch {
+            throw EngineError.cannotSaveAudio(error.localizedDescription)
+        }
+        guard writer.canApply(outputSettings: settings, forMediaType: .audio) else {
+            throw AudioCapture.CaptureError.unsupportedFormat(sampleRate)
+        }
+        let input = AVAssetWriterInput(mediaType: .audio, outputSettings: settings,
+                                       sourceFormatHint: description)
+        input.expectsMediaDataInRealTime = true
+        guard writer.canAdd(input) else {
+            throw AudioCapture.CaptureError.unsupportedFormat(sampleRate)
+        }
+        writer.add(input)
+        writer.movieFragmentInterval = CMTime(seconds: Self.fragmentSeconds,
+                                              preferredTimescale: 600)
+        guard writer.startWriting() else {
+            throw EngineError.cannotSaveAudio(
+                writer.error?.localizedDescription ?? "the archive could not be started")
+        }
+        writer.startSession(atSourceTime: .zero)
+        self.writer = writer
+        self.input = input
+    }
+
+    /// `AVAssetWriter` refuses an output that exists; `AVAudioFile` replaced
+    /// it, and a recording that restarts under the same name relies on that.
+    private static func freshURL(_ url: URL) -> URL {
+        try? FileManager.default.removeItem(at: url)
+        return url
+    }
+
+    deinit {
+        // A writer that is let go without `finish()` is still closed, so that
+        // no path out of a recording leaves the file open.
+        close()
     }
 
     var frameCount: AVAudioFramePosition {
@@ -143,14 +220,14 @@ final class ArchiveWriter: @unchecked Sendable {
         }
 
         lock.withLock { frames += AVAudioFramePosition(count) }
-        queue.async { [weak self] in
-            self?.commit(copy)
-        }
+        // Held strongly: every buffer that was accepted is written, even if the
+        // owner lets go of the writer before the queue has drained.
+        queue.async { self.commit(copy) }
     }
 
     /// The disk check and the write, on `queue`.
     private func commit(_ buffer: AVAudioPCMBuffer) {
-        guard let file else { return }
+        guard let writer, let input else { return }
         framesSinceDiskCheck += AVAudioFramePosition(buffer.frameLength)
         let interval = AVAudioFramePosition(format.sampleRate)
             * AVAudioFramePosition(DiskSpace.checkIntervalMs) / 1000
@@ -161,31 +238,135 @@ final class ArchiveWriter: @unchecked Sendable {
                 return
             }
         }
-        do {
-            try file.write(from: buffer)
-        } catch {
-            stop(because: error)
+
+        // Back-pressure rather than a drop: the capture side is already
+        // finished with this buffer, so waiting costs memory and never audio.
+        let deadline = Date().addingTimeInterval(Self.stallLimit)
+        while !input.isReadyForMoreMediaData {
+            if writer.status != .writing {
+                stop(because: writer.error ?? Stalled())
+                return
+            }
+            if Date() > deadline {
+                stop(because: Stalled())
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.002)
         }
+        guard let sample = sampleBuffer(from: buffer, atFrame: framesAppended),
+              input.append(sample)
+        else {
+            stop(because: writer.error ?? Stalled())
+            return
+        }
+        framesAppended += Int64(buffer.frameLength)
+    }
+
+    /// `buffer` as a sample buffer stamped at its position in the file, so the
+    /// timeline is the frame count and nothing else.
+    private func sampleBuffer(from buffer: AVAudioPCMBuffer,
+                              atFrame frame: Int64) -> CMSampleBuffer? {
+        let scale = Int32(format.sampleRate)
+        var timing = CMSampleTimingInfo(
+            duration: CMTime(value: 1, timescale: scale),
+            presentationTimeStamp: CMTime(value: frame, timescale: scale),
+            decodeTimeStamp: .invalid)
+        var sample: CMSampleBuffer?
+        guard CMSampleBufferCreate(
+            allocator: kCFAllocatorDefault, dataBuffer: nil, dataReady: false,
+            makeDataReadyCallback: nil, refcon: nil, formatDescription: description,
+            sampleCount: CMItemCount(buffer.frameLength), sampleTimingEntryCount: 1,
+            sampleTimingArray: &timing, sampleSizeEntryCount: 0, sampleSizeArray: nil,
+            sampleBufferOut: &sample) == noErr, let sample,
+              CMSampleBufferSetDataBufferFromAudioBufferList(
+                sample, blockBufferAllocator: kCFAllocatorDefault,
+                blockBufferMemoryAllocator: kCFAllocatorDefault, flags: 0,
+                bufferList: buffer.audioBufferList) == noErr
+        else { return nil }
+        return sample
     }
 
     /// Closes the file now, while closing it can still succeed, and reports why.
     private func stop(because error: any Error) {
-        file = nil
+        close()
         let report = lock.withLock { () -> (@Sendable (any Error) -> Void)? in
+            guard _failure == nil else { return nil }
             _failure = error
             return _onFailure
         }
         report?(error)
     }
 
-    /// Closes the file, and does mean *closes*.
+    /// Finalizes the file: the last fragment, then the closing index.
     ///
-    /// An MPEG-4 container is only finalized -- the sample tables flushed and
-    /// the `moov` atom written -- when `AVAudioFile` is deallocated. Merely
-    /// stopping writes leaves bytes on disk that every decoder refuses to open,
-    /// so the reference is dropped here rather than left to whenever the owner
-    /// happens to release the writer.
+    /// Every way out of a recording ends here -- `finish()`, a failed write, a
+    /// disk running low, and the writer being let go. A recording that wrote no
+    /// frame at all has no audio to keep, so its empty file is removed rather
+    /// than left behind as something that looks like a recording; a file that
+    /// holds audio is never removed, even when the writer failed, because what
+    /// the last complete fragment holds still plays.
+    private func close() {
+        guard let writer, let input else { return }
+        self.writer = nil
+        self.input = nil
+        guard writer.status == .writing else { return }
+        if framesAppended == 0 {
+            writer.cancelWriting()
+            return
+        }
+        input.markAsFinished()
+        let finished = DispatchSemaphore(value: 0)
+        writer.finishWriting { finished.signal() }
+        finished.wait()
+        if writer.status == .failed, let error = writer.error {
+            let report = lock.withLock { () -> (@Sendable (any Error) -> Void)? in
+                guard _failure == nil else { return nil }
+                _failure = error
+                return _onFailure
+            }
+            report?(error)
+        }
+    }
+
+    /// Closes the file, and does mean *closes*: the last fragment is written
+    /// and the file finalized before this returns.
     func finish() {
-        queue.sync { file = nil }
+        queue.sync { close() }
+    }
+
+    /// Returns once everything handed over so far has been passed to the
+    /// encoder. For tests that look at the file while the writer is open.
+    func settle() {
+        queue.sync {}
+    }
+}
+
+/// Whether the archive of a recording can be played.
+public enum ArchiveStatus: Equatable, Sendable {
+    /// Opens, and holds this much audio.
+    case playable(durationMs: Int)
+    /// The file is there and cannot be opened, or holds no audio. A recording
+    /// made before the archive was written in fragments and then ended without
+    /// a close -- a quit, a crash, a power cut -- is this: the audio is in the
+    /// file and no reader can find it. The 16 kHz working copy is what is left.
+    case unreadable(String)
+    /// No file at that path.
+    case missing
+}
+
+/// Asks the question the recovery path needs to answer before it says "the
+/// audio is here": whether the archive opens, which `hasAudio` -- a check that
+/// the file exists -- does not tell.
+public enum AudioArchive {
+    public static func status(of url: URL) -> ArchiveStatus {
+        guard FileManager.default.fileExists(atPath: url.path) else { return .missing }
+        do {
+            let file = try AVAudioFile(forReading: url)
+            let rate = file.fileFormat.sampleRate
+            guard file.length > 0, rate > 0 else { return .unreadable("the file holds no audio") }
+            return .playable(durationMs: Int(Double(file.length) / rate * 1000))
+        } catch {
+            return .unreadable(error.localizedDescription)
+        }
     }
 }
