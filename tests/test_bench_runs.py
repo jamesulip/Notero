@@ -385,3 +385,12 @@ def test_parse_stderr_reads_both_wordings_of_the_retry_line():
     new = "  2 window(s) needed a retry (a lead-in of silence, wider audio or half the window)\n"
     assert br.parse_stderr(new)["retried_windows"] == 2
     assert br.parse_stderr("  1 window(s) needed a warmer retry\n")["retried_windows"] == 1
+
+
+def test_bsd_time_is_used_only_where_it_understands_dash_l(monkeypatch):
+    # GNU time (Linux CI) rejects -l and exits 125 before the program runs.
+    monkeypatch.setattr(br.sys, "platform", "linux")
+    assert br.bsd_time_available() is False
+    monkeypatch.setattr(br.sys, "platform", "darwin")
+    monkeypatch.setattr(br, "TIME_BINARY", br.Path("/nonexistent/time"))
+    assert br.bsd_time_available() is False

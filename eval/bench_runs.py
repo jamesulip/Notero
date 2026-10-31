@@ -582,6 +582,15 @@ def capture_environment() -> dict:
     }
 
 
+def bsd_time_available() -> bool:
+    """Whether `/usr/bin/time -l` can wrap a run. `-l` is the BSD/macOS option that
+    prints the peak footprint and maximum resident set size. GNU `time` on Linux
+    rejects it ("invalid option -- 'l'") and exits 125 before the program starts,
+    which is how a CI runner failed every run. Without it the harness still runs;
+    the `time_*` memory fields are simply absent."""
+    return sys.platform == "darwin" and TIME_BINARY.exists()
+
+
 def build_command(binary: Path, audio: Path, ref: Path, json_path: Path, *, mode: str,
                   extra: list[str], use_lock: bool, use_time: bool) -> list[str]:
     cmd: list[str] = []
@@ -605,7 +614,7 @@ def run_once(*, binary: Path, audio: Path, ref: Path, reference_text: str, out_d
     stem = f"run-{index:02d}"
     json_path = out_dir / f"{stem}.report.json"
     stderr_path = out_dir / f"{stem}.stderr.txt"
-    use_time = TIME_BINARY.exists()
+    use_time = bsd_time_available()
     cmd = build_command(binary, audio, ref, json_path, mode=mode, extra=extra,
                         use_lock=use_lock, use_time=use_time)
     record: dict = {"schema": SCHEMA, "index": index, "arm": arm, "mode": mode,
