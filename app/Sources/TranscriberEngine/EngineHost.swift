@@ -136,11 +136,25 @@ public actor EngineHost {
 
     public func footprintMB() -> Int { MemoryProbe.footprintMB() }
 
-    /// Drops everything not currently in use, keeping the recognizer while a
-    /// recording is live. Nothing calls this yet; it is the hook for an
-    /// idle-memory pass.
+    /// Drops everything not currently in use. A recording keeps the recognizer;
+    /// a job that is running keeps everything it loaded, because a model
+    /// released under a decode turns the rest of that job's windows into
+    /// "could not be decoded" warnings (and the job's own release at its end
+    /// takes the speaker models). Nothing calls this yet: "Release the Models"
+    /// in Settings releases the speaker models only, and leaves the 1.6 GB
+    /// recognizer resident, which is the memory that button promises back.
     public func releaseAll() async {
+        guard jobsRunning == 0 else { return }
         await diarizer.unload()
         if !isLiveActive { await asr.unload() }
     }
+
+    // MARK: - Jobs
+
+    /// Background jobs the queue is running now. Kept here so that a release
+    /// pass cannot unload a model from under one.
+    public private(set) var jobsRunning = 0
+
+    func beginJob() { jobsRunning += 1 }
+    func endJob() { jobsRunning = max(0, jobsRunning - 1) }
 }

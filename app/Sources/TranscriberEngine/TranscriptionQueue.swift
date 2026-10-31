@@ -288,8 +288,12 @@ public actor TranscriptionQueue {
     }
 
     private func execute(_ job: TranscriptionJob) async -> JobEnd {
-        guard let runner else {
-            let end = await run(job)
+        await engines.beginJob()
+        let end: JobEnd
+        if let runner {
+            end = await runner(job) { self.sink.yield($0) }
+        } else {
+            end = await run(job)
             // Every way out of `run` passes through here, and the speaker models
             // must not outlive the job on any of them. The releases inside `run`
             // sit on the success path only: a diarization that is cancelled (by
@@ -299,9 +303,9 @@ public actor TranscriptionQueue {
             // the user pressed "Release the Models" in Settings (F13). The release
             // is cheap and does nothing when nothing is loaded.
             await engines.releaseDiarizer()
-            return end
         }
-        return await runner(job) { self.sink.yield($0) }
+        await engines.endJob()
+        return end
     }
 
     private func finish(_ job: TranscriptionJob, end: JobEnd) {

@@ -74,6 +74,7 @@ final class QueueResidencyTests: XCTestCase {
     }
 
     private struct Rig {
+        let host: EngineHost
         let queue: TranscriptionQueue
         let diarizer: FakeDiarizer
         let recognizer: FakeRecognizer
@@ -115,7 +116,7 @@ final class QueueResidencyTests: XCTestCase {
                 }
             }
         }
-        return Rig(queue: queue, diarizer: diarizer, recognizer: recognizer, log: log, reader: reader)
+        return Rig(host: host, queue: queue, diarizer: diarizer, recognizer: recognizer, log: log, reader: reader)
     }
 
     /// A 16 kHz working copy of tone, loud enough for the energy detector.
@@ -241,5 +242,63 @@ final class QueueResidencyTests: XCTestCase {
         XCTAssertEqual(prepares, 0, "a job cancelled while decoding loaded the speaker models")
         let loaded = await rig.diarizer.loaded
         XCTAssertFalse(loaded)
+    }
+
+    // MARK: - "Release the models" and what a running job holds
+
+    func testReleaseAllGivesBackBothModelsWhenNothingIsRunning() async throws {
+        let rig = rig(diarizer: .answers)
+        defer { rig.reader.cancel() }
+        try await rig.host.loadModel("stand-in")
+        try await rig.host.prepareDiarizer()
+        let loadedBefore = await rig.host.loadedModel
+        XCTAssertEqual(loadedBefore, "stand-in")
+
+        await rig.host.releaseAll()
+
+        let loaded = await rig.host.loadedModel
+        XCTAssertNil(loaded, "the recognizer is the 1.6 GB that a release is for")
+        let diarizerLoaded = await rig.diarizer.loaded
+        XCTAssertFalse(diarizerLoaded)
+    }
+
+    func testReleaseAllKeepsTheRecognizerForARecording() async throws {
+        let rig = rig(diarizer: .answers)
+        defer { rig.reader.cancel() }
+        try await rig.host.loadModel("stand-in")
+        await rig.host.beginLive()
+
+        await rig.host.releaseAll()
+        let during = await rig.host.loadedModel
+        XCTAssertEqual(during, "stand-in", "a release pass unloaded the model a recording decodes with")
+
+        await rig.host.endLive()
+        await rig.host.releaseAll()
+        let after = await rig.host.loadedModel
+        XCTAssertNil(after)
+    }
+
+    func testReleaseAllLeavesWhatARunningJobLoadedAndTakesItAfterwards() async throws {
+        let rig = rig(diarizer: .waitsForCancel)
+        defer { rig.reader.cancel() }
+        let job = try job()
+        await rig.queue.enqueue(job)
+        try await eventually("diarization to start") { await rig.diarizer.entered == 1 }
+        let running = await rig.host.jobsRunning
+        XCTAssertEqual(running, 1, "the job was meant to be running")
+
+        await rig.host.releaseAll()
+        let model = await rig.host.loadedModel
+        XCTAssertEqual(model, "stand-in", "a release pass unloaded the model from under a running job")
+        let speakers = await rig.diarizer.loaded
+        XCTAssertTrue(speakers, "a release pass unloaded the speaker models under a running job")
+
+        await rig.queue.cancel(job.id)
+        try await eventually("the job to finish") { rig.log.all.contains("finished") }
+        let after = await rig.host.jobsRunning
+        XCTAssertEqual(after, 0)
+        await rig.host.releaseAll()
+        let gone = await rig.host.loadedModel
+        XCTAssertNil(gone)
     }
 }
