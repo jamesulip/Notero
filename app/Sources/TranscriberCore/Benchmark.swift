@@ -12,7 +12,19 @@ public struct BenchmarkRun: Identifiable, Sendable, Codable, Equatable {
     public var audioMs: Int
     public var processMs: Int
     public var loadMs: Int
+    /// `phys_footprint` of this process after the decode: dirty and compressed
+    /// pages of the process itself. **Not the model's memory.** A loaded model
+    /// is owned by the Neural Engine and is not in it (the default model: 76 MB
+    /// here against 1580 MB there), so this number looks nearly the same for
+    /// every tier and says nothing about which tier needs less memory. Read
+    /// `modelResidencyMB` for that.
     public var peakMemoryMB: Int
+    /// Neural Engine memory the loaded model added to this process, from the
+    /// kernel's ledger (`footprint(1)` "neural, nofootprint"), in megabytes.
+    /// This is the figure that separates the tiers, and system-wide it is wired
+    /// memory that the Mac cannot compress or swap. Nil when the kernel does not
+    /// report it, and for runs saved before it was recorded.
+    public var modelResidencyMB: Int?
     public var segmentCount: Int
     public var wordCount: Int
     public var language: String
@@ -23,7 +35,8 @@ public struct BenchmarkRun: Identifiable, Sendable, Codable, Equatable {
 
     public init(id: UUID = UUID(), modelId: String, tier: ModelTier? = nil,
                 label: String, audioMs: Int, processMs: Int, loadMs: Int = 0,
-                peakMemoryMB: Int = 0, segmentCount: Int = 0, wordCount: Int = 0,
+                peakMemoryMB: Int = 0, modelResidencyMB: Int? = nil,
+                segmentCount: Int = 0, wordCount: Int = 0,
                 language: String = "tl", startedAt: Date = Date(),
                 wer: Double? = nil, failure: String? = nil) {
         self.id = id
@@ -34,6 +47,7 @@ public struct BenchmarkRun: Identifiable, Sendable, Codable, Equatable {
         self.processMs = processMs
         self.loadMs = loadMs
         self.peakMemoryMB = peakMemoryMB
+        self.modelResidencyMB = modelResidencyMB
         self.segmentCount = segmentCount
         self.wordCount = wordCount
         self.language = language
