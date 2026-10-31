@@ -11,62 +11,133 @@ import WhisperKit
 /// the whole window every hop is the difference between real-time and not.
 public actor WhisperEngine: SpeechRecognizing {
 
+    /// Builds a ready WhisperKit for a model id, downloading it first if it is
+    /// not on disk. A seam: a test can stand in for the 1.6 GB load.
+    typealias PipelineFactory = @Sendable (
+        _ model: String, _ modelsDirectory: URL, _ progress: ProgressReport?
+    ) async throws -> sending WhisperKit
+
     private let modelsDirectory: URL
+    private let makePipeline: PipelineFactory
     private var pipeline: WhisperKit?
     private var currentModel: String?
     public private(set) var loadMs: Int = 0
 
+    /// The load in progress, and the callers waiting for it.
+    private struct LoadInFlight {
+        var model: String
+        var waiters: [CheckedContinuation<Void, Error>] = []
+    }
+    private var inFlight: LoadInFlight?
+
     public init(modelsDirectory: URL) {
         self.modelsDirectory = modelsDirectory
+        self.makePipeline = Self.loadPipeline
+    }
+
+    init(modelsDirectory: URL, makePipeline: @escaping PipelineFactory) {
+        self.modelsDirectory = modelsDirectory
+        self.makePipeline = makePipeline
     }
 
     public var loadedModel: String? { currentModel }
 
+    /// Callers parked behind the load in progress. For tests.
+    var waitingLoads: Int { inFlight?.waiters.count ?? 0 }
+
     // MARK: - Lifecycle
 
+    /// Loads `model`, once.
+    ///
+    /// The `pipeline` guard below only sees a *finished* load, and a load takes
+    /// seconds to minutes (the first compile of a model took 284 s). The actor
+    /// is re-entered at every `await`, so a second call that arrived while the
+    /// first was still loading found `pipeline == nil` and started a second
+    /// 1.6 GB load of the same model: the launch warm-up and a Dock-drop import
+    /// can both ask within that window. A call for the model that is loading now
+    /// waits for that load and shares its result; a call for a different model
+    /// waits its turn, because two loads at once cannot both leave `pipeline`
+    /// as the caller asked.
     public func load(model: String, progress: ProgressReport?) async throws {
-        if pipeline != nil, currentModel == model { return }
+        while true {
+            if pipeline != nil, currentModel == model { return }
+            guard let running = inFlight else { break }
+            do {
+                try await waitForLoad()
+            } catch {
+                // The failure belongs to whoever asked for that model.
+                if running.model == model { throw error }
+            }
+            if running.model == model, pipeline != nil, currentModel == model {
+                progress?("Ready", 1)
+            }
+        }
 
-        let option = ModelCatalogue.option(model)
-        let label = option?.label ?? model
-        let known = ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory)
-
+        inFlight = LoadInFlight(model: model)
         let previous = pipeline
         let previousName = currentModel
         pipeline = nil
 
         let started = Date()
         do {
-            if !known {
-                // Fetched separately first: the combined download-and-load
-                // path reports nothing until the weights are on disk, and a
-                // 1.6 GB wait behind a spinner reads as a hang.
-                let title = "Downloading \(label) (\(option?.sizeLabel ?? "~1.6 GB"))…"
-                progress?(title, 0)
-                _ = try await WhisperKit.download(variant: model, downloadBase: modelsDirectory) { report in
-                    progress?(title, report.fractionCompleted)
-                }
-            }
-            progress?("Loading \(label)…", nil)
-            let config = WhisperKitConfig(
-                model: model,
-                downloadBase: modelsDirectory,
-                verbose: false,
-                prewarm: true,
-                load: true,
-                download: true
-            )
-            pipeline = try await WhisperKit(config)
+            let loaded = try await makePipeline(model, modelsDirectory, progress)
+            pipeline = loaded
             currentModel = model
             loadMs = Int(Date().timeIntervalSince(started) * 1000)
             progress?("Ready", 1)
+            finishLoad(nil)
         } catch {
             // Leave the working model in place rather than no model at all --
             // a failed switch should not take the session down with it.
             pipeline = previous
             currentModel = previousName
+            finishLoad(error)
             throw error
         }
+    }
+
+    private func waitForLoad() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            // Runs on the actor before any suspension, so `inFlight` is still
+            // the load that was seen a line ago.
+            inFlight?.waiters.append(continuation)
+        }
+    }
+
+    private func finishLoad(_ error: Error?) {
+        let waiters = inFlight?.waiters ?? []
+        inFlight = nil
+        for waiter in waiters {
+            if let error { waiter.resume(throwing: error) } else { waiter.resume() }
+        }
+    }
+
+    private static func loadPipeline(model: String, modelsDirectory: URL,
+                                     progress: ProgressReport?) async throws -> sending WhisperKit {
+        let option = ModelCatalogue.option(model)
+        let label = option?.label ?? model
+        let known = ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory)
+
+        if !known {
+            // Fetched separately first: the combined download-and-load
+            // path reports nothing until the weights are on disk, and a
+            // 1.6 GB wait behind a spinner reads as a hang.
+            let title = "Downloading \(label) (\(option?.sizeLabel ?? "~1.6 GB"))…"
+            progress?(title, 0)
+            _ = try await WhisperKit.download(variant: model, downloadBase: modelsDirectory) { report in
+                progress?(title, report.fractionCompleted)
+            }
+        }
+        progress?("Loading \(label)…", nil)
+        let config = WhisperKitConfig(
+            model: model,
+            downloadBase: modelsDirectory,
+            verbose: false,
+            prewarm: true,
+            load: true,
+            download: true
+        )
+        return try await WhisperKit(config)
     }
 
     public func unload() {
