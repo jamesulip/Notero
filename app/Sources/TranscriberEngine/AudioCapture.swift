@@ -329,6 +329,17 @@ public final class AudioCapture: @unchecked Sendable {
                               lanes: pcm, peaks: peaks))
     }
 
+    /// The longest stretch of silence written as one buffer.
+    ///
+    /// A gap can be as long as the Mac was asleep: the first buffer after a
+    /// wake reports everything since the last one. As a single buffer that is
+    /// the length of the sleep in float samples, per lane -- measured, one hour
+    /// at 48 kHz raised the footprint by 770 MB, produced one 115 MB chunk for
+    /// the live path, and held the capture thread for 19 s while it did. A
+    /// second at a time costs the same silence in the same total time, and a
+    /// bounded amount of memory.
+    private static let gapSliceSeconds = 1.0
+
     /// Silence for a gap in a lane, so later timestamps stay where they were.
     ///
     /// The output device changing mid-recording tears the tap down and builds
@@ -347,27 +358,35 @@ public final class AudioCapture: @unchecked Sendable {
         // recorded in that time anyway.
         guard let onAudio, frames > 0, !paused else { return }
 
-        var buffers: [CaptureLane: AVAudioPCMBuffer] = [:]
-        for lane in lanes {
-            guard let chain = chains[lane],
-                  let buffer = AVAudioPCMBuffer(pcmFormat: chain.monoFormat,
-                                                frameCapacity: AVAudioFrameCount(frames))
-            else { continue }
-            buffer.frameLength = AVAudioFrameCount(frames)
-            if let channel = buffer.floatChannelData?[0] {
-                for index in 0..<frames { channel[index] = 0 }
-            }
-            buffers[lane] = buffer
-        }
-        archive?.write(buffers)
+        let slice = max(1, Int(archiveSampleRate > 0 ? Double(archiveSampleRate) : 48_000)
+                        * Int(Self.gapSliceSeconds))
+        var remaining = frames
+        while remaining > 0 {
+            let count = min(remaining, slice)
+            remaining -= count
 
-        var pcm: [CaptureLane: Data] = [:]
-        for (lane, buffer) in buffers {
-            if let narrow = chains[lane]?.toInference(buffer) { pcm[lane] = narrow }
+            var buffers: [CaptureLane: AVAudioPCMBuffer] = [:]
+            for lane in lanes {
+                guard let chain = chains[lane],
+                      let buffer = AVAudioPCMBuffer(pcmFormat: chain.monoFormat,
+                                                    frameCapacity: AVAudioFrameCount(count))
+                else { continue }
+                buffer.frameLength = AVAudioFrameCount(count)
+                if let channel = buffer.floatChannelData?[0] {
+                    for index in 0..<count { channel[index] = 0 }
+                }
+                buffers[lane] = buffer
+            }
+            archive?.write(buffers)
+
+            var pcm: [CaptureLane: Data] = [:]
+            for (lane, buffer) in buffers {
+                if let narrow = chains[lane]?.toInference(buffer) { pcm[lane] = narrow }
+            }
+            guard !pcm.isEmpty else { continue }
+            onAudio(CapturedAudio(pcm: Self.mix(pcm, order: lanes), peak: 0,
+                                  lanes: pcm, peaks: [:]))
         }
-        guard !pcm.isEmpty else { return }
-        onAudio(CapturedAudio(pcm: Self.mix(pcm, order: lanes), peak: 0,
-                              lanes: pcm, peaks: [:]))
     }
 
     /// Sums the lanes for the single-transcript path.

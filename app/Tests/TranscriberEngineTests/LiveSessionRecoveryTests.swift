@@ -13,17 +13,15 @@ import TranscriberCore
 @MainActor
 final class LiveSessionRecoveryTests: XCTestCase {
 
-    private var scratch: URL!
-
-    override func setUpWithError() throws {
-        scratch = FileManager.default.temporaryDirectory
+    /// A fresh directory, removed when the test ends. Made on demand: this
+    /// class is main-actor isolated and XCTest's set-up hooks are not.
+    private lazy var scratch: URL = {
+        let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("transcriber-live-recovery-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
-    }
-
-    override func tearDownWithError() throws {
-        try? FileManager.default.removeItem(at: scratch)
-    }
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        return url
+    }()
 
     /// A session that captures only: no model, so no weights are needed.
     private func makeSession(input: @escaping @Sendable () -> ScriptedInput) -> LiveSession {
