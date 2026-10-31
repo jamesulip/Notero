@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import TranscriberCore
 
 /// How long the audio in an archive file is, or nil when it cannot be read.
 ///
@@ -67,6 +68,37 @@ public enum WorkingCopyPolicy {
     public static func isTruncated(workingCopyMs: Int, archiveMs: Int?) -> Bool {
         guard let archiveMs else { return false }
         return archiveMs > workingCopyMs + toleranceMs(archiveMs: archiveMs)
+    }
+
+    /// Which lanes a job on a recording should read, and what to tell the person if
+    /// that is not the lanes it was recorded with.
+    public struct LanePlan: Equatable, Sendable {
+        public var lanes: [CaptureLane]
+        public var warning: String?
+
+        public init(lanes: [CaptureLane], warning: String? = nil) {
+            self.lanes = lanes
+            self.warning = warning
+        }
+    }
+
+    /// The lane path builds each lane's 16 kHz copy from one channel of the archive
+    /// (or finds a lane copy an earlier run left), and live capture writes only the
+    /// mixed copy. When the archive cannot be opened and no lane copy is left, asking
+    /// for the lanes fails the job with "audio unreadable" while the mixed copy holds
+    /// the whole meeting. That copy is the only source there is, so it is read as one
+    /// lane, and the warning says what it costs: the transcript cannot say which side
+    /// each line came from (finding 33).
+    public static func lanePlan(recorded lanes: [CaptureLane], archiveReadable: Bool,
+                                laneCopiesExist: Bool, mixedCopyExists: Bool) -> LanePlan {
+        guard lanes.count > 1, !archiveReadable, !laneCopiesExist, mixedCopyExists else {
+            return LanePlan(lanes: lanes, warning: nil)
+        }
+        return LanePlan(
+            lanes: [.room],
+            warning: "The recording file could not be opened, so the room and the call could "
+                + "not be read apart. This transcript was made from the mixed copy of the audio, "
+                + "and its lines do not say which side they came from.")
     }
 
     /// `canDiscard` with the real probe, for a caller outside the queue.

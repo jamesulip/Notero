@@ -96,12 +96,31 @@ extension AppState {
         }
     }
 
+    /// The lanes a job on this recording should read. Its own, unless it has two and
+    /// the file that holds them cannot be opened: then the mixed working copy is read
+    /// as one lane, with a warning, instead of failing the job. Refer to
+    /// `WorkingCopyPolicy.lanePlan`.
+    func lanePlan(for recording: StoredRecording) -> WorkingCopyPolicy.LanePlan {
+        let lanes = recording.lanes
+        guard lanes.count > 1 else { return .init(lanes: lanes, warning: nil) }
+        func holdsAudio(_ url: URL) -> Bool { ((try? MappedPCM(contentsOf: url))?.sampleCount ?? 0) > 0 }
+        let id = recording.id
+        return WorkingCopyPolicy.lanePlan(
+            recorded: lanes,
+            archiveReadable: recording.audioURL.flatMap { ArchiveProbe.recordedDurationMs(of: $0) } != nil,
+            laneCopiesExist: lanes.allSatisfy {
+                holdsAudio(AudioCache.url(for: id, lane: $0, under: Paths.support))
+            },
+            mixedCopyExists: holdsAudio(AudioCache.url(for: id, under: Paths.support)))
+    }
+
     func enqueueTranscription(_ recording: StoredRecording, work: TranscriptionJob.Work,
                               modelId: String? = nil,
                               diarizationMode: DiarizationMode? = nil) {
         guard let name = recording.audioFileName else { return }
-        warnings[recording.id] = nil
-        recording.warningMessage = nil
+        let plan = lanePlan(for: recording)
+        warnings[recording.id] = plan.warning
+        recording.warningMessage = plan.warning
         let job = TranscriptionJob(
             id: recording.id,
             title: recording.title,
@@ -115,7 +134,7 @@ extension AppState {
             discardCacheWhenDone: !settings.keepWorkingCopy,
             roomMode: settings.roomMode,
             expectedSpeakers: recording.expectedSpeakers,
-            lanes: recording.lanes
+            lanes: plan.lanes
         )
         progress[recording.id] = JobProgress(status: .pending, fraction: 0)
         queuedJobs[recording.id] = job
@@ -151,7 +170,7 @@ extension AppState {
                                                        speakerId: block.speakerId)),
             discardCacheWhenDone: !settings.keepWorkingCopy,
             roomMode: settings.roomMode,
-            lanes: recording.lanes
+            lanes: lanePlan(for: recording).lanes
         )
         progress[recording.id] = JobProgress(status: .pending, fraction: 0)
         queuedJobs[recording.id] = job

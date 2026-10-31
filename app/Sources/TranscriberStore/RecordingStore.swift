@@ -113,11 +113,19 @@ public enum RecordingStore {
 
     /// What a recovered row says about the audio, beyond what it says about
     /// the transcript. Empty when the recording file opens.
-    static func audioClause(_ audio: SurvivingAudio) -> String {
+    ///
+    /// A recording of two lanes is a different promise when its file did not close.
+    /// The copy that was kept is the room and the call mixed, so it can be
+    /// transcribed, but as one: the lines will not say which side they came from.
+    static func audioClause(_ audio: SurvivingAudio, lanes: [CaptureLane] = [.room]) -> String {
         if audio.archivePlays { return "" }
         if audio.workingCopyMs != nil {
+            let mixed = lanes.count > 1
+                ? " It holds the room and the call mixed, so the transcript will not say "
+                    + "which side each line came from."
+                : ""
             return " The recording file was never closed, so it will not play, "
-                + "but a copy of the audio was kept and can be transcribed."
+                + "but a copy of the audio was kept and can be transcribed." + mixed
         }
         return " No audio survived, so it cannot be transcribed again."
     }
@@ -153,7 +161,7 @@ public enum RecordingStore {
         for recording in stale {
             let wasRecording = recording.status == .recording
             let surviving = audio(recording)
-            let clause = audioClause(surviving)
+            let clause = audioClause(surviving, lanes: recording.lanes)
             if recording.durationMs == 0, surviving.durationMs > 0 {
                 // The length is written at Stop, which never came.
                 recording.durationMs = surviving.durationMs
