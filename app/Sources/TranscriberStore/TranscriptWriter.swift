@@ -9,7 +9,7 @@ import TranscriberCore
 /// change into the main context and the views update.
 ///
 /// **A plain actor, not `@ModelActor`, and that is the point.** A `@ModelActor`'s
-/// executor runs a call on *the thread of whoever made it*: measured, a call from
+/// executor runs a call on *the thread of the caller*: measured, a call from
 /// the main actor ran on the main thread 20 times in 20 whether the actor had been
 /// created on the main actor or in a detached task, and a call from a detached task
 /// never did (finding 32). `AppState` is main-actor, so every `await writer.x()`
