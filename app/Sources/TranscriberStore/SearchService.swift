@@ -2,7 +2,8 @@ import Foundation
 import SwiftData
 import TranscriberCore
 
-@MainActor
+/// Not tied to an actor: it works on the context it is given, wherever that
+/// context lives. `SearchReader` runs it off the main actor.
 public enum SearchService {
 
     /// Two passes on purpose.
@@ -73,5 +74,20 @@ public enum SearchService {
                 atMs: bookmark.atMs, segmentId: nil)
         }
         return out
+    }
+}
+
+/// One search on a context of its own, off the main actor.
+///
+/// A search fetches every segment of each recording that matches, and for a
+/// six-hour meeting that is 15,000 rows: 0.5 s on this Mac for each such
+/// recording, on the main actor, on every debounced keystroke, until 80 hits
+/// are found. For one hour it is 66 ms. A new reader for each search, as with
+/// `TranscriptReader`: a context keeps the rows it loaded, and a long-lived
+/// one would read an edit that the window saved a moment ago in its old form.
+@ModelActor
+public actor SearchReader {
+    public func search(_ query: String, limit: Int = 80) throws -> [SearchHit] {
+        try SearchService.search(query, in: modelContext, limit: limit)
     }
 }

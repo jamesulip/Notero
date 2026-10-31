@@ -268,6 +268,12 @@ final class AppState {
         TranscriptReader(modelContainer: container)
     }
 
+    /// A searcher on its own context, for one search off the main actor.
+    /// New each time on purpose, for the reason that `makeReader` gives.
+    func makeSearcher() -> SearchReader {
+        SearchReader(modelContainer: container)
+    }
+
     /// Pending questions, asked one at a time.
     var duplicateImports: [DuplicateImport] = []
 
