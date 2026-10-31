@@ -121,3 +121,246 @@ public enum MachineInfo {
         return "\(model) · \(cores) cores · macOS \(os.majorVersion).\(os.minorVersion)"
     }
 }
+
+// MARK: - Run metrics for the `transcribe` CLI
+//
+// Four numbers that used to be conflated, now reported apart:
+//
+//   * whole-file RTF   wall time of a whole offline run over the audio length
+//   * per-decode time  what one call to the recognizer costs (`DecodeTimingSummary`)
+//   * commit latency   how far behind the audio a committed word trails
+//   * memory           what this process's accounting says, at named stages
+//
+// They live here, in the engine module, because the CLI is an executable
+// target a test cannot import. Everything below is a pure value type or a thin
+// decorator, so it is testable with a fake recognizer and no model.
+
+/// Order statistics, one definition for everything in this file.
+///
+/// Percentiles use linear interpolation between order statistics (Hyndman and
+/// Fan type 7, the default of numpy and R), because `eval/bench_runs.py` uses
+/// the same definition and the two have to agree when a number crosses over.
+public enum RunStats {
+    public static func percentile(_ values: [Double], _ p: Double) -> Double? {
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        let clamped = min(max(p, 0), 1)
+        let position = clamped * Double(sorted.count - 1)
+        let lower = Int(position.rounded(.down))
+        let upper = min(lower + 1, sorted.count - 1)
+        return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - Double(lower))
+    }
+
+    public static func mean(_ values: [Double]) -> Double? {
+        values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
+    }
+}
+
+/// One reading of this process's memory accounting, in megabytes.
+///
+/// **`physFootprintMB` is the footprint of one process, not the residency of a
+/// model.** `phys_footprint` is dirty plus compressed pages plus some IOKit
+/// mappings. Memory that CoreML places on the Neural Engine is owned by this
+/// process but accounted separately, as "neural, nofootprint": measured on the
+/// synthetic clip, the footprint after loading large-v3-turbo was 77 MB while
+/// `neuralMB` was 1581 MB. `neuralMB` is the residency-style figure; the
+/// footprint is not. A build that shows a smaller footprint has not shown that
+/// it needs less memory for the model. Compare snapshots across stages of one
+/// build, and read `neuralMB` beside the footprint.
+public struct MemorySnapshot: Codable, Sendable, Equatable {
+    public var stage: String
+    /// `phys_footprint` now. What Activity Monitor calls Memory.
+    public var physFootprintMB: Int
+    /// The highest `phys_footprint` this process has reached so far.
+    public var lifetimePeakFootprintMB: Int
+    /// Resident pages now, including clean file-backed pages that are mapped.
+    public var residentMB: Int
+    /// Anonymous (heap) pages now, resident or compressed.
+    public var internalMB: Int
+    /// File-backed and other external pages now.
+    public var externalMB: Int
+    public var compressedMB: Int
+    /// Neural Engine memory owned by this process now. **Not in
+    /// `physFootprintMB`.** Zero on a kernel that does not report it.
+    public var neuralMB: Int
+    /// The highest `neuralMB` this process has reached.
+    public var neuralPeakMB: Int
+
+    public init(stage: String, physFootprintMB: Int, lifetimePeakFootprintMB: Int,
+                residentMB: Int, internalMB: Int, externalMB: Int, compressedMB: Int,
+                neuralMB: Int = 0, neuralPeakMB: Int = 0) {
+        self.stage = stage
+        self.physFootprintMB = physFootprintMB
+        self.lifetimePeakFootprintMB = lifetimePeakFootprintMB
+        self.residentMB = residentMB
+        self.internalMB = internalMB
+        self.externalMB = externalMB
+        self.compressedMB = compressedMB
+        self.neuralMB = neuralMB
+        self.neuralPeakMB = neuralPeakMB
+    }
+
+    public static func current(stage: String) -> MemorySnapshot {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        let mb: (UInt64) -> Int = { Int($0 / (1024 * 1024)) }
+        guard result == KERN_SUCCESS else {
+            return MemorySnapshot(stage: stage, physFootprintMB: 0, lifetimePeakFootprintMB: 0,
+                                  residentMB: 0, internalMB: 0, externalMB: 0, compressedMB: 0)
+        }
+        return MemorySnapshot(
+            stage: stage,
+            physFootprintMB: mb(info.phys_footprint),
+            lifetimePeakFootprintMB: mb(UInt64(max(0, info.ledger_phys_footprint_peak))),
+            residentMB: mb(info.resident_size),
+            internalMB: mb(info.internal),
+            externalMB: mb(info.external),
+            compressedMB: mb(info.compressed),
+            neuralMB: mb(UInt64(max(0, info.ledger_tag_neural_nofootprint_total))),
+            neuralPeakMB: mb(UInt64(max(0, info.ledger_tag_neural_nofootprint_peak)))
+        )
+    }
+}
+
+/// What one call to the recognizer cost, measured from outside it.
+public struct DecodeSample: Sendable, Equatable {
+    /// Audio handed to the model, including context and pre-roll.
+    public var audioMs: Int
+    /// The model's own report of its inference time.
+    public var inferMs: Int
+    /// Wall time around the whole call. The gap to `inferMs` is audio
+    /// conversion, actor hops and anything else the model's clock leaves out.
+    public var wallMs: Int
+
+    public init(audioMs: Int, inferMs: Int, wallMs: Int) {
+        self.audioMs = audioMs
+        self.inferMs = inferMs
+        self.wallMs = wallMs
+    }
+}
+
+/// Per-decode cost over a run. **Not the whole-file RTF**: on the live path a
+/// call decodes a 15 s window to advance the transcript by one hop, so a
+/// per-decode RTF of 0.06 and a hop that costs 0.9 s describe the same run as
+/// a whole-file RTF of 0.15 and a replay that takes 8 s.
+public struct DecodeTimingSummary: Codable, Sendable, Equatable {
+    public var calls: Int
+    /// Sum of model-reported inference time over sum of audio decoded.
+    public var inferRtf: Double
+    /// Sum of wall time around each call over sum of audio decoded.
+    public var wallRtf: Double
+    public var meanInferMs: Double
+    public var medianInferMs: Double
+    public var p95InferMs: Double
+    public var maxInferMs: Int
+    public var meanWallMs: Double
+    public var p95WallMs: Double
+    public var maxWallMs: Int
+
+    public init?(samples: [DecodeSample]) {
+        guard !samples.isEmpty else { return nil }
+        let audio = Double(max(1, samples.reduce(0) { $0 + $1.audioMs }))
+        let infer = samples.map { Double($0.inferMs) }
+        let wall = samples.map { Double($0.wallMs) }
+        calls = samples.count
+        inferRtf = infer.reduce(0, +) / audio
+        wallRtf = wall.reduce(0, +) / audio
+        meanInferMs = RunStats.mean(infer) ?? 0
+        medianInferMs = RunStats.percentile(infer, 0.5) ?? 0
+        p95InferMs = RunStats.percentile(infer, 0.95) ?? 0
+        maxInferMs = samples.map(\.inferMs).max() ?? 0
+        meanWallMs = RunStats.mean(wall) ?? 0
+        p95WallMs = RunStats.percentile(wall, 0.95) ?? 0
+        maxWallMs = samples.map(\.wallMs).max() ?? 0
+    }
+}
+
+/// Records every decode that passes through it and forwards the call.
+///
+/// The live decoder reports only totals in `SessionStats`, which hide the slow
+/// hop that causes a drop. Wrapping the recognizer from outside shows the
+/// distribution without touching the decoder.
+public actor TimedRecognizer: SpeechRecognizing {
+    private let inner: any SpeechRecognizing
+    public private(set) var samples: [DecodeSample] = []
+
+    public init(wrapping inner: any SpeechRecognizing) {
+        self.inner = inner
+    }
+
+    public var loadedModel: String? {
+        get async { await inner.loadedModel }
+    }
+
+    public func load(model: String, progress: ProgressReport?) async throws {
+        try await inner.load(model: model, progress: progress)
+    }
+
+    public func unload() async {
+        await inner.unload()
+    }
+
+    public func transcribe(_ request: ASRRequest) async throws -> ASROutput {
+        let started = ContinuousClock.now
+        let output = try await inner.transcribe(request)
+        let elapsed = started.duration(to: .now)
+        let wallMs = Int((Double(elapsed.components.seconds) * 1000
+            + Double(elapsed.components.attoseconds) / 1e15).rounded())
+        samples.append(DecodeSample(audioMs: output.audioMs, inferMs: output.inferMs, wallMs: wallMs))
+        return output
+    }
+
+    public var summary: DecodeTimingSummary? { DecodeTimingSummary(samples: samples) }
+}
+
+/// How far behind the audio a committed word trails, in milliseconds.
+public struct CommitLatencySummary: Codable, Sendable, Equatable {
+    public var words: Int
+    public var minMs: Int
+    public var medianMs: Double
+    public var meanMs: Double
+    public var p95Ms: Double
+    public var maxMs: Int
+    /// Words committed with an end time later than the audio fed so far. Zero
+    /// in a healthy run; anything else is a timestamp past the audio.
+    public var aheadOfAudio: Int
+}
+
+/// Commit latency: the clock at the moment a word was committed, minus the
+/// time that word ended in the audio.
+///
+/// Which clock is the caller's choice and has to be stated with the number.
+/// Audio fed so far measures the mechanism, how long the commit policy waits
+/// for agreement and for a pause. Wall time since the replay began, under
+/// `--realtime`, adds what the machine costs.
+public struct CommitLatencyTracker: Sendable {
+    private var latenciesMs: [Int] = []
+
+    public init() {}
+
+    public mutating func record(_ tokens: [Token], atMs clockMs: Int) {
+        for token in tokens {
+            latenciesMs.append(clockMs - token.endMs)
+        }
+    }
+
+    public var summary: CommitLatencySummary? {
+        guard !latenciesMs.isEmpty else { return nil }
+        let values = latenciesMs.map(Double.init)
+        return CommitLatencySummary(
+            words: latenciesMs.count,
+            minMs: latenciesMs.min() ?? 0,
+            medianMs: RunStats.percentile(values, 0.5) ?? 0,
+            meanMs: RunStats.mean(values) ?? 0,
+            p95Ms: RunStats.percentile(values, 0.95) ?? 0,
+            maxMs: latenciesMs.max() ?? 0,
+            aheadOfAudio: latenciesMs.filter { $0 < 0 }.count
+        )
+    }
+}
