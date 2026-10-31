@@ -173,14 +173,76 @@ final class ArchiveCrashTests: XCTestCase {
         XCTAssertEqual(Double(ms), 7_000, accuracy: 50, "every buffer that was accepted is written")
     }
 
-    func testARateTheEncoderCannotTakeIsRefusedWithAnError() {
-        // `AVAssetWriterInput` raises an Objective-C exception for these, which
-        // Swift cannot catch and which ends the process.
-        for rate in [88_200.0, 96_000, 192_000] {
-            let url = scratch.appendingPathComponent("rate-\(Int(rate)).m4a")
-            XCTAssertThrowsError(try ArchiveWriter(url: url, sampleRate: rate, lanes: [.room]),
-                                 "\(Int(rate)) Hz")
+    func testAFastInterfaceIsArchivedAtTheNearestRateTheEncoderTakes() throws {
+        // The AAC encoder offers nothing above 48 kHz, and a 96 kHz interface is
+        // an ordinary thing to own: before this the recording was refused, with
+        // a Core Audio status (-66567) for a message.
+        XCTAssertEqual(ArchiveWriter.encodableRate(for: 96_000), 48_000)
+        XCTAssertEqual(ArchiveWriter.encodableRate(for: 88_200), 44_100)
+        XCTAssertEqual(ArchiveWriter.encodableRate(for: 192_000), 48_000)
+        XCTAssertEqual(ArchiveWriter.encodableRate(for: 48_000), 48_000)
+        XCTAssertEqual(ArchiveWriter.encodableRate(for: 44_100), 44_100)
+        XCTAssertEqual(ArchiveWriter.encodableRate(for: 16_000), 16_000)
+        XCTAssertEqual(ArchiveWriter.encodableRate(for: 8_000), 8_000)
+        XCTAssertNil(ArchiveWriter.encodableRate(for: 4_000), "slower than anything the encoder offers")
+
+        for (rate, fileRate) in [(96_000.0, 48_000.0), (88_200.0, 44_100.0), (192_000.0, 48_000.0)] {
+            let url = scratch.appendingPathComponent("fast-\(Int(rate)).m4a")
+            let writer = try ArchiveWriter(url: url, sampleRate: rate, lanes: [.room, .remote])
+            XCTAssertEqual(writer.fileFormat.sampleRate, fileRate)
+            // Odd buffer sizes, as everywhere: nothing may depend on them.
+            var written = 0
+            var sine = SineSource(rate: rate)       // one signal, no seam between buffers
+            while written < Int(rate * 8) {
+                let source = sine.buffer(frames: 12_345)
+                writer.write([.room: source, .remote: source])
+                written += Int(source.frameLength)
+            }
+            writer.finish()
+            XCTAssertNil(writer.failure, "\(Int(rate)) Hz")
+
+            let file = try AVAudioFile(forReading: url)
+            XCTAssertEqual(file.fileFormat.sampleRate, fileRate, "\(Int(rate)) Hz")
+            XCTAssertEqual(Int(file.fileFormat.channelCount), 2)
+            let seconds = Double(file.length) / fileRate
+            XCTAssertEqual(seconds, Double(written) / rate, accuracy: 0.05,
+                           "\(Int(rate)) Hz: the file is as long as what was recorded")
+            // The length the writer reports is the file's, in the file's units.
+            XCTAssertEqual(Double(writer.frameCount) / fileRate, seconds, accuracy: 0.05)
+
+            // A 440 Hz tone, still one: count zero crossings across a second.
+            let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                                        frameCapacity: AVAudioFrameCount(fileRate)))
+            file.framePosition = AVAudioFramePosition(fileRate * 2)
+            try file.read(into: buffer, frameCount: AVAudioFrameCount(fileRate))
+            let samples = try XCTUnwrap(buffer.floatChannelData?[0])
+            var crossings = 0
+            for index in 1..<Int(buffer.frameLength) where (samples[index - 1] < 0) != (samples[index] < 0) {
+                crossings += 1
+            }
+            XCTAssertEqual(Double(crossings) / 2, 440, accuracy: 3, "\(Int(rate)) Hz tone kept its pitch")
         }
+    }
+
+    func testACaptureAtNinetySixKilohertzReportsTheFilesRate() throws {
+        let input = ScriptedInput(sampleRate: 96_000)
+        let capture = AudioCapture(source: .microphone, microphoneUID: nil,
+                                   makeInput: { _, _ in input })
+        let url = scratch.appendingPathComponent("capture-96k.m4a")
+        let sink = AudioSink()
+        sink.keep = false
+        try capture.start(archiveURL: url) { sink.receive($0) }
+        var sine = SineSource(rate: 96_000)
+        for _ in 0..<200 { input.deliver([.room: sine.buffer(frames: 8_160)]) }
+        let stopped = capture.stop()
+        XCTAssertEqual(stopped.sampleRate, 48_000, "the rate of the file, which is what is stored")
+        XCTAssertEqual(Double(stopped.frames) / 48_000, Double(sine.framesProduced) / 96_000,
+                       accuracy: 0.05)
+        XCTAssertEqual(AudioArchive.status(of: url).isPlayable, true)
+        // The working copy is unaffected by what the archive is written at.
+        // Within the 96 kHz converter's own delay, which wanders between 0 and
+        // 40 ms and does not accumulate.
+        XCTAssertEqual(Double(sink.totalBytes) / 2, Double(sine.framesProduced) / 6, accuracy: 700)
     }
 
     func testARestartUnderTheSameNameReplacesTheFile() throws {
@@ -224,5 +286,12 @@ final class ArchiveCrashTests: XCTestCase {
         guard case .unreadable = AudioArchive.status(of: hollow) else {
             return XCTFail("\(AudioArchive.status(of: hollow))")
         }
+    }
+}
+
+private extension ArchiveStatus {
+    var isPlayable: Bool {
+        if case .playable = self { return true }
+        return false
     }
 }

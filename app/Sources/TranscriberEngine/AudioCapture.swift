@@ -62,6 +62,8 @@ public final class AudioCapture: @unchecked Sendable {
 
     public private(set) var isRunning = false
     public private(set) var archiveFormat: AVAudioFormat?
+    /// The rate the device delivers, which `fillGap` counts its frames in.
+    private var captureRate: Double = 0
 
     /// Muted capture writes silence rather than dropping frames, so timestamps
     /// stay pinned to wall-clock and the transcript never desyncs from audio.
@@ -188,6 +190,7 @@ public final class AudioCapture: @unchecked Sendable {
                                                 channels: AVAudioChannelCount(lanes.count))
         else { throw CaptureError.unsupportedFormat(rate) }
         self.archiveFormat = archiveFormat
+        self.captureRate = rate
 
         var chains: [CaptureLane: LaneChain] = [:]
         for lane in lanes {
@@ -205,6 +208,9 @@ public final class AudioCapture: @unchecked Sendable {
         writer?.onFailure = { [weak self] error in
             self?.onNotice?(.recordingNotSaved(error.localizedDescription))
         }
+        // What the file holds, which is not the device's rate when the device
+        // runs faster than the encoder can.
+        if let writer { self.archiveFormat = writer.fileFormat }
         stateLock.withLock {
             self.input = input
             self.chains = chains
@@ -365,8 +371,7 @@ public final class AudioCapture: @unchecked Sendable {
         // recorded in that time anyway.
         guard let onAudio, frames > 0, !paused else { return }
 
-        let slice = max(1, Int(archiveSampleRate > 0 ? Double(archiveSampleRate) : 48_000)
-                        * Int(Self.gapSliceSeconds))
+        let slice = max(1, Int((captureRate > 0 ? captureRate : 48_000) * Self.gapSliceSeconds))
         var remaining = frames
         while remaining > 0 {
             let count = min(remaining, slice)

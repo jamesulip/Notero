@@ -45,8 +45,16 @@ final class ArchiveWriter: @unchecked Sendable {
     private let queue = DispatchQueue(label: "transcriber.archive", qos: .utility)
     private let lock = NSLock()
     private var frames: AVAudioFramePosition = 0
+    private var handedOver: AVAudioFramePosition = 0
     private let lanes: [CaptureLane]
+    /// What the device delivers, and what `write` copies.
     private let format: AVAudioFormat
+    /// What the file holds. The same as `format` unless the device's rate is
+    /// one the AAC encoder does not offer (see `encodableRate`).
+    let fileFormat: AVAudioFormat
+    /// Brings `format` to `fileFormat`; nil when they are the same. Used only
+    /// on `queue`.
+    private let converter: AVAudioConverter?
     private let description: CMAudioFormatDescription
     private let url: URL
     private let disk: DiskSpace
@@ -69,7 +77,25 @@ final class ArchiveWriter: @unchecked Sendable {
         else { throw AudioCapture.CaptureError.unsupportedFormat(sampleRate) }
         self.format = format
 
-        var asbd = format.streamDescription.pointee
+        // The encoder offers no rate above 48 kHz, and a 96 kHz interface is
+        // an ordinary thing to have: the recording would be refused outright.
+        // The archive is written at the nearest rate the encoder takes, below
+        // the device's, which loses nothing speech has.
+        guard let fileRate = Self.encodableRate(for: sampleRate),
+              let fileFormat = AVAudioFormat(standardFormatWithSampleRate: fileRate,
+                                             channels: AVAudioChannelCount(lanes.count))
+        else { throw AudioCapture.CaptureError.unsupportedFormat(sampleRate) }
+        self.fileFormat = fileFormat
+        if fileRate == sampleRate {
+            self.converter = nil
+        } else {
+            guard let converter = AVAudioConverter(from: format, to: fileFormat) else {
+                throw AudioCapture.CaptureError.unsupportedFormat(sampleRate)
+            }
+            self.converter = converter
+        }
+
+        var asbd = fileFormat.streamDescription.pointee
         var description: CMAudioFormatDescription?
         guard CMAudioFormatDescriptionCreate(
             allocator: kCFAllocatorDefault, asbd: &asbd, layoutSize: 0, layout: nil,
@@ -89,10 +115,10 @@ final class ArchiveWriter: @unchecked Sendable {
         // encoder allows at this rate (finding 13).
         var settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: sampleRate,
+            AVSampleRateKey: fileRate,
             AVNumberOfChannelsKey: lanes.count,
         ]
-        if let bitRate = Self.bitRate(target: 64_000 * lanes.count, for: format) {
+        if let bitRate = Self.bitRate(target: 64_000 * lanes.count, for: fileFormat) {
             settings[AVEncoderBitRateKey] = bitRate
         }
         try FileManager.default.createDirectory(
@@ -159,6 +185,36 @@ final class ArchiveWriter: @unchecked Sendable {
         set { lock.withLock { _onFailure = newValue } }
     }
 
+    /// The sample rate the file is written at for a device delivering `rate`:
+    /// `rate` itself when the AAC encoder offers it, else one it does offer
+    /// below it, read from the encoder.
+    static func encodableRate(for rate: Double) -> Double? {
+        var asbd = AudioStreamBasicDescription(
+            mSampleRate: 0, mFormatID: kAudioFormatMPEG4AAC, mFormatFlags: 0,
+            mBytesPerPacket: 0, mFramesPerPacket: 0, mBytesPerFrame: 0,
+            mChannelsPerFrame: 0, mBitsPerChannel: 0, mReserved: 0)
+        let specifier = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        var size = UInt32(0)
+        var offered: [Double] = [48_000, 44_100, 32_000, 24_000, 22_050, 16_000, 12_000, 11_025, 8_000]
+        if AudioFormatGetPropertyInfo(kAudioFormatProperty_AvailableEncodeSampleRates,
+                                      specifier, &asbd, &size) == noErr, size > 0 {
+            var ranges = [AudioValueRange](
+                repeating: AudioValueRange(),
+                count: Int(size) / MemoryLayout<AudioValueRange>.size)
+            if AudioFormatGetProperty(kAudioFormatProperty_AvailableEncodeSampleRates,
+                                      specifier, &asbd, &size, &ranges) == noErr {
+                let listed = ranges.map(\.mMaximum).filter { $0 > 0 }
+                if !listed.isEmpty { offered = listed.sorted(by: >) }
+            }
+        }
+        if offered.contains(rate) { return rate }
+        // An exact fraction of the device's rate when there is one -- 96 kHz
+        // to 48 kHz, 88.2 to 44.1 -- because a whole-number ratio is the
+        // cleanest conversion; else the highest the encoder offers below it.
+        let below = offered.filter { $0 < rate }
+        return below.filter { rate.truncatingRemainder(dividingBy: $0) == 0 }.max() ?? below.max()
+    }
+
     /// `target` clamped into the bitrates the AAC encoder accepts for `format`,
     /// read from the encoder itself rather than from a table that goes stale.
     /// Nil when the encoder cannot be asked; the caller then omits the key and
@@ -219,7 +275,14 @@ final class ArchiveWriter: @unchecked Sendable {
             }
         }
 
-        lock.withLock { frames += AVAudioFramePosition(count) }
+        // Counted in what the file holds, so the length reported is the file's.
+        lock.withLock {
+            handedOver += AVAudioFramePosition(count)
+            frames = converter == nil
+                ? handedOver
+                : AVAudioFramePosition((Double(handedOver) * fileFormat.sampleRate
+                                        / format.sampleRate).rounded())
+        }
         // Held strongly: every buffer that was accepted is written, even if the
         // owner lets go of the writer before the queue has drained.
         queue.async { self.commit(copy) }
@@ -253,20 +316,33 @@ final class ArchiveWriter: @unchecked Sendable {
             }
             Thread.sleep(forTimeInterval: 0.002)
         }
-        guard let sample = sampleBuffer(from: buffer, atFrame: framesAppended),
+        var toWrite = buffer
+        if let converter {
+            let ratio = fileFormat.sampleRate / format.sampleRate
+            let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
+            guard let out = AVAudioPCMBuffer(pcmFormat: fileFormat, frameCapacity: capacity),
+                  converter.convertOnce(buffer, into: out)
+            else {
+                // Nothing came out of this buffer: carried inside the converter
+                // and heard with the next one.
+                return
+            }
+            toWrite = out
+        }
+        guard let sample = sampleBuffer(from: toWrite, atFrame: framesAppended),
               input.append(sample)
         else {
             stop(because: writer.error ?? Stalled())
             return
         }
-        framesAppended += Int64(buffer.frameLength)
+        framesAppended += Int64(toWrite.frameLength)
     }
 
     /// `buffer` as a sample buffer stamped at its position in the file, so the
     /// timeline is the frame count and nothing else.
     private func sampleBuffer(from buffer: AVAudioPCMBuffer,
                               atFrame frame: Int64) -> CMSampleBuffer? {
-        let scale = Int32(format.sampleRate)
+        let scale = Int32(fileFormat.sampleRate)
         var timing = CMSampleTimingInfo(
             duration: CMTime(value: 1, timescale: scale),
             presentationTimeStamp: CMTime(value: frame, timescale: scale),
