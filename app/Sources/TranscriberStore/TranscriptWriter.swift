@@ -198,8 +198,13 @@ public actor TranscriptWriter {
                 textClean: segment.textClean, speakerId: segment.speakerId,
                 confidence: segment.confidence
             )
-            row.transcript = transcript
+            // Inserted before it is linked. Linking an unmanaged row first
+            // makes SwiftData update the transcript's `segments` for every
+            // row already in it, so a batch of 250 took 3.6 s with 3000 rows
+            // saved and the whole job grew quadratically; the other order
+            // costs 84 ms for the same batch (finding 16).
             modelContext.insert(row)
+            row.transcript = transcript
         }
     }
 
