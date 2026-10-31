@@ -155,6 +155,11 @@ final class AppState {
     /// Jobs handed to the queue, kept until they finish: `.partial` events
     /// need the model and language the job was started with.
     var queuedJobs: [UUID: TranscriptionJob] = [:]
+    /// The newest job asked for on each recording. `.queued` hands it to
+    /// `queuedJobs`. Kept apart because a request made while a cancelled run
+    /// of the same recording unwinds is queued behind it, and that run's
+    /// `.finished` clears `queuedJobs` before the new job starts.
+    var requestedJobs: [UUID: TranscriptionJob] = [:]
     /// The revision each running job is appending to, from its first window.
     var openTranscripts: [UUID: UUID] = [:]
     /// Writes the live session's committed lines as they land, so a crash

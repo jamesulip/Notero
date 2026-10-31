@@ -241,6 +241,7 @@ extension AppState {
                     expectedSpeakers: recording(result.recordingId)?.expectedSpeakers
                 )
                 queuedJobs[job.id] = job
+                requestedJobs[job.id] = job
                 await queue.enqueue(job)
             case .finished:
                 let marked = await ledger.succeeded(.status, for: result.recordingId) {

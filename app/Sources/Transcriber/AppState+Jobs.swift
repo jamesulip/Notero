@@ -34,6 +34,7 @@ extension AppState {
         switch event {
         case .queued(let id, _):
             progress[id] = JobProgress(status: .pending, fraction: 0)
+            if let job = requestedJobs[id] { queuedJobs[id] = job }
             openTranscripts[id] = nil
             stageClock[id] = nil
             ledger.clear(id)
