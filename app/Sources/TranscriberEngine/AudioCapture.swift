@@ -253,6 +253,13 @@ public final class AudioCapture: @unchecked Sendable {
         return (frames, rate)
     }
 
+    /// Returns once the archive has taken everything handed to it so far. For
+    /// tests that run hours of audio faster than real time and would otherwise
+    /// outrun the encoder, which real time never does.
+    func settle() {
+        stateLock.withLock { archive }?.settle()
+    }
+
     // MARK: - The chain
 
     private func handle(_ frames: [CaptureLane: AVAudioPCMBuffer]) {

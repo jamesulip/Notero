@@ -165,9 +165,15 @@ public final class LiveSession {
     @ObservationIgnored var requestMicrophoneAccess: @MainActor () async -> Bool = {
         await MicrophoneAccess.request() == .granted
     }
+    @ObservationIgnored var requestSystemAudioAccess: @MainActor () async -> Bool = {
+        await SystemAudioAccess.request().mightWork
+    }
     @ObservationIgnored var makeCapture: @MainActor (CaptureSource, String?) -> AudioCapture? = {
         AudioCapture(source: $0, microphoneUID: $1)
     }
+    /// A decoder built from scripted parts, so a test can run the live path
+    /// with no model. When set, nothing is loaded.
+    @ObservationIgnored var decoderOverride: (@MainActor (SessionConfig) -> LiveDecoder)?
 
     private var capture: AudioCapture?
     private var cache: WavWriter?
@@ -210,7 +216,7 @@ public final class LiveSession {
         modelId = model
         // Nothing to load for a capture-only session; the offline job loads
         // the model when it runs.
-        guard decodeLive else { state = .ready; return }
+        guard decodeLive, decoderOverride == nil else { state = .ready; return }
         state = .preparing("Loading model…", nil)
         do {
             try await engines.prepareForLive(model: model) { [weak self] message, fraction in
@@ -239,7 +245,7 @@ public final class LiveSession {
         // `.ready` from a capture-only prepare has no model behind it, so
         // when live decoding is wanted the check is on the model, not the state.
         let loaded = await engines.loadedModel
-        if !(state == .ready && (!decodeLive || loaded == modelId)) {
+        if !(state == .ready && (!decodeLive || decoderOverride != nil || loaded == modelId)) {
             await prepare(model: modelId)
         }
         guard case .ready = state else {
@@ -256,8 +262,7 @@ public final class LiveSession {
             // silence -- Core Audio reports success and never delivers a
             // sample -- so a session started without this permission looks
             // exactly like a call where nobody spoke.
-            let access = await SystemAudioAccess.request()
-            guard access.mightWork else {
+            guard await requestSystemAudioAccess() else {
                 state = .failed(SystemAudioTap.TapError.notPermitted.localizedDescription)
                 throw EngineError.backendUnavailable("system audio access denied")
             }
@@ -281,9 +286,14 @@ public final class LiveSession {
         await engines.resetVAD()
 
         if decodeLive {
-            let decoder = LiveDecoder(config: config,
+            let decoder: LiveDecoder
+            if let decoderOverride {
+                decoder = decoderOverride(config)
+            } else {
+                decoder = LiveDecoder(config: config,
                                       recognizer: await engines.recognizer,
                                       vad: await engines.voiceActivity)
+            }
             decoder.onCommitted = { [weak self] tokens in self?.emit(tokens) }
             decoder.onPartial = { [weak self] text in self?.partial = text }
             self.decoder = decoder
