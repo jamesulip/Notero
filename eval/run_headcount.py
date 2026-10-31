@@ -82,6 +82,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fixtures", type=Path, action="append", required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--wrap", nargs="*", default=[])
+    parser.add_argument("--arms", nargs="*", choices=list(ARMS), default=list(ARMS),
+                        help="consolidation arms to run (default all)")
+    parser.add_argument("--stated", nargs="*", choices=list(STATED), default=list(STATED),
+                        help="stated counts to run (default all)")
     args = parser.parse_args(argv)
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -93,7 +97,11 @@ def main(argv: list[str] | None = None) -> int:
             ref = der.read_rttm(wav.with_suffix(".rttm"))
             n_ref = len({t.speaker for t in ref})
             for arm, tune in ARMS.items():
+                if arm not in args.arms:
+                    continue
                 for stated, delta in STATED.items():
+                    if stated not in args.stated:
+                        continue
                     count = None if delta is None else max(1, n_ref + delta)
                     if count == 1:
                         continue          # the app short-circuits a count of one; nothing runs

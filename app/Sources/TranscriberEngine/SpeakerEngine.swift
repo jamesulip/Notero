@@ -17,7 +17,8 @@ public actor SpeakerEngine: SpeakerDiarizing {
     ///
     /// `shipping` is what the app runs and what the tests pin. The benchmark
     /// tool builds the others, so a threshold can be measured against the
-    /// fixtures without editing the engine (see `eval/run_tuning_sweep.py`).
+    /// fixtures without editing the engine (`eval/run_diarization_ab.py` runs
+    /// the arms; `eval/tuning_verdict.py` holds the rule a change has to meet).
     public struct Tuning: Sendable, Equatable {
         /// FluidAudio's first pass drops a segment shorter than this, and a
         /// segment shorter than this cannot found a speaker there either. A meeting
@@ -44,7 +45,8 @@ public actor SpeakerEngine: SpeakerDiarizing {
         /// the user's head-count says there are too many. Wider than
         /// `sameSpeakerDistance`, because the count is evidence the threshold did
         /// not have; narrower than "anything", because a real seventh voice must
-        /// survive a count of six.
+        /// survive a count of six. Measured only on synthetic voices
+        /// (`eval/run_headcount.py`); never on a real six-person room.
         public var consolidationDistance: Float = 0.85
         /// A turn shorter than this may join an existing speaker but never found
         /// a new one: a 1-2 s embedding is noisy enough that letting it open a
