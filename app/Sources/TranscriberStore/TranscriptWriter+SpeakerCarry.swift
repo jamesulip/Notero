@@ -103,3 +103,51 @@ extension TranscriptWriter {
         }
     }
 }
+
+// MARK: - A transcription that brings its own speakers
+
+extension TranscriptWriter {
+
+    /// What Transcribe Again stores: the new run's segments and roster under the
+    /// labels the recording already uses.
+    ///
+    /// Same question as `applySpeakers`, asked of a new revision instead of the
+    /// current rows: the evidence is the lines of the latest earlier revision that
+    /// finished, set against the lines the new run produced. `excluding` names the
+    /// revisions that are not "earlier": the one being written, and the open
+    /// partial revision of this very job (which has no speakers yet).
+    ///
+    /// Nothing changes where there is nothing to match (no earlier revision, none
+    /// with speakers, no roster): the new run's labels pass through.
+    func carriedSpeakers(segments: [Segment], roster: [SpeakerLabel],
+                         on recording: StoredRecording,
+                         excluding: Set<UUID> = []) -> (segments: [Segment], roster: [SpeakerLabel]) {
+        guard !roster.isEmpty,
+              let previous = (recording.transcripts ?? [])
+                  .filter({ !excluding.contains($0.id) && $0.isComplete })
+                  .max(by: { $0.revision < $1.revision })
+        else { return (segments, roster) }
+
+        let spans: [SpeakerSpan] = segments.compactMap { segment in
+            guard let label = segment.speakerId, segment.endMs > segment.startMs else { return nil }
+            return SpeakerSpan(speakerId: label, startMs: segment.startMs, endMs: segment.endMs)
+        }
+        let plan = speakerCarryPlan(rows: previous.orderedSegments, recording: recording,
+                                    spans: spans, roster: roster)
+        let relabelled = segments.map { segment -> Segment in
+            var copy = segment
+            copy.speakerId = segment.speakerId.map { plan.carry.label(for: $0) }
+            return copy
+        }
+        return (relabelled, plan.relabel(roster))
+    }
+
+    /// The same, by recording id, for a caller outside the actor.
+    func carriedSpeakers(segments: [Segment], roster: [SpeakerLabel], for id: UUID,
+                         excluding: Set<UUID> = []) throws -> (segments: [Segment], roster: [SpeakerLabel]) {
+        var descriptor = FetchDescriptor<StoredRecording>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        guard let recording = try modelContext.fetch(descriptor).first else { return (segments, roster) }
+        return carriedSpeakers(segments: segments, roster: roster, on: recording, excluding: excluding)
+    }
+}

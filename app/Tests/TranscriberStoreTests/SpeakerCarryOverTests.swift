@@ -378,4 +378,107 @@ final class SpeakerCarryOverTests: XCTestCase {
             try assertNoLineIsOrphaned(id)
         }
     }
+
+    // MARK: - Transcribing again
+
+    /// A run of lines as Transcribe Again produces them: new text, new labels.
+    private func transcribedAgain(_ labels: [String?]) -> [Segment] {
+        labels.enumerated().map { offset, label in
+            Segment(index: offset, startMs: offset * stepMs, endMs: offset * stepMs + lineMs,
+                    text: "again \(offset)", speakerId: label)
+        }
+    }
+
+    func testTranscribingAgainStoresTheNewLinesUnderTheLabelsAPersonNamed() async throws {
+        let (id, writer) = try await seed(["S1", "S2", "S1", "S2", "S1", "S2"])
+        try rename("S1", to: "Maria", in: id)
+        let labels: [String?] = ["S2", "S1", "S2", "S1", "S2", "S1"]
+
+        let carried = try await writer.carriedSpeakers(
+            segments: transcribedAgain(labels),
+            roster: Self.roster(of: labels, lineMs: lineMs), for: id)
+
+        XCTAssertEqual(carried.segments.map(\.speakerId),
+                       ["S1", "S2", "S1", "S2", "S1", "S2"], "Maria's lines stay S1")
+        XCTAssertEqual(carried.segments.map(\.text).first, "again 0", "the text is the new text")
+        XCTAssertEqual(Set(carried.roster.map(\.id)), ["S1", "S2"])
+        XCTAssertEqual(carried.roster.first { $0.id == "S1" }?.speechMs, 3 * lineMs)
+    }
+
+    func testTranscribingAgainKeepsTheOldNamesOfWhoeverTheRunDidNotFind() async throws {
+        let (id, writer) = try await seed(["S1", "S2", "S3", "S1", "S2", "S3"])
+        try rename("S2", to: "Juan", in: id)
+        let labels: [String?] = ["S1", nil, "S2", "S1", nil, "S2"]   // Juan is not heard
+
+        let carried = try await writer.carriedSpeakers(
+            segments: transcribedAgain(labels),
+            roster: Self.roster(of: labels, lineMs: lineMs), for: id)
+
+        XCTAssertEqual(carried.segments.map(\.speakerId), ["S1", nil, "S3", "S1", nil, "S3"])
+        let kept = try XCTUnwrap(carried.roster.first { $0.displayName == "Juan" })
+        XCTAssertEqual(kept.id, "S2")
+        XCTAssertEqual(kept.speechMs, 0)
+    }
+
+    func testTranscribingAgainWithNothingEarlierPassesTheLabelsThrough() async throws {
+        let id = try RecordingStore.create(kind: .meeting, in: container.mainContext).id
+        let writer = TranscriptWriter(modelContainer: container)
+        let labels: [String?] = ["S2", "S1", "S2"]
+        let segments = transcribedAgain(labels)
+        let roster = Self.roster(of: labels, lineMs: lineMs)
+
+        let carried = try await writer.carriedSpeakers(segments: segments, roster: roster, for: id)
+
+        XCTAssertEqual(carried.segments, segments)
+        XCTAssertEqual(carried.roster, roster)
+    }
+
+    func testTranscribingAgainWithoutSpeakersChangesNothing() async throws {
+        let (id, writer) = try await seed(["S1", "S2", "S1", "S2"])
+        let segments = transcribedAgain([nil, nil, nil, nil])
+
+        let carried = try await writer.carriedSpeakers(segments: segments, roster: [], for: id)
+
+        XCTAssertEqual(carried.segments, segments)
+        XCTAssertTrue(carried.roster.isEmpty, "an empty roster stays empty, so nothing is pruned")
+    }
+
+    func testAnOpenPartialRevisionIsNeverTheEvidence() async throws {
+        // A job that is still decoding (or died part-way) has rows and no
+        // speakers. The newest revision is that one; the evidence is the
+        // newest that finished.
+        let (id, writer) = try await seed(["S1", "S2", "S1", "S2"])
+        try rename("S1", to: "Maria", in: id)
+        _ = try await writer.openPartialTranscript(modelId: "turbo", language: "en", for: id)
+        let labels: [String?] = ["S2", "S1", "S2", "S1"]
+
+        let carried = try await writer.carriedSpeakers(
+            segments: transcribedAgain(labels),
+            roster: Self.roster(of: labels, lineMs: lineMs), for: id)
+
+        XCTAssertEqual(carried.segments.map(\.speakerId), ["S1", "S2", "S1", "S2"])
+    }
+
+    func testTheRevisionBeingWrittenIsNotTheEvidence() async throws {
+        // `storeTranscript` inserts the new revision, finished and empty, before
+        // its rows are decided. Taken for the earlier run it would match nothing.
+        let (id, writer) = try await seed(["S1", "S2", "S1", "S2"])
+        try rename("S1", to: "Maria", in: id)
+        try await writer.storeTranscript(segments: [], roster: [], modelId: "turbo",
+                                         language: "en", processMs: 1, didDiarize: false, for: id)
+        let newest = try XCTUnwrap(try recording(id).transcript)
+        XCTAssertEqual(newest.revision, 2)
+        XCTAssertTrue(newest.isComplete, "this is what makes it look like evidence")
+        let labels: [String?] = ["S2", "S1", "S2", "S1"]
+        let roster = Self.roster(of: labels, lineMs: lineMs)
+
+        let ignored = try await writer.carriedSpeakers(
+            segments: transcribedAgain(labels), roster: roster, for: id)
+        XCTAssertEqual(ignored.segments.map(\.speakerId), labels,
+                       "with the empty revision as evidence there is nothing to match")
+
+        let carried = try await writer.carriedSpeakers(
+            segments: transcribedAgain(labels), roster: roster, for: id, excluding: [newest.id])
+        XCTAssertEqual(carried.segments.map(\.speakerId), ["S1", "S2", "S1", "S2"])
+    }
 }
