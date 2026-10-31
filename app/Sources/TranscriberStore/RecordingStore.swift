@@ -49,6 +49,34 @@ public enum RecordingStore {
         try context.save()
     }
 
+    // MARK: - Seeing another context's save
+
+    /// Brings the main context's copy of one recording up to date with what the
+    /// writer has saved, now.
+    ///
+    /// A row held on the main context does not see another context's save until
+    /// the main context fetches it: measured, 0 of 40 held rows were current after
+    /// `await writer.updateStatus(...)`, however long the main actor waited, and 40
+    /// of 40 after a fetch. A `@Query` that is on screen does the fetch itself, a few
+    /// milliseconds after the save (at most 11 ms in 180 saves), so a view catches up
+    /// without help; what this closes is the gap between the writer returning and
+    /// that fetch, which was zero when the writer ran on the main thread and is not
+    /// now (finding 32). Called before the app tells a view to re-read, so that the
+    /// view reads the rows that were saved and not the ones before.
+    ///
+    /// Three small fetches, none of them of the segments: the recording, its
+    /// transcripts (a transcript is its own object, and `completeTranscript`
+    /// replaces one) and its speakers.
+    public static func refresh(_ id: UUID, in context: ModelContext) {
+        var recording = FetchDescriptor<StoredRecording>(predicate: #Predicate { $0.id == id })
+        recording.fetchLimit = 1
+        _ = try? context.fetch(recording)
+        _ = try? context.fetch(FetchDescriptor<StoredTranscript>(
+            predicate: #Predicate { $0.recording?.id == id }))
+        _ = try? context.fetch(FetchDescriptor<StoredSpeaker>(
+            predicate: #Predicate { $0.recording?.id == id }))
+    }
+
     // MARK: - Recovery
 
     /// What is still on disk for a recording whose session ended without a

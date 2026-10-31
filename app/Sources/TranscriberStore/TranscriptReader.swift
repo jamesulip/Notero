@@ -9,14 +9,24 @@ import TranscriberCore
 /// all. A four-hour meeting has four thousand rows, thus a selection in the
 /// sidebar paid four thousand fetches on the main thread before the first
 /// line could draw. One fetch with a predicate and a sort descriptor returns
-/// the same rows in one query, in order, and a `@ModelActor` runs it on its
-/// own context so the window never waits for it.
+/// the same rows in one query, in order, and an actor runs it on its own
+/// context so the window never waits for it.
 ///
 /// Make a new reader for each read. A long-lived context keeps the row values
 /// it has already loaded, and a fetch does not refresh them, thus an edit
 /// saved on the main context could be read back stale.
-@ModelActor
+///
+/// A plain actor and not `@ModelActor`, for the reason given on
+/// `TranscriptWriter`: a `@ModelActor` runs on the caller's thread, and the views
+/// that call this are on the main actor (finding 32).
 public actor TranscriptReader {
+
+    public nonisolated let modelContainer: ModelContainer
+    lazy var modelContext = ModelContext(modelContainer)
+
+    public init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+    }
 
     /// The rows of one transcript, in time order.
     public func segments(ofTranscript id: UUID) throws -> [Segment] {

@@ -180,6 +180,9 @@ extension AppState {
                     .compactMap { $0 }.joined(separator: " ")
             }
         }
+        // The transcript is saved on the writer's context. Brought across before
+        // anything below reads the row.
+        syncStore(result.recordingId)
         let attached = await ledger.succeeded(.status, for: result.recordingId) {
             try await writer.attachAudio(
                 fileName: result.archiveFileName ?? "",
@@ -190,6 +193,7 @@ extension AppState {
                 for: result.recordingId
             )
         }
+        syncStore(result.recordingId)
         if !attached {
             // Without these a two-lane recording is transcribed as one, and the
             // library shows no length. The row the app holds is a second way
@@ -284,6 +288,7 @@ extension AppState {
                 }
             }
         }
+        syncStore(result.recordingId)
         // What changed under the recording: a microphone that was unplugged
         // and replaced, a default input that moved, an input that could not
         // be restarted. Kept with the recording, because the person reading

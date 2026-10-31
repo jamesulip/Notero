@@ -264,8 +264,17 @@ final class AppState {
 
     var context: ModelContext { container.mainContext }
 
+    /// Brings the main context's copy of a recording up to date with what the
+    /// writer saved. The writer runs off the main thread, and a row held here
+    /// does not see its save until this context fetches (finding 32), so every
+    /// place that saves through the writer and then tells a view to re-read calls
+    /// this first. Refer to `RecordingStore.refresh`.
+    func syncStore(_ id: UUID) {
+        RecordingStore.refresh(id, in: context)
+    }
+
     /// A reader on its own context, for one read of a transcript off the main
-    /// actor. New each time on purpose: refer to `TranscriptReader`.
+    /// thread. New each time on purpose: refer to `TranscriptReader`.
     func makeReader() -> TranscriptReader {
         TranscriptReader(modelContainer: container)
     }

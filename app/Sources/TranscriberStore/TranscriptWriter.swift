@@ -4,11 +4,29 @@ import TranscriberCore
 
 /// Writes transcription results off the main actor.
 ///
-/// A `@ModelActor` owns its own `ModelContext`, so a two-hour transcript can be
-/// inserted a few thousand rows at a time without the UI waiting on it.
-/// SwiftData merges the change into the main context and the views update.
-@ModelActor
+/// It owns its own `ModelContext`, so a two-hour transcript can be inserted a few
+/// thousand rows at a time without the UI waiting on it. SwiftData merges the
+/// change into the main context and the views update.
+///
+/// **A plain actor, not `@ModelActor`, and that is the point.** A `@ModelActor`'s
+/// executor runs a call on *the thread of whoever made it*: measured, a call from
+/// the main actor ran on the main thread 20 times in 20 whether the actor had been
+/// created on the main actor or in a detached task, and a call from a detached task
+/// never did (finding 32). `AppState` is main-actor, so every `await writer.x()`
+/// in it was main-thread work: `completeTranscript` took 6.5 s at 15,000 rows with
+/// the window frozen for it. A plain actor runs on the default executor whoever
+/// calls it, so no caller can bring the stall back by forgetting to hop.
+///
+/// The context is made on the first call, on the actor's own executor, rather than
+/// in `init`: that may run on the main thread.
 public actor TranscriptWriter {
+
+    public nonisolated let modelContainer: ModelContainer
+    lazy var modelContext = ModelContext(modelContainer)
+
+    public init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+    }
 
     public func updateStatus(_ status: TranscriptionStatus, progress: Double = 0,
                              error: String? = nil, for id: UUID) throws {
