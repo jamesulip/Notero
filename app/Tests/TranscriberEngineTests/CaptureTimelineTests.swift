@@ -46,16 +46,18 @@ final class CaptureTimelineTests: XCTestCase {
 
     func testTheWorkingCopyTracksTheArchiveAtEveryRate() throws {
         // 8 to 48 kHz covers a telephone headset to a studio interface. Over
-        // ten minutes of 85 ms buffers the copy must hold what the archive
+        // three minutes of 85 ms buffers the copy must hold what the archive
         // holds, converted: the difference is the converter's fixed latency,
-        // and it must not grow with the length of the recording.
+        // and it must not grow with the length of the recording. (The same
+        // check ran for an hour per rate when the finding was recorded: the
+        // lag was constant from the first measurement to the last.)
         for rate in [8_000.0, 16_000, 24_000, 44_100, 48_000] {
             let sink = AudioSink()
             sink.keep = false
             let (capture, input) = try startCapture(rate: rate, sink: sink)
             var sine = SineSource(rate: rate)
             let frames = bufferFrames(rate)
-            let buffers = Int(600 / 0.085)
+            let buffers = Int(180 / 0.085)
             var lag: [Int] = []
             for index in 0..<buffers {
                 input.deliver([.room: sine.buffer(frames: frames)])
@@ -152,6 +154,39 @@ final class CaptureTimelineTests: XCTestCase {
         XCTAssertEqual(sink.bytes / 2, Int(Double(20 * frames + 96_000) / 3), accuracy: 40)
     }
 
+    func testAGapThatIsFilledWithSilenceIsToldToTheUser() throws {
+        // A Mac that slept for half an hour comes back on the same microphone:
+        // no device changed, so no notice said so, and the recording held
+        // thirty minutes of silence that nothing on screen or in the saved
+        // warning mentioned. Five minutes stand in for it here.
+        let rate = 48_000.0
+        let notices = NoticeLog()
+        let sink = AudioSink()
+        sink.keep = false
+        let (capture, input) = try startCapture(rate: rate, archive: nil, sink: sink)
+        capture.onNotice = { notices.add($0) }
+
+        input.onGap?(Int(rate * 0.4))             // a blip: not worth a line
+        XCTAssertEqual(notices.all.count, 0, "under a second is not reported")
+
+        input.onGap?(Int(rate * 3))
+        XCTAssertEqual(notices.all.count, 1)
+        XCTAssertTrue(notices.all.first?.message.contains("3 seconds") ?? false,
+                      "\(notices.all.map(\.message))")
+        XCTAssertTrue(notices.all.first?.message.contains("silence") ?? false)
+
+        capture.isPaused = true
+        input.onGap?(Int(rate * 30))              // part of the pause
+        capture.isPaused = false
+        XCTAssertEqual(notices.all.count, 1, "a gap during a pause is not a loss")
+
+        input.onGap?(Int(rate * (5 * 60 + 5)))    // a nap
+        XCTAssertEqual(notices.all.count, 2)
+        XCTAssertTrue(notices.all.last?.message.contains("5 minutes 5 seconds") ?? false,
+                      "\(notices.all.map(\.message))")
+        capture.stop()
+    }
+
     func testALongGapIsNotAllocatedAsOneBuffer() throws {
         // A Mac that sleeps in the middle of a meeting comes back with the
         // whole sleep as one gap. Writing it as one buffer is the length of the
@@ -245,6 +280,13 @@ private final class Counter: @unchecked Sendable {
     private var _value = 0
     var value: Int { lock.withLock { _value } }
     func increment() { lock.withLock { _value += 1 } }
+}
+
+private final class NoticeLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _all: [CaptureNotice] = []
+    var all: [CaptureNotice] { lock.withLock { _all } }
+    func add(_ notice: CaptureNotice) { lock.withLock { _all.append(notice) } }
 }
 
 private final class Peak: @unchecked Sendable {

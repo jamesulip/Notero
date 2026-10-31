@@ -189,7 +189,9 @@ final class LongSessionSoakTests: XCTestCase {
         let memory = progress.memory
         let expectedRecordedFrames = progress.recordedFrames
 
+        let stopBegan = Date()
         let stopped = await session.stop()
+        let stopSeconds = Date().timeIntervalSince(stopBegan)
         let result = try XCTUnwrap(stopped)
 
         // The question recovery asks, on a file this long.
@@ -252,7 +254,8 @@ final class LongSessionSoakTests: XCTestCase {
             + "footprint slope \(String(format: "%.1f", slope)) MB/h, peak \(peak) MB over "
             + "\(memory.count) samples; consumer lag at most \(maxLagMs) ms; "
             + "meter \(session.meter.count) bars, segments \(session.segments.count); "
-            + "AudioArchive.status of the \(Self.hours) h file took \(statusMs) ms"
+            + "AudioArchive.status of the \(Self.hours) h file took \(statusMs) ms; "
+            + "stop() took \(String(format: "%.1f", stopSeconds)) s"
         print(summary)
 
         XCTAssertGreaterThan(markers.count, 0)

@@ -353,6 +353,10 @@ public final class AudioCapture: @unchecked Sendable {
     /// bounded amount of memory.
     private static let gapSliceSeconds = 1.0
 
+    /// The shortest gap worth a line to the user. A device change normally
+    /// costs a fraction of a second, which nobody can hear or read back.
+    private static let reportedGapSeconds = 1.0
+
     /// Silence for a gap in a lane, so later timestamps stay where they were.
     ///
     /// The output device changing mid-recording tears the tap down and builds
@@ -371,7 +375,16 @@ public final class AudioCapture: @unchecked Sendable {
         // recorded in that time anyway.
         guard let onAudio, frames > 0, !paused else { return }
 
-        let slice = max(1, Int((captureRate > 0 ? captureRate : 48_000) * Self.gapSliceSeconds))
+        // Said, not only filled: the recording is on the wall clock again, but
+        // it holds silence where audio was, and a same-device recovery after a
+        // sleep raises no other notice.
+        let rate = captureRate > 0 ? captureRate : 48_000
+        let seconds = Double(frames) / rate
+        if seconds >= Self.reportedGapSeconds {
+            onNotice?(.audioGap(seconds: Int(seconds.rounded())))
+        }
+
+        let slice = max(1, Int(rate * Self.gapSliceSeconds))
         var remaining = frames
         while remaining > 0 {
             let count = min(remaining, slice)
