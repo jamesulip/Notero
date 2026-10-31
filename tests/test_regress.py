@@ -747,6 +747,24 @@ def test_work_files_are_unique_per_batch_and_cleaned_up(world):
     assert rg.uuid.uuid4 is real and not names
 
 
+def test_two_sessions_with_one_tag_never_share_a_work_file(tmp_path, monkeypatch):
+    # Two sessions started with the same --out-dir name, at the same time, must not read each
+    # other's work orders. Fail both batches (so neither cleans up) and compare the paths.
+    seen = []
+
+    def failing(cmd, stdin=None):
+        seen.append(Path(cmd[-1]))
+        return subprocess.CompletedProcess(cmd, 1)
+
+    monkeypatch.setattr(rg.subprocess, "run", failing)
+    for items in ([{"arm": "A", "n": 1}], [{"arm": "B", "n": 2}]):
+        with pytest.raises(RuntimeError, match="exited with code 1"):
+            rg.run_batch(items, scratch=tmp_path, use_lock=False, tag="same-tag")
+    assert len(seen) == 2 and seen[0] != seen[1]
+    assert json.loads(seen[0].read_text())["items"] == [{"arm": "A", "n": 1}]     # each file kept its own order
+    assert json.loads(seen[1].read_text())["items"] == [{"arm": "B", "n": 2}]
+
+
 def test_build_lock_clears_a_dead_holder_and_blocks_a_live_one(tmp_path):
     lock = tmp_path / ".lock"
     dead = subprocess.Popen([sys.executable, "-c", "pass"])
