@@ -54,6 +54,8 @@ actor OracleRecognizer: SpeechRecognizing {
     struct Call: Sendable {
         var startMs: Int
         var endMs: Int
+        var attempt = 0
+        var sampling = ASRRequest.Sampling.standard
     }
 
     var words: [SpokenWord]
@@ -101,7 +103,8 @@ actor OracleRecognizer: SpeechRecognizing {
         let startMs = OraclePCM.startMs(of: request.samples)
         let durationMs = request.samples.count / 16
         let endMs = startMs + durationMs
-        calls.append(Call(startMs: startMs, endMs: endMs))
+        calls.append(Call(startMs: startMs, endMs: endMs, attempt: request.decodeAttempt,
+                          sampling: request.sampling))
         let index = calls.count
         if held {
             await withCheckedContinuation { waiters.append($0) }

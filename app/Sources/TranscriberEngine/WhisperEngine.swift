@@ -77,6 +77,41 @@ public actor WhisperEngine: SpeechRecognizing {
 
     // MARK: - Inference
 
+    /// Where WhisperKit's temperature ladder starts and how long it is.
+    struct Sampling: Equatable {
+        var temperature: Float
+        var fallbackCount: Int
+    }
+
+    /// The standard ladder, and the two halves of it that the offline pass runs
+    /// separately.
+    ///
+    /// Attempt 0 is greedy. A retry warms the sampler: the failure being
+    /// retried is a window whose greedy first token looked improbable, and
+    /// repeating the same deterministic decode would fail identically.
+    ///
+    /// Zero fallbacks on a request that is allowed to fall back is silent data
+    /// loss: WhisperKit discards any window whose first token looks improbable,
+    /// and with nothing to fall back to the window returns empty rather than
+    /// being retried. Sliding windows start mid-word every hop, so this fires
+    /// often -- measured at 37% of hops with no fallbacks, 16% with two.
+    /// `.greedyOnly` is for a caller that retries on its own.
+    static func sampling(for request: ASRRequest) -> Sampling {
+        let attempt = request.decodeAttempt
+        switch request.sampling {
+        case .standard:
+            return Sampling(temperature: Float(attempt) * 0.2, fallbackCount: 2 + attempt * 2)
+        case .greedyOnly:
+            return Sampling(temperature: 0, fallbackCount: 0)
+        case .resampleOnly:
+            // The standard ladder at attempt 0 is temperatures 0, 0.2, 0.4;
+            // this is 0.2, 0.4. Later attempts never started at 0.
+            return attempt == 0
+                ? Sampling(temperature: 0.2, fallbackCount: 1)
+                : Sampling(temperature: Float(attempt) * 0.2, fallbackCount: 2 + attempt * 2)
+        }
+    }
+
     public func transcribe(_ request: ASRRequest) async throws -> ASROutput {
         guard let pipeline else { throw EngineError.modelNotLoaded }
         let audioMs = request.samples.count * 1000 / Audio.sampleRate
@@ -92,17 +127,10 @@ public actor WhisperEngine: SpeechRecognizing {
         options.wordTimestamps = request.wordTimestamps
         options.withoutTimestamps = false
         options.chunkingStrategy = nil
-        // Attempt 0 is greedy. A retry warms the sampler: the failure being
-        // retried is a window whose greedy first token looked improbable, and
-        // repeating the same deterministic decode would fail identically.
-        options.temperature = Float(request.decodeAttempt) * 0.2
+        let sampling = Self.sampling(for: request)
+        options.temperature = sampling.temperature
         options.temperatureIncrementOnFallback = 0.2
-        // Zero fallbacks is silent data loss: WhisperKit discards any window
-        // whose first token looks improbable, and with nothing to fall back to
-        // the window returns empty rather than being retried. Sliding windows
-        // start mid-word every hop, so this fires often -- measured at 37% of
-        // hops with no fallbacks, 16% with two.
-        options.temperatureFallbackCount = 2 + request.decodeAttempt * 2
+        options.temperatureFallbackCount = sampling.fallbackCount
 
         if request.language == "auto" {
             // Auto-detect resolves Taglish elsewhere and starts translating; on
@@ -127,12 +155,20 @@ public actor WhisperEngine: SpeechRecognizing {
 
         var tokens: [Token] = []
         var logProbs: [Double] = []
+        // The gates are WhisperKit's own, read back from the segments of the
+        // decode it returned. See `DecodeQuality`.
+        var worstLogProb = Double.infinity
+        var worstCompression = 0.0
         for result in results {
             for segment in result.segments {
                 // Whisper reports how sure it is that a window is silence.
                 // Above this it is almost always about to invent a sentence.
                 if segment.noSpeechProb > 0.85 { continue }
                 logProbs.append(Double(segment.avgLogprob))
+                if !segment.text.trimmed.isEmpty {
+                    worstLogProb = min(worstLogProb, Double(segment.avgLogprob))
+                    worstCompression = max(worstCompression, Double(segment.compressionRatio))
+                }
 
                 if let words = segment.words, !words.isEmpty {
                     for word in words where !word.word.trimmed.isEmpty {
@@ -160,9 +196,18 @@ public actor WhisperEngine: SpeechRecognizing {
         let confidence = logProbs.isEmpty
             ? nil
             : min(1, max(0, exp(logProbs.reduce(0, +) / Double(logProbs.count))))
+        var quality: DecodeQuality?
+        if worstLogProb.isFinite {
+            quality = DecodeQuality(
+                avgLogProb: worstLogProb,
+                compressionRatio: worstCompression,
+                isRepetitive: options.compressionRatioThreshold.map { worstCompression > Double($0) } ?? false,
+                isLowConfidence: options.logProbThreshold.map { worstLogProb < Double($0) } ?? false
+            )
+        }
         return ASROutput(tokens: tokens, audioMs: audioMs, inferMs: inferMs,
                          detectedLanguage: results.first?.language ?? request.language,
-                         confidence: confidence)
+                         confidence: confidence, quality: quality)
     }
 }
 

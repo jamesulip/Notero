@@ -22,16 +22,64 @@ public struct ASRRequest: Sendable {
     /// warmer sampling temperature and more fallbacks. A window that decoded to
     /// nothing is not silence: VAD already said there was speech in it.
     public var decodeAttempt: Int
+    public var sampling: Sampling
+
+    /// How much of the backend's own temperature fallback a request may use.
+    ///
+    /// Whisper's fallback re-samples a window whose greedy decode failed a
+    /// confidence gate, and the sampling is random: the same file decodes
+    /// differently on each run (FINDINGS 15). The live path wants that ladder
+    /// as it is. The offline pass can do better, because it can try again on
+    /// different audio, so it takes the ladder apart.
+    public enum Sampling: Sendable, Equatable {
+        /// The backend's whole ladder: greedy first, then warmer retries.
+        case standard
+        /// Greedy only. A window whose greedy decode fails a gate comes back
+        /// empty or flagged in `ASROutput.quality`, and is not re-sampled.
+        case greedyOnly
+        /// The ladder without its greedy first step, for a caller that has
+        /// just run that step itself.
+        case resampleOnly
+    }
 
     public init(samples: [Float], language: String = LanguageCatalogue.defaultLanguage,
                 prompt: String? = nil, wordTimestamps: Bool = true,
-                decodeAttempt: Int = 0) {
+                decodeAttempt: Int = 0, sampling: Sampling = .standard) {
         self.samples = samples
         self.language = language
         self.prompt = prompt
         self.wordTimestamps = wordTimestamps
         self.decodeAttempt = decodeAttempt
+        self.sampling = sampling
     }
+}
+
+/// How far a backend trusts one decode, for callers that can retry.
+///
+/// Mirrors the backend's own gates. Whisper returns the *last* attempt of its
+/// ladder even when that attempt also failed them, so a window can come back
+/// with text that the model itself had flagged as a repetition loop.
+public struct DecodeQuality: Sendable, Equatable {
+    /// Lowest mean token log-probability over the decoded segments.
+    public var avgLogProb: Double
+    /// Highest compression ratio over the decoded segments.
+    public var compressionRatio: Double
+    /// The text compresses like a loop ("Thank you. Thank you. ..."). The
+    /// backend's repetition gate failed.
+    public var isRepetitive: Bool
+    /// The log-probability gate failed: the model was not confident.
+    public var isLowConfidence: Bool
+
+    public init(avgLogProb: Double, compressionRatio: Double,
+                isRepetitive: Bool, isLowConfidence: Bool) {
+        self.avgLogProb = avgLogProb
+        self.compressionRatio = compressionRatio
+        self.isRepetitive = isRepetitive
+        self.isLowConfidence = isLowConfidence
+    }
+
+    /// Passed every gate the backend applies.
+    public var passedGates: Bool { !isRepetitive && !isLowConfidence }
 }
 
 public struct ASROutput: Sendable {
@@ -41,14 +89,19 @@ public struct ASROutput: Sendable {
     public var detectedLanguage: String?
     /// Mean token log-probability mapped to 0...1, when the backend reports one.
     public var confidence: Double?
+    /// The backend's own verdict on the decode. Nil when it has none, which
+    /// callers read as "passed".
+    public var quality: DecodeQuality?
 
     public init(tokens: [Token], audioMs: Int, inferMs: Int,
-                detectedLanguage: String? = nil, confidence: Double? = nil) {
+                detectedLanguage: String? = nil, confidence: Double? = nil,
+                quality: DecodeQuality? = nil) {
         self.tokens = tokens
         self.audioMs = audioMs
         self.inferMs = inferMs
         self.detectedLanguage = detectedLanguage
         self.confidence = confidence
+        self.quality = quality
     }
 
     /// Real-time factor for this call. Below 1.0 means faster than the audio.

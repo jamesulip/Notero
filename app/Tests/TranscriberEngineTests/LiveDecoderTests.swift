@@ -126,6 +126,20 @@ final class LiveDecoderTests: XCTestCase {
         XCTAssertEqual(decoder.committedEndMs, 4_200)
     }
 
+    // MARK: - The live path keeps Whisper's own ladder
+
+    func testTheLivePathNeverTakesTheLadderApart() async throws {
+        // `.greedyOnly` is for a caller that retries on other audio. A live hop
+        // has no such retry and re-decodes the same audio a hop later, so it
+        // keeps WhisperKit's whole temperature ladder (FINDINGS 2).
+        let (decoder, asr, _, _) = make(words: quotation, speech: [2_200..<5_500])
+        var clock = 0
+        await feed(decoder, &clock, to: 8_000)
+        let calls = await asr.calls
+        XCTAssertFalse(calls.isEmpty)
+        XCTAssertTrue(calls.allSatisfy { $0.sampling == .standard && $0.attempt == 0 })
+    }
+
     // MARK: - Finalization on the VAD's clock
 
     func testSilenceTriggersTheFinalDecodeBeforeTheNextHop() async throws {
