@@ -854,8 +854,21 @@ noisy ones: each holds a collapsed run, so their spread is wide. More runs per a
 
 **What the resampling cannot show** is slow drift or load between runs: its draws are iid. A real A/A
 session on the machine (`regress.py --base X --cand X`) is the check, and `calibrate_aa.py stream`
-turns a long stream of real runs into blocks of 8 against 8; the sessions this cycle ran are kept in
-`eval/baselines/sessions/`.
+turns a long stream of real runs into blocks of 8 against 8. **No real A/A session was run this
+cycle**: behind the shared bench lock (8 to 10 waiters, about 25 minutes of waiting per hold) it would
+have taken hours, and the lead decided the resampling above was the right evidence for the rule. The
+false-positive rate in the table is therefore a resampling result, with iid draws.
+
+**The one real session** is kept in `eval/baselines/sessions/quick-ab-addf5f8-vs-57dcc14/` (report,
+data, plan, and a README that says what did not run): `regress.py --suite quick`, pre-P6 `addf5f8`
+against `57dcc14`, n = 8 per arm, through the lock. Its offline and live halves ran; **its DER half and
+the real A/A did not** (lock contention, stopped by the lead). Offline WER 34.4% [30.5-58.6] to 24.2%
+[24.2-24.2] (-10.2 points, Holm-adjusted p = 0.002: a suspected improvement), 3 of 8 collapsed runs to
+0 (Fisher p = 0.20, not significant at n = 8), 8 distinct transcripts in 8 runs against byte-identical.
+The offline RTF gap of -10% is not believed: median load 6.4 against a limit of 2. Live: nothing significant
+(WER 28.1% to 26.2%, p = 0.12; replay RTF +5%, p = 0.23, at a quiet median load of 1.2), and **both builds
+gave 8 distinct transcripts in 8 live runs**: the P6 branch is deterministic offline only. One session
+suspects and does not confirm; this matches the lead's own n = 6 offline A/B.
 
 ## Test material that exists
 
