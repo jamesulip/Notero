@@ -140,6 +140,8 @@ final class AppState {
     var transcriptTicks: [UUID: Int] = [:]
     /// Per-recording notes about work that finished imperfectly.
     var warnings: [UUID: String] = [:]
+    /// What each job could not save. Refer to `JobLedger`.
+    let ledger = JobLedger()
     /// The recording the live session is working on, set the moment the user
     /// asks for one rather than when the first sample arrives. `live.recordingId`
     /// only exists once capture starts, which on a cold model is several
