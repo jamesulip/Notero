@@ -78,11 +78,13 @@ final class SearchReaderTests: XCTestCase {
         let context = container.mainContext
         for index in 0..<3 { try seed(title: "Long \(index)", rows: 6_000, in: context) }
 
-        var longestGapMs = 0.0
-        var running = true
-        let ticker = Task { @MainActor in
+        // The ticker owns its measurement and hands it back when cancelled,
+        // so no variable is shared across the concurrency boundary.
+        let ticker = Task { @MainActor () -> (gapMs: Double, ticks: Int) in
+            var longestGapMs = 0.0
+            var ticks = 0
             var last = ContinuousClock.now
-            while running {
+            while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(10))
                 let now = ContinuousClock.now
                 let gap = now - last
@@ -90,14 +92,17 @@ final class SearchReaderTests: XCTestCase {
                                    Double(gap.components.seconds) * 1000
                                    + Double(gap.components.attoseconds) / 1e15)
                 last = now
+                ticks += 1
             }
+            return (longestGapMs, ticks)
         }
         let started = ContinuousClock.now
-        let hits = try await SearchReader(modelContainer: container).search("budget")
+        let hits = try await SearchReader.search("budget", in: container)
         let took = ContinuousClock.now - started
-        running = false
-        await ticker.value
+        ticker.cancel()
+        let (longestGapMs, ticks) = await ticker.value
 
+        XCTAssertGreaterThan(ticks, 3, "the ticker has to have run, or a gap of 0 means nothing")
         XCTAssertEqual(hits.count, 80, "the limit still applies")
         print("search of 6000-row meetings: \(took), longest main-actor gap \(Int(longestGapMs)) ms")
         XCTAssertLessThan(longestGapMs, 250, "the window must not stall for a search")

@@ -85,9 +85,24 @@ public enum SearchService {
 /// are found. For one hour it is 66 ms. A new reader for each search, as with
 /// `TranscriptReader`: a context keeps the rows it loaded, and a long-lived
 /// one would read an edit that the window saved a moment ago in its old form.
+///
+/// **Where it runs depends on where it is created.** A `@ModelActor` made on the
+/// main actor runs on the main thread: measured, `isMainThread` was true for
+/// one created from a `@MainActor` method and false for one created in a
+/// detached task. `search(_:in:)` therefore makes the reader inside a detached
+/// task; building one in the app target, whose default isolation is the main
+/// actor, kept the half-second stall it was meant to remove.
 @ModelActor
 public actor SearchReader {
     public func search(_ query: String, limit: Int = 80) throws -> [SearchHit] {
         try SearchService.search(query, in: modelContext, limit: limit)
+    }
+
+    /// One search, on a thread that is not the main one.
+    public static func search(_ query: String, in container: ModelContainer,
+                              limit: Int = 80) async throws -> [SearchHit] {
+        try await Task.detached(priority: .userInitiated) {
+            try await SearchReader(modelContainer: container).search(query, limit: limit)
+        }.value
     }
 }

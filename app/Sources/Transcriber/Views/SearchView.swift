@@ -146,7 +146,7 @@ struct SearchView: View {
     /// text moved on while it ran.
     private func runSearch() async {
         let query = state.searchText
-        let found = (try? await state.makeSearcher().search(query)) ?? []
+        let found = (try? await SearchReader.search(query, in: state.container)) ?? []
         guard !Task.isCancelled, query == state.searchText else { return }
         hits = found
     }
