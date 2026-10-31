@@ -528,3 +528,113 @@ def test_a_failed_decode_is_recorded_and_excluded_from_scores(prepared, tmp_path
     capsys.readouterr()
     fe.main(["score", "--work", str(prepared), "--set", "subset", "--arm", "b"])
     assert "no decoded records for arm b" in capsys.readouterr().err
+
+
+def test_lock_is_held_once_per_batch_and_never_nested(prepared, tmp_path, monkeypatch):
+    log = tmp_path / "lock.log"
+    lock = tmp_path / "lock.sh"
+    lock.write_text('#!/bin/bash\necho acquired >> "$LOCK_LOG"\nexec "$@"\n')
+    lock.chmod(0o755)
+    monkeypatch.setattr(fe, "LOCK_SCRIPT", lock)
+    monkeypatch.setenv("NOTERO_BENCH_LOCK", str(lock))        # the batch child must not reach the real queue
+    monkeypatch.setenv("LOCK_LOG", str(log))
+    good = make_fake(tmp_path / "good", "exact")
+    bad = make_fake(tmp_path / "bad", "drop-first")
+    args = ["decode", "--work", str(prepared), "--set", "subset", "--lock-batch", "4",
+            "--arm", f"good|{good}", "--arm", f"bad|{bad}"]
+    assert fe.main(args) == 0
+    assert len(log.read_text().splitlines()) == 3          # 10 decodes in batches of 4: 4 + 4 + 2
+    done = sorted(p.name for arm in ("good", "bad") for p in (prepared / "decode" / "subset" / arm).glob("*.r0.json"))
+    assert len(done) == 10
+    assert not list((prepared / "decode" / "_batches").glob("*.json"))     # batch plans are cleaned up
+    assert fe.main(args) == 0
+    assert len(log.read_text().splitlines()) == 3          # everything finished: no lock taken at all
+
+
+def test_a_lock_per_decode_is_still_the_default(prepared, tmp_path, monkeypatch):
+    log = tmp_path / "lock.log"
+    lock = tmp_path / "lock.sh"
+    lock.write_text('#!/bin/bash\necho acquired >> "$LOCK_LOG"\nexec "$@"\n')
+    lock.chmod(0o755)
+    monkeypatch.setattr(fe, "LOCK_SCRIPT", lock)
+    monkeypatch.setenv("NOTERO_BENCH_LOCK", str(lock))        # the batch child must not reach the real queue
+    monkeypatch.setenv("LOCK_LOG", str(log))
+    fake = make_fake(tmp_path / "fake", "exact")
+    fe.main(["decode", "--work", str(prepared), "--set", "subset", "--limit", "3", "--arm", f"x|{fake}"])
+    assert len(log.read_text().splitlines()) == 3
+
+
+# ---- code-switch counts, the CER guard, and the user's own reference set ----
+
+def test_code_switch_points_are_counted_and_pooled(english):
+    ref = "kailangan natin i-send ang report bago mag-meeting"
+    perfect = fe.score_utterance(ref, ref)
+    broken = fe.score_utterance(ref, "kailangan natin i-send ang bago mag-meeting")      # drops "report"
+    assert perfect["switch_positions"] == 2 and perfect["switch_errors"] == 0
+    assert broken["switch_errors"] >= 1
+    pool = fe.pooled([perfect, broken])
+    assert pool["code_switch"]["positions"] == 4
+    assert pool["code_switch"]["error_rate"] == pytest.approx(pool["code_switch"]["errors"] / 4)
+    assert fe.pooled([fe.score_utterance("ang bata", "ang bata")])["code_switch"]["error_rate"] is None
+
+
+def test_cer_is_skipped_for_very_long_text_and_pooling_says_so(monkeypatch):
+    monkeypatch.setattr(fe, "CER_MAX_CHARS", 30)
+    short = fe.score_utterance("ang bata", "ang bata")
+    long = fe.score_utterance(" ".join(["ang"] * 30), " ".join(["ang"] * 29))
+    assert short["cer_skipped"] is False and long["cer_skipped"] is True
+    assert long["char_ref"] == 0 and long["sub"] + long["del"] + long["ins"] == 1       # the WER is still scored
+    pool = fe.pooled([short, long])
+    assert pool["cer_skipped_rows"] == 1 and pool["cer"] == 0.0
+
+
+def reference_folder(tmp_path: Path, entries: list[dict] | None = None) -> Path:
+    folder = tmp_path / "notero-references-2026-11-01"
+    (folder / "audio").mkdir(parents=True)
+    (folder / "refs").mkdir()
+    (folder / "audio" / "aaa-111.m4a").write_bytes(b"not really audio")
+    (folder / "refs" / "aaa-111.txt").write_text("Kailangan natin i-send ang report.\nSige po.\n", encoding="utf8")
+    manifest = entries if entries is not None else [
+        {"id": "aaa-111", "audio": "audio/aaa-111.m4a", "ref": "refs/aaa-111.txt", "category": "own",
+         "title": "Weekly", "durationMs": 61000}]
+    (folder / "manifest.json").write_text(json.dumps(manifest))
+    return folder
+
+
+def test_import_references_builds_a_work_manifest_without_copying_audio(tmp_path, capsys):
+    folder = reference_folder(tmp_path)
+    work = tmp_path / "work"
+    assert fe.main(["import-references", "--refs", str(folder), "--work", str(work)]) == 0
+    manifest = json.loads((work / "manifest.json").read_text())
+    entry = manifest["sets"]["subset"][0]
+    assert entry["id"] == "aaa-111" and entry["wav"] == str((folder / "audio" / "aaa-111.m4a").resolve())
+    assert entry["ref"].startswith("Kailangan natin") and entry["duration_s"] == 61.0
+    assert manifest["source"]["dataset"] == "user-reference-set" and "private" in manifest["source"]["license"]
+    assert not list(work.rglob("*.m4a"))                      # the audio stays where the app wrote it
+    assert "1 recordings, 8 reference words" in capsys.readouterr().out
+
+
+def test_import_references_refuses_paths_outside_the_folder_and_bad_ids(tmp_path):
+    outside = tmp_path / "secret.txt"
+    outside.write_text("private")
+    folder = reference_folder(tmp_path, [{"id": "aaa-111", "audio": "audio/aaa-111.m4a", "ref": "../secret.txt"}])
+    with pytest.raises(ValueError, match="leaves"):
+        fe.references_to_manifest(folder, json.loads((folder / "manifest.json").read_text()))
+    with pytest.raises(ValueError, match="unusable id"):
+        fe.references_to_manifest(folder, [{"id": "../x", "audio": "audio/aaa-111.m4a", "ref": "refs/aaa-111.txt"}])
+    with pytest.raises(FileNotFoundError):
+        fe.references_to_manifest(folder, [{"id": "ok", "audio": "audio/missing.m4a", "ref": "refs/aaa-111.txt"}])
+    with pytest.raises(ValueError, match="no recordings"):
+        fe.references_to_manifest(folder, [])
+
+
+def test_an_imported_reference_set_goes_through_decode_and_score(tmp_path, capsys, monkeypatch):
+    folder = reference_folder(tmp_path)
+    work = tmp_path / "work"
+    fe.main(["import-references", "--refs", str(folder), "--work", str(work)])
+    monkeypatch.setenv("FAKE_MANIFEST", str(work / "manifest.json"))
+    fake = make_fake(tmp_path / "fake", "exact")
+    assert fe.main(["decode", "--work", str(work), "--set", "subset", "--no-lock", "--arm", f"x|{fake}"]) == 0
+    capsys.readouterr()
+    assert fe.main(["score", "--work", str(work), "--set", "subset", "--arm", "x"]) == 0
+    assert "| x | 1 | 8 |" in capsys.readouterr().out

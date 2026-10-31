@@ -66,6 +66,7 @@ import json
 import math
 import os
 import random
+import re
 import shlex
 import shutil
 import signal
@@ -86,7 +87,9 @@ sys.path.insert(0, str(EVAL_DIR))
 import langscore  # noqa: E402
 from score import levenshtein, normalize  # noqa: E402
 
-LOCK_SCRIPT = Path("/tmp/notero-team/bench-lock.sh")
+#: The shared first-come lock for anything measured. Overridable so a test can use a stand-in
+#: and never touch the real queue.
+LOCK_SCRIPT = Path(os.environ.get("NOTERO_BENCH_LOCK", "/tmp/notero-team/bench-lock.sh"))
 SAMPLE_RATE = 16_000
 SCHEMA = 1
 
@@ -392,6 +395,12 @@ def _banded(a: Sequence, b: Sequence, band: int) -> int:
     return prev[m]
 
 
+#: Above this many reference characters the character edit distance is skipped:
+#: it is quadratic in pure Python and a long meeting would take minutes per file.
+#: The row says so (`cer_skipped`) and pooled CER counts only the rows that have one.
+CER_MAX_CHARS = 20_000
+
+
 def cer_counts(reference: str, hypothesis: str) -> tuple[int, int]:
     """(character errors, reference characters) on the normalized text."""
     ref = " ".join(normalize(reference))
@@ -405,17 +414,21 @@ def score_utterance(reference: str, hypothesis: str) -> dict:
     ref_words = normalize(reference)
     hyp_words = normalize(hypothesis)
     subs, dels, ins = levenshtein(ref_words, hyp_words)
-    char_err, char_ref = cer_counts(reference, hypothesis)
+    ref_chars = len(" ".join(ref_words))
+    cer_skipped = ref_chars > CER_MAX_CHARS
+    char_err, char_ref = (0, 0) if cer_skipped else cer_counts(reference, hypothesis)
     lang = langscore.score(reference, hypothesis)
     classes = {c: {"ref": v["ref_words"], "err": v["errors"], "ins": v["insertions"]}
                for c, v in lang["by_class"].items()}
     return {
         "ref_words": len(ref_words), "hyp_words": len(hyp_words),
         "sub": subs, "del": dels, "ins": ins,
-        "char_err": char_err, "char_ref": char_ref,
+        "char_err": char_err, "char_ref": char_ref, "cer_skipped": cer_skipped,
         "langscore_errors": lang["sub"] + lang["del"] + lang["ins"],
         "langscore_ref_words": lang["ref_words"],
         "classes": classes,
+        "switch_positions": lang["code_switch"]["positions"],
+        "switch_errors": lang["code_switch"]["errors"],
     }
 
 
@@ -435,6 +448,7 @@ def pooled(rows: Sequence[dict]) -> dict:
         classes[name] = {"ref_words": ref, "errors": err, "insertions": ins,
                          "error_rate": err / ref if ref else None}
     lang_words = sum(r["langscore_ref_words"] for r in rows)
+    switches = sum(r["switch_positions"] for r in rows)
     return {
         "utterances": len(rows),
         "ref_words": words,
@@ -442,8 +456,11 @@ def pooled(rows: Sequence[dict]) -> dict:
         "ins": sum(r["ins"] for r in rows),
         "wer": errors / words if words else None,
         "cer": char_errors / chars if chars else None,
+        "cer_skipped_rows": sum(1 for r in rows if r["cer_skipped"]),
         "langscore_wer": sum(r["langscore_errors"] for r in rows) / lang_words if lang_words else None,
         "classes": classes,
+        "code_switch": {"positions": switches, "errors": sum(r["switch_errors"] for r in rows),
+                        "error_rate": (sum(r["switch_errors"] for r in rows) / switches) if switches else None},
         "empty_transcripts": sum(1 for r in rows if r["hyp_words"] == 0),
     }
 
@@ -747,6 +764,51 @@ def command_manifest(args: argparse.Namespace) -> int:
     return 0
 
 
+_SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,80}$")
+
+
+def references_to_manifest(folder: Path, entries: Sequence[dict]) -> dict:
+    """A work manifest from the folder that File > Export Corrections as References
+    writes (its manifest.json holds `id`, `audio`, `ref`). Only paths inside `folder`
+    are accepted, and the audio is not copied: the decode reads it where it is.
+    The reference is the transcript with the person's corrections applied, one row per line."""
+    root = folder.resolve()
+    items = []
+    for entry in entries:
+        entry_id = str(entry["id"])
+        if not _SAFE_ID.match(entry_id):
+            raise ValueError(f"unusable id {entry_id!r}: use letters, digits, '-' and '_'")
+        paths = []
+        for key in ("audio", "ref"):
+            path = (root / entry[key]).resolve()
+            if root not in path.parents:
+                raise ValueError(f"{entry_id}: {key} path {entry[key]!r} leaves {root}")
+            if not path.is_file():
+                raise FileNotFoundError(f"{entry_id}: no such {key} file {path}")
+            paths.append(path)
+        items.append({"id": entry_id, "sent_id": None, "wav": str(paths[0]),
+                      "ref": paths[1].read_text(encoding="utf8"), "ref_fleurs_norm": "",
+                      "category": entry.get("category", "own"),
+                      "duration_s": round(entry.get("durationMs", 0) / 1000, 3)})
+    if not items:
+        raise ValueError("the reference set has no recordings")
+    return {"schema": SCHEMA, "seed": None, "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "source": {"dataset": "user-reference-set", "license": "private, not for redistribution",
+                       "folder": str(root)},
+            "notes": "The user's own corrected transcripts. Scored on this machine only.",
+            "sets": {"subset": items, "parts": [], "longform": []}}
+
+
+def command_import_references(args: argparse.Namespace) -> int:
+    entries = json.loads((args.refs / "manifest.json").read_text(encoding="utf8"))
+    manifest = references_to_manifest(args.refs, entries)
+    args.work.mkdir(parents=True, exist_ok=True)
+    (args.work / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
+    words = sum(len(normalize(i["ref"])) for i in manifest["sets"]["subset"])
+    print(f"{len(manifest['sets']['subset'])} recordings, {words} reference words -> {args.work}")
+    return 0
+
+
 def load_manifest(work: Path) -> dict:
     return json.loads((work / "manifest.json").read_text())
 
@@ -759,26 +821,63 @@ def parse_arm(spec: str) -> tuple[str, Path, list[str]]:
     return parts[0], Path(parts[1]), shlex.split(parts[2]) if len(parts) == 3 else []
 
 
+def chunked(entries: Sequence, size: int) -> list[list]:
+    return [list(entries[i:i + size]) for i in range(0, len(entries), size)]
+
+
 def command_decode(args: argparse.Namespace) -> int:
     manifest = load_manifest(args.work)
     items = {e["id"]: e for e in manifest["sets"][args.set]}
     ids = list(items)[: args.limit] if args.limit else list(items)
-    arms = {name: (binary, extra) for name, binary, extra in args.arm}
+    arm_specs = list(args.arm)
+    arms = {name: (binary, extra) for name, binary, extra in map(parse_arm, arm_specs)}
     use_lock = LOCK_SCRIPT.exists() and not args.no_lock
-    if not use_lock:
-        print("note: running WITHOUT /tmp/notero-team/bench-lock.sh; do not quote timings", file=sys.stderr)
+    if not use_lock and not args.no_lock:
+        print("note: no bench lock on this machine; do not quote timings", file=sys.stderr)
     for binary, _ in arms.values():
         if not binary.exists():
             print(f"error: no such binary {binary}", file=sys.stderr)
             return 2
-    plan = schedule(ids, list(arms), args.repeats)
-    done = 0
-    for rep, item_id, arm in plan:
+
+    def finished(rep: int, item_id: str, arm: str) -> bool:
+        record = with_ext(args.work / "decode" / args.set / arm / f"{item_id}.r{rep}", ".json")
+        return record.exists() and bool(json.loads(record.read_text()).get("ok")) and not args.force
+
+    if args.plan_file:                      # a batch handed down by a parent that holds the lock
+        plan = [tuple(entry) for entry in json.loads(args.plan_file.read_text())]
+    else:
+        plan = schedule(ids, list(arms), args.repeats)
+    pending = [entry for entry in plan if not finished(*entry)]
+
+    if use_lock and args.lock_batch > 1:
+        # Hold the bench lock once per batch of decodes, not once per decode. Each
+        # decode is about 11 s but waits behind other people's minutes-long holds, so
+        # one lock per decode costs hours of queueing. A batch is still short (a
+        # minute or two); the arms inside it stay interleaved.
+        batches = chunked(pending, args.lock_batch)
+        script = Path(__file__).resolve()
+        for number, batch in enumerate(batches, 1):
+            plan_path = args.work / "decode" / "_batches" / f"{os.getpid()}-{number}.json"
+            plan_path.parent.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text(json.dumps(batch))
+            cmd = [str(LOCK_SCRIPT), sys.executable, "-I", str(script), "decode", "--work", str(args.work),
+                   "--set", args.set, "--no-lock", "--plan-file", str(plan_path),
+                   "--timeout", str(args.timeout)]
+            for spec in arm_specs:
+                cmd += ["--arm", spec]
+            if args.force:
+                cmd.append("--force")
+            print(f"batch {number}/{len(batches)}: {len(batch)} decodes under one lock", flush=True)
+            result = subprocess.run(cmd)
+            plan_path.unlink(missing_ok=True)
+            if result.returncode != 0:
+                print(f"error: batch {number} exited {result.returncode}", file=sys.stderr)
+                return result.returncode
+        return 0
+
+    done = len(plan) - len(pending)
+    for rep, item_id, arm in pending:
         prefix = args.work / "decode" / args.set / arm / f"{item_id}.r{rep}"
-        if with_ext(prefix, ".json").exists() and not args.force:
-            if json.loads(with_ext(prefix, ".json").read_text()).get("ok"):
-                done += 1
-                continue
         binary, extra = arms[arm]
         record = run_decode(binary=binary, extra=extra, audio=Path(items[item_id]["wav"]),
                             out_prefix=prefix, use_lock=use_lock, timeout=args.timeout)
@@ -869,8 +968,8 @@ def run_to_run(records: list[dict]) -> dict:
 
 def format_summary_table(name_to_summary: dict[str, dict]) -> str:
     head = ("| arm | utts | ref words | WER | 95% CI | CER | median utt WER | tl err | en err (n) | "
-            "retried / dropped windows | empty | RTF med (range) | load |\n"
-            "|---|---:|---:|---:|---|---:|---:|---:|---:|---|---:|---|---|\n")
+            "switch err (n) | retried / dropped windows | empty | RTF med (range) | load |\n"
+            "|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---|---:|---|---|\n")
     lines = []
     for name, s in name_to_summary.items():
         en = s["classes"]["en"]
@@ -884,6 +983,7 @@ def format_summary_table(name_to_summary: dict[str, dict]) -> str:
             f"{fmt_pct(ci[0]) + '-' + fmt_pct(ci[1]) if ci else 'n/a'} | {fmt_pct(s['cer'])} | "
             f"{fmt_pct(s['wer_median_per_utterance'])} | {fmt_pct(s['classes']['tl']['error_rate'])} | "
             f"{fmt_pct(en['error_rate'])} ({en['ref_words']}) | "
+            f"{fmt_pct(s['code_switch']['error_rate'])} ({s['code_switch']['positions']}) | "
             f"{s['windows_retried']} / {s['windows_dropped']} | {s['empty_transcripts']} | {rtf} | {load} |")
     return head + "\n".join(lines)
 
@@ -1008,15 +1108,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--longform-seconds", nargs="+", type=float, default=[180, 270, 360])
     p.set_defaults(func=command_prepare)
 
+    p = sub.add_parser("import-references",
+                       help="use the folder 'Export Corrections as References' wrote (private; stays on this machine)")
+    p.add_argument("--refs", type=Path, required=True)
+    p.add_argument("--work", type=Path, required=True)
+    p.set_defaults(func=command_import_references)
+
     p = sub.add_parser("decode", help="run `transcribe` over a set, arms interleaved")
     p.add_argument("--work", type=Path, required=True)
     p.add_argument("--set", choices=["subset", "parts", "longform"], required=True)
-    p.add_argument("--arm", type=parse_arm, action="append", required=True,
+    p.add_argument("--arm", action="append", required=True,
                    help="'name|/path/to/transcribe|extra args'; repeat for each arm")
     p.add_argument("--repeats", type=int, default=1)
     p.add_argument("--limit", type=int, default=0, help="only the first N items of the set")
     p.add_argument("--timeout", type=float, default=1800)
     p.add_argument("--no-lock", action="store_true")
+    p.add_argument("--lock-batch", type=int, default=1,
+                   help="hold the bench lock once per this many decodes instead of once per decode")
+    p.add_argument("--plan-file", type=Path, help=argparse.SUPPRESS)
     p.add_argument("--force", action="store_true")
     p.set_defaults(func=command_decode)
 
