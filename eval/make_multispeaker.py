@@ -28,6 +28,11 @@ What the set covers, each on purpose:
     two-similar    two voices of the same sex and accent trading SHORT turns, so
                    both land in the same 10 s diarizer chunk: the FINDINGS 10
                    case, where chunk-level embeddings fuse the pair
+    two-short-turns two voices that ARE separable, trading short turns inside the
+                   same 10 s chunks: the FINDINGS 10 mechanism without the
+                   confound of a pair no method can split
+    chunk-fusion   Daniel/Tessa: the first pass mixes them up, per-turn embedding
+                   separates them. The case chunk-embedding reuse must not break
     three-voices   three speakers, a one-word backchannel every few turns
     four-voices    four speakers, a mix of lengths, longer file
     three-overlap  three speakers with low overlap: a backchannel starts before
@@ -164,6 +169,26 @@ FIXTURES = [
         "two-similar", ("Samantha", "Kathy"), 100, seed=23,
         weights=(0.05, 0.30, 0.40, 0.25), gap_s=(0.2, 0.7),
         note="Two similar voices trading short turns inside shared 10 s chunks.",
+    ),
+    Fixture(
+        # The FINDINGS 10 mechanism with voices that CAN be told apart: two voices
+        # whose per-turn embeddings are far apart (Daniel/Moira, nearest turn pair
+        # ~0.85) trading short turns, so every 10 s chunk holds both of them. Any
+        # method that gives a turn the embedding of its whole chunk slot blurs the
+        # two; one that embeds each turn from its own audio does not.
+        "two-short-turns", ("Daniel", "Moira"), 100, seed=67,
+        weights=(0.05, 0.30, 0.40, 0.25), gap_s=(0.3, 0.8),
+        note="Two separable voices trading short turns inside shared 10 s chunks.",
+    ),
+    Fixture(
+        # Found by `--pair` over twelve voice pairs. The per-turn embeddings of
+        # Daniel and Tessa are far enough apart to split (centroid distance 0.80),
+        # but the first pass, which embeds whole 10 s chunk slots, mixes them up:
+        # first-pass-only DER is ~50% where per-turn re-embedding reaches ~8%.
+        # This is the FINDINGS 10 failure reproduced with synthetic voices.
+        "chunk-fusion", ("Daniel", "Tessa"), 80, seed=91,
+        weights=(0.05, 0.30, 0.40, 0.25), gap_s=(0.3, 0.8),
+        note="Separable voices the first pass mixes up inside shared 10 s chunks.",
     ),
     Fixture(
         "three-voices", ("Daniel", "Moira", "Albert"), 120, seed=37,
@@ -352,6 +377,9 @@ def main(argv: list[str] | None = None) -> int:
                         default=Path(__file__).resolve().parent / "audio" / "multispeaker")
     parser.add_argument("--only", action="append", help="fixture name; repeatable")
     parser.add_argument("--list", action="store_true", help="list fixtures and exit")
+    parser.add_argument("--pair", nargs=2, metavar="VOICE",
+                        help="write one short-turn fixture for this pair of voices, named "
+                             "pair-<a>-<b>, to look for pairs a method fuses")
     parser.add_argument("--survey", nargs="+", metavar="VOICE",
                         help="write survey.wav/.rttm with these voices instead of the fixtures")
     args = parser.parse_args(argv)
@@ -369,6 +397,14 @@ def main(argv: list[str] | None = None) -> int:
             survey(args.survey, args.out, Path(scratch))
         print(f"wrote {args.out}/survey.wav and survey.rttm")
         return 0
+
+    if args.pair:
+        a, b = args.pair
+        FIXTURES.append(Fixture(
+            f"pair-{a}-{b}".replace(" ", "_"), (a, b), 80, seed=91,
+            weights=(0.05, 0.30, 0.40, 0.25), gap_s=(0.3, 0.8),
+            note=f"Short turns between {a} and {b}."))
+        args.only = [FIXTURES[-1].name]
 
     chosen = [f for f in FIXTURES if not args.only or f.name in args.only]
     if not chosen:
