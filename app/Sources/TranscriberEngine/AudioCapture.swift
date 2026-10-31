@@ -119,13 +119,33 @@ public final class AudioCapture: @unchecked Sendable {
     ///   - microphoneUID: which microphone, or nil to follow the system
     ///     default. A UID rather than a device id, because ids are reassigned
     ///     across reboots and a saved preference outlives one.
-    public init?(source: CaptureSource = .default, microphoneUID: String? = nil) {
+    public convenience init?(source: CaptureSource = .default, microphoneUID: String? = nil) {
+        self.init(source: source, microphoneUID: microphoneUID,
+                  makeInput: AudioCapture.hardwareInput)
+    }
+
+    /// The seam tests use: the lane source is built by `makeInput` instead of
+    /// being the microphone or the system tap, so the whole chain from a
+    /// buffer to the archive and the working-copy bytes runs with no device.
+    init(source: CaptureSource, microphoneUID: String?,
+         makeInput: @escaping @Sendable (CaptureSource, String?) -> any LaneCapturing) {
         self.source = source
         self.lanes = source.lanes
         self.microphoneUID = microphoneUID
+        self.makeInput = makeInput
     }
 
     private let microphoneUID: String?
+    private let makeInput: @Sendable (CaptureSource, String?) -> any LaneCapturing
+
+    private static func hardwareInput(_ source: CaptureSource,
+                                      _ microphoneUID: String?) -> any LaneCapturing {
+        switch source {
+        case .microphone: MicrophoneInput(deviceUID: microphoneUID)
+        case .systemAudio: TapInput(withMicrophone: false, microphoneUID: nil)
+        case .both: TapInput(withMicrophone: true, microphoneUID: microphoneUID)
+        }
+    }
 
     /// Called when something changed under the recording that the user has
     /// to be told about: the microphone was unplugged and replaced, the
@@ -155,11 +175,7 @@ public final class AudioCapture: @unchecked Sendable {
         guard !isRunning else { return }
         self.onAudio = onAudio
 
-        let input: any LaneCapturing = switch source {
-        case .microphone: MicrophoneInput(deviceUID: microphoneUID)
-        case .systemAudio: TapInput(withMicrophone: false, microphoneUID: nil)
-        case .both: TapInput(withMicrophone: true, microphoneUID: microphoneUID)
-        }
+        let input = makeInput(source, microphoneUID)
         try input.prepare()
         let rate = input.sampleRate
         guard rate > 0 else { throw CaptureError.noInputDevice }
