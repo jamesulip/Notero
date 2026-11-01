@@ -33,6 +33,14 @@ public struct SessionConfig: Sendable, Equatable, Codable {
     /// the replay harness says otherwise.
     public var adaptiveHop: Bool
     public var minHopMs: Int
+    /// Words of slack, at the head of each hypothesis, when looking for what two
+    /// passes agree on. Zero is strict LocalAgreement: the agreed prefix, nothing
+    /// after a first word that differs. See `LocalAgreement.headTolerance` and
+    /// FINDINGS 27. Three words and a run of three is what the baseline traces
+    /// chose; zero restores the strict rule.
+    public var headTolerance: Int
+    /// How many words must agree after the head for the tolerance to apply.
+    public var headMinRun: Int
 
     public init(
         contextMs: Int = 15_000,
@@ -50,7 +58,9 @@ public struct SessionConfig: Sendable, Equatable, Codable {
         useNeuralVAD: Bool = true,
         preRollMs: Int = 1_500,
         adaptiveHop: Bool = false,
-        minHopMs: Int = 1_000
+        minHopMs: Int = 1_000,
+        headTolerance: Int = 0,
+        headMinRun: Int = 3
     ) {
         self.contextMs = contextMs
         self.hopMs = hopMs
@@ -62,6 +72,8 @@ public struct SessionConfig: Sendable, Equatable, Codable {
         self.preRollMs = preRollMs
         self.adaptiveHop = adaptiveHop
         self.minHopMs = minHopMs
+        self.headTolerance = headTolerance
+        self.headMinRun = headMinRun
     }
 }
 
@@ -116,6 +128,12 @@ public struct SessionStats: Sendable, Equatable, Codable {
     /// in the silence after an utterance the VAD had already closed. Neither
     /// was spoken; both used to be committed.
     public var hallucinationsDropped = 0
+    /// Times two passes disagreed on the first word, agreed on what followed, and
+    /// the tail was committed anyway (`SessionConfig.headTolerance`).
+    public var headSkips = 0
+    /// Words committed by those skips on the newest pass's say-so alone: the
+    /// words in front of the agreed run.
+    public var headSkippedWords = 0
     public var totalAudioMs = 0
     public var totalInferMs = 0
     public var peakMemoryMB = 0

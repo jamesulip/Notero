@@ -108,7 +108,9 @@ public final class LiveDecoder {
         self.recognizer = recognizer
         self.vad = vad
         self.ring = RingBuffer(contextMs: config.contextMs, preRollMs: config.preRollMs)
-        self.commit = LocalAgreement(agreement: config.agreement)
+        self.commit = LocalAgreement(agreement: config.agreement,
+                                     headTolerance: config.headTolerance,
+                                     headMinRun: config.headMinRun)
     }
 
     /// Milliseconds on the trace clock: monotonic, from this decoder's creation.
@@ -422,6 +424,8 @@ public final class LiveDecoder {
             concludeBoundary(producedNothing: output.tokens.isEmpty)
         }
         stats.duplicatesDropped = commit.duplicatesDropped
+        stats.headSkips = commit.headSkips
+        stats.headSkippedWords = commit.headSkippedWords
         onPartial?(commit.partial)
         activeSpan?.postMs = wallMs() - postStartedMs
         return output.tokens.isEmpty

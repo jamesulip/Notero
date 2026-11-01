@@ -30,10 +30,12 @@ final class LiveDecoderTests: XCTestCase {
     }
 
     private func config(hop: Int = 1_500, preRoll: Int = 1_500, context: Int = 15_000,
-                        adaptive: Bool = false, minHop: Int = 1_000) -> SessionConfig {
+                        adaptive: Bool = false, minHop: Int = 1_000,
+                        headTolerance: Int = 0) -> SessionConfig {
         SessionConfig(contextMs: context, hopMs: hop, silenceBoundaryMs: 700, agreement: 2,
                       language: "tl", prompt: nil, useNeuralVAD: false, preRollMs: preRoll,
-                      adaptiveHop: adaptive, minHopMs: minHop)
+                      adaptiveHop: adaptive, minHopMs: minHop,
+                      headTolerance: headTolerance, headMinRun: 3)
     }
 
     private func make(words: [SpokenWord], speech: [Range<Int>],
@@ -367,6 +369,28 @@ final class LiveDecoderTests: XCTestCase {
         await decoder.drain()
         let calls4 = await asr.calls
         XCTAssertEqual(calls4.count, 1, "the dropped hop never decoded")
+    }
+
+    func testAHeadThatChangesOnEveryPassHoldsBackTheRestUnlessTheHeadIsTolerated() async throws {
+        // The first word is heard differently on every pass; everything after it is stable.
+        let words = (0..<15).map { word("w\($0)", 2_000 + $0 * 400, 2_000 + $0 * 400 + 300) }
+        func run(tolerance: Int) async -> (committedBefore7_6s: String, skips: Int) {
+            let (decoder, asr, _, out) = make(words: words, speech: [2_000..<8_000],
+                                              config: config(headTolerance: tolerance))
+            await asr.setMutation { text, call, _ in text == "w0" ? "w0_\(call)" : text }
+            var clock = 0
+            // Passes at 1.5, 3.0, 4.5, 6.0 and 7.5 s; the speech has not ended.
+            await feed(decoder, &clock, to: 7_600)
+            return (out.committed.joinedText, decoder.stats.headSkips)
+        }
+        let strict = await run(tolerance: 0)
+        XCTAssertEqual(strict.committedBefore7_6s, "", "one unstable first word blocks every word behind it")
+        XCTAssertEqual(strict.skips, 0)
+
+        let tolerant = await run(tolerance: 2)
+        XCTAssertTrue(tolerant.committedBefore7_6s.hasPrefix("w0_"), tolerant.committedBefore7_6s)
+        XCTAssertTrue(tolerant.committedBefore7_6s.contains("w1 w2 w3"), tolerant.committedBefore7_6s)
+        XCTAssertGreaterThanOrEqual(tolerant.skips, 1)
     }
 
     func testAStallForcesCommitsWhenTheWindowHasToSlide() async throws {
