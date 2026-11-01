@@ -4,17 +4,19 @@ import WhisperKit
 
 /// Owns the three model-backed engines and decides who gets memory.
 ///
-/// On a 16 GB machine the models are the budget: large-v3-turbo is ~1.6 GB
-/// resident, the diarizer pair another ~200 MB, and macOS starts compressing
-/// well before the ceiling. So there is exactly one of each, they are shared
-/// between the live path and the background queue, and the diarizer is released
-/// the moment a job stops needing it.
+/// On a 16 GB machine the models are the budget: large-v3-turbo holds 1580 MB
+/// of Neural Engine memory (outside the process footprint, and wired, so macOS
+/// can neither compress nor swap it), and macOS starts compressing well before
+/// the ceiling. The diarizer pair is small: 13 MB on disk, nothing on the Neural
+/// Engine, about 23 MB of footprint once loaded. There is exactly one of each,
+/// they are shared between the live path and the background queue, and the
+/// diarizer is released the moment a job stops needing it.
 public actor EngineHost {
 
     public let modelsDirectory: URL
-    private let asr: WhisperEngine
+    private let asr: any SpeechRecognizing
     private let vad: VADEngine
-    private let diarizer: SpeakerEngine
+    private let diarizer: any SpeakerDiarizing
 
     /// True while a recording is in progress. The queue refuses to start work
     /// during one: a background decode competing for the ANE is what turns a
@@ -22,10 +24,24 @@ public actor EngineHost {
     public private(set) var isLiveActive = false
 
     public init(modelsDirectory: URL, preferNeuralVAD: Bool = true) {
+        self.init(
+            modelsDirectory: modelsDirectory,
+            asr: WhisperEngine(modelsDirectory: modelsDirectory),
+            vad: VADEngine(modelsDirectory: modelsDirectory, preferNeural: preferNeuralVAD),
+            diarizer: SpeakerEngine(modelsDirectory: modelsDirectory)
+        )
+    }
+
+    /// The same host over engines that are handed in. A seam for tests: the
+    /// queue's release of the diarizer on every way out of a job could only be
+    /// checked against the real models, and a test cannot depend on weights. The public initializer passes the real engines, so nothing
+    /// outside a test sees a difference.
+    init(modelsDirectory: URL, asr: any SpeechRecognizing, vad: VADEngine,
+         diarizer: any SpeakerDiarizing) {
         self.modelsDirectory = modelsDirectory
-        self.asr = WhisperEngine(modelsDirectory: modelsDirectory)
-        self.vad = VADEngine(modelsDirectory: modelsDirectory, preferNeural: preferNeuralVAD)
-        self.diarizer = SpeakerEngine(modelsDirectory: modelsDirectory)
+        self.asr = asr
+        self.vad = vad
+        self.diarizer = diarizer
     }
 
     // MARK: - Speech recognition
@@ -112,7 +128,8 @@ public actor EngineHost {
     }
 
     /// Called at the end of every job. The diarizer is only needed in bursts,
-    /// and holding its two models between recordings is 200 MB of nothing.
+    /// and holding its two models between recordings is memory for nothing (a
+    /// small amount: 23 MB of footprint measured, none on the Neural Engine).
     public func releaseDiarizer() async {
         await diarizer.unload()
     }
@@ -121,11 +138,25 @@ public actor EngineHost {
 
     public func footprintMB() -> Int { MemoryProbe.footprintMB() }
 
-    /// Drops everything not currently in use, keeping the recognizer while a
-    /// recording is live. Nothing calls this yet; it is the hook for an
-    /// idle-memory pass.
+    /// Drops everything not currently in use. A recording keeps the recognizer;
+    /// a job that is running keeps everything it loaded, because a model
+    /// released under a decode turns the rest of that job's windows into
+    /// "could not be decoded" warnings (and the job's own release at its end
+    /// takes the speaker models). Nothing calls this yet: "Release the Models"
+    /// in Settings releases the speaker models only, and leaves the 1.6 GB
+    /// recognizer resident, which is the memory that button promises back.
     public func releaseAll() async {
+        guard jobsRunning == 0 else { return }
         await diarizer.unload()
         if !isLiveActive { await asr.unload() }
     }
+
+    // MARK: - Jobs
+
+    /// Background jobs the queue is running now. Kept here so that a release
+    /// pass cannot unload a model from under one.
+    public private(set) var jobsRunning = 0
+
+    func beginJob() { jobsRunning += 1 }
+    func endJob() { jobsRunning = max(0, jobsRunning - 1) }
 }

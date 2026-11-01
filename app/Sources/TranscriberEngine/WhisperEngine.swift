@@ -23,12 +23,34 @@ public actor WhisperEngine: SpeechRecognizing {
     private var currentModel: String?
     public private(set) var loadMs: Int = 0
 
+    /// How a load that other callers waited on ended, as each of them sees it.
+    private enum LoadOutcome {
+        case loaded
+        /// The load failed. The failure belongs to callers that asked for the
+        /// same model.
+        case failed(Error)
+        /// The caller that was running the load was cancelled. That says
+        /// nothing about the callers waiting behind it, which load for
+        /// themselves.
+        case ownerCancelled
+    }
+
+    private struct Waiter {
+        var id: Int
+        var continuation: CheckedContinuation<LoadOutcome, Error>
+    }
+
     /// The load in progress, and the callers waiting for it.
     private struct LoadInFlight {
         var model: String
-        var waiters: [CheckedContinuation<Void, Error>] = []
+        var waiters: [Waiter] = []
     }
     private var inFlight: LoadInFlight?
+    private var nextWaiterId = 0
+
+    /// Counts releases. A switch that fails puts the old model back only if no
+    /// release happened while it was loading.
+    private var releases = 0
 
     public init(modelsDirectory: URL) {
         self.modelsDirectory = modelsDirectory
@@ -59,24 +81,40 @@ public actor WhisperEngine: SpeechRecognizing {
     /// waits its turn, because two loads at once cannot both leave `pipeline`
     /// as the caller asked.
     public func load(model: String, progress: ProgressReport?) async throws {
+        // Not a cancellable load: once a load has started it runs to its end.
+        // This only refuses to start one for a caller that has already gone.
+        try Task.checkCancellation()
         while true {
             if pipeline != nil, currentModel == model { return }
             guard let running = inFlight else { break }
-            do {
-                try await waitForLoad()
-            } catch {
+            // Throws only if *this* caller is cancelled while it waits.
+            switch try await waitForLoad() {
+            case .failed(let error):
                 // The failure belongs to whoever asked for that model.
                 if running.model == model { throw error }
-            }
-            if running.model == model, pipeline != nil, currentModel == model {
-                progress?("Ready", 1)
+            case .loaded:
+                if running.model == model, pipeline != nil, currentModel == model {
+                    progress?("Ready", 1)
+                }
+            case .ownerCancelled:
+                break
             }
         }
 
         inFlight = LoadInFlight(model: model)
-        let previous = pipeline
-        let previousName = currentModel
+        // The model being replaced is released BEFORE the new one loads. Holding
+        // it until the switch succeeded meant both were resident at the peak:
+        // 2458 MB of Neural Engine memory for Balanced to Fast (1580 MB for
+        // Balanced alone), and 4581 MB for Balanced to Best (3000 MB for Best
+        // alone). On a 16 GB Mac that is wired memory, which the system can
+        // neither compress nor swap. Nothing
+        // is given up: `pipeline` is nil while the new model loads either way, so
+        // no decode could have used the old one. A failed switch loads the old
+        // model again, from the compile cache.
+        let replacedName = currentModel
+        let releasesAtStart = releases
         pipeline = nil
+        currentModel = nil
 
         let started = Date()
         do {
@@ -85,39 +123,103 @@ public actor WhisperEngine: SpeechRecognizing {
             currentModel = model
             loadMs = Int(Date().timeIntervalSince(started) * 1000)
             progress?("Ready", 1)
-            finishLoad(nil)
+            finishLoad(.loaded)
         } catch {
             // Leave the working model in place rather than no model at all --
-            // a failed switch should not take the session down with it.
-            pipeline = previous
-            currentModel = previousName
-            finishLoad(error)
+            // a failed switch should not take the session down with it. Not if
+            // it was released while this loaded: that is someone's decision, and
+            // a failure does not undo it. The reload is one attempt, quiet; if it
+            // fails too (or the caller was cancelled and the reload with it) the
+            // engine is empty and the next `load` starts clean.
+            if let replacedName, releases == releasesAtStart,
+               let back = try? await makePipeline(replacedName, modelsDirectory, nil),
+               releases == releasesAtStart, pipeline == nil {
+                pipeline = back
+                currentModel = replacedName
+            }
+            // A cancelled owner may report its cancellation as another error
+            // (a URLSession task, a Core ML wrapper), so the task is asked too.
+            let cancelled = error is CancellationError || Task.isCancelled
+            finishLoad(cancelled ? .ownerCancelled : .failed(error))
             throw error
         }
     }
 
-    private func waitForLoad() async throws {
-        try await withCheckedThrowingContinuation { continuation in
-            // Runs on the actor before any suspension, so `inFlight` is still
-            // the load that was seen a line ago.
-            inFlight?.waiters.append(continuation)
+    /// Parks the caller behind the load in progress. A caller that is cancelled
+    /// while parked leaves at once; it used to stay until the load finished, which
+    /// for a first compile is minutes, and `setLiveActive` waits on the job that
+    /// it belongs to.
+    private func waitForLoad() async throws -> LoadOutcome {
+        let id = nextWaiterId
+        nextWaiterId += 1
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                // Runs on the actor before any suspension, so `inFlight` is still
+                // the load that was seen a line ago.
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                } else {
+                    inFlight?.waiters.append(Waiter(id: id, continuation: continuation))
+                }
+            }
+        } onCancel: {
+            Task { await self.abandonWait(id) }
         }
     }
 
-    private func finishLoad(_ error: Error?) {
+    private func abandonWait(_ id: Int) {
+        guard let index = inFlight?.waiters.firstIndex(where: { $0.id == id }),
+              let waiter = inFlight?.waiters.remove(at: index) else { return }
+        waiter.continuation.resume(throwing: CancellationError())
+    }
+
+    private func finishLoad(_ outcome: LoadOutcome) {
         let waiters = inFlight?.waiters ?? []
         inFlight = nil
-        for waiter in waiters {
-            if let error { waiter.resume(throwing: error) } else { waiter.resume() }
-        }
+        for waiter in waiters { waiter.continuation.resume(returning: outcome) }
+    }
+
+    /// The configuration that loads a model already on disk straight from its
+    /// folder, or nil when the model is not there.
+    ///
+    /// With `download: true` and no folder, WhisperKit asks the Hub which files
+    /// the model has and checks each against the disk on every load, whether or
+    /// not anything is missing. On the Mac mini M2 Pro that cost 7 s of an 8.7 s
+    /// load of a model that was already complete, and it needs the network for a
+    /// model that is local. Handed the folder it loads in 1.6 s with the same
+    /// 1580 MB on the Neural Engine and the same transcript.
+    static func localConfiguration(model: String, modelsDirectory: URL) -> WhisperKitConfig? {
+        guard ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory) else { return nil }
+        let folder = ModelCatalogue.directory(for: model, modelsDirectory: modelsDirectory)
+        return WhisperKitConfig(
+            model: model,
+            downloadBase: modelsDirectory,
+            modelFolder: folder.path,
+            verbose: false,
+            prewarm: true,
+            load: true,
+            download: false
+        )
     }
 
     private static func loadPipeline(model: String, modelsDirectory: URL,
                                      progress: ProgressReport?) async throws -> sending WhisperKit {
         let option = ModelCatalogue.option(model)
         let label = option?.label ?? model
-        let known = ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory)
 
+        if let local = localConfiguration(model: model, modelsDirectory: modelsDirectory) {
+            progress?("Loading \(label)…", nil)
+            do {
+                return try await WhisperKit(local)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // A folder that is damaged or missing a file: fall through to the
+                // path that asks the Hub, which downloads whatever is missing.
+            }
+        }
+
+        let known = ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory)
         if !known {
             // Fetched separately first: the combined download-and-load
             // path reports nothing until the weights are on disk, and a
@@ -143,6 +245,7 @@ public actor WhisperEngine: SpeechRecognizing {
     public func unload() {
         pipeline = nil
         currentModel = nil
+        releases += 1
         loadMs = 0
     }
 

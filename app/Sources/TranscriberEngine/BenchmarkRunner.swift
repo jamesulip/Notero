@@ -51,6 +51,7 @@ public actor BenchmarkRunner {
             // Each tier starts from an unloaded state: a warm model would make
             // whichever tier ran second look free.
             await engines.unloadModel()
+            let neuralBefore = MemorySnapshot.current(stage: "beforeLoad").neuralMB
             let loadStarted = Date()
             do {
                 try await engines.loadModel(model, progress: nil)
@@ -63,6 +64,8 @@ public actor BenchmarkRunner {
                 continue
             }
             let loadMs = Int(Date().timeIntervalSince(loadStarted) * 1000)
+            // What the model occupies, which the footprint below does not show.
+            let residency = MemorySnapshot.current(stage: "afterLoad").neuralMB - neuralBefore
 
             let asr = await engines.recognizer
             let baseline = MemoryProbe.footprintMB()
@@ -84,7 +87,8 @@ public actor BenchmarkRunner {
                 runs.append(BenchmarkRun(
                     modelId: model, tier: tier, label: option?.label ?? model,
                     audioMs: speechMs, processMs: processMs, loadMs: loadMs,
-                    peakMemoryMB: peak, segmentCount: segments.count,
+                    peakMemoryMB: peak, modelResidencyMB: residency > 0 ? residency : nil,
+                    segmentCount: segments.count,
                     wordCount: text.split(separator: " ").count,
                     language: language,
                     wer: reference.map { WordErrorRate.score(reference: $0, hypothesis: text) }
