@@ -74,7 +74,7 @@ Replay a file through the live path at wall-clock speed:
 | Option | Function |
 | --- | --- |
 | `--audio FILE` | The audio or video file to transcribe. **Required.** |
-| `--reference FILE` | A reference transcript. The tool then reports the WER. |
+| `--reference FILE` | A reference transcript, plain text or the JSON reference form. The tool then reports the WER, and the result of the evaluation framework. |
 | `--models DIR` | Read the model weights from this directory. The default is `~/Library/Application Support/Transcriber/Models`. |
 | `--model ID` | Use this WhisperKit model. It overrides `--tier`. [MODELS.md](MODELS.md) lists the ids. |
 | `--tier fast\|balanced\|best` | Use the default model for this tier. The default is `balanced`. The flag also accepts `accurate`, which is the name that the `best` tier had before. |
@@ -103,6 +103,20 @@ Replay a file through the live path at wall-clock speed:
 | `--devices` | List each audio device with its channel counts and its UID, then stop. |
 | `--channels` | Capture the raw channels of the combined device and report the peak level of each channel. |
 | `--log FILE` | Write a copy of the stderr output to this file. |
+| `--eval-config FILE` | With `--reference` or `--score`, the evaluation configuration. The default is the content of `eval/evaluation-config.v1.json`. |
+| `--policy ID` | With `--reference` or `--score`, use this scoring policy. It replaces the policy of the configuration. |
+| `--eval-json FILE` | With `--reference`, write an evaluation report for this one recording. |
+| `--eval-md FILE` | With `--reference`, write the same report as Markdown. |
+| `--label NAME` | The name of the system in an evaluation report. |
+| `--model-revision REV` | Record this model revision. Without it, the tool reads the revision from the local download cache. |
+| `--build ID` | Record this build, for example a commit. |
+| `--score MANIFEST` | Score saved transcripts. Refer to "Score saved transcripts". The tool needs no `--audio` and loads no model. |
+| `--hypotheses DIR` | With `--score`, the folder of transcripts to score. |
+| `--compare DIR` | With `--score`, a second folder of transcripts. The tool compares it with `--hypotheses`. |
+| `--compare-label NAME` | With `--compare`, the name of the second system. |
+| `--corpus-id ID` | With `--score`, the corpus ID. It replaces the ID of the manifest. |
+| `--out-dir DIR` | With `--score`, write the reports to this folder. Without it, the tool prints the Markdown report. |
+| `--print-eval-config` | Write the evaluation configuration as JSON, then stop. |
 
 The default speaker mode is `accurate`. Use `--fast-diarize` or `--no-diarize`
 to change it.
@@ -138,7 +152,9 @@ stdout or to `--out`. It reports:
 - With `--live`, the **commit latency**: how far behind the audio each committed
   word trails. With `--live --realtime`, the same against wall time.
 - The number of speakers and the time that speaker identification took.
-- The WER, if you gave `--reference`.
+- The WER, if you gave `--reference`. Then also the line `evaluation (…)` with
+  the WER, the substitutions, deletions and insertions, the CER and, with a
+  timed JSON reference, the share of missing speech.
 - **Memory, in two lines.** The footprint of this process at exit, its lifetime
   peak footprint, and its footprint before and after the model loads. Then the
   Neural Engine memory that the process owns, which the footprint does not
@@ -159,6 +175,12 @@ The WER of this tool splits an intra-word hyphen. `eval/langscore.py` keeps it,
 thus "i-send" stays one Filipino word there. The two scorers therefore report
 different numbers for the same transcript. [BENCHMARKS.md](BENCHMARKS.md) says
 which scorer produced each number.
+
+The `evaluation (…)` line comes from the evaluation framework. It names its
+scoring policy. With the default policy, `notero-standard`, it gives the same
+words as `eval/score.py`. `WER 0.2734` is from the older scorer, which has not
+changed. The two lines can therefore show different values.
+[BENCHMARKS.md](BENCHMARKS.md#the-evaluation-framework) gives the method.
 
 ### The JSON report
 
@@ -181,9 +203,48 @@ older binary lacks them, and a reader has to cope.
 | `memory` | A list of snapshots at the stages `start`, `beforeModelLoad`, `afterModelLoad`, `afterVADLoad`, `afterDecode` and `end`. Each holds `physFootprintMB`, `lifetimePeakFootprintMB`, `residentMB`, `internalMB`, `externalMB`, `compressedMB`, `neuralMB` and `neuralPeakMB`. |
 | `windows` | Offline only. The decode windows in order, each `{startMs, endMs}`. `eval/regress.py determinism` uses it to name the window in which two runs of one binary first differ. A live replay has none. |
 
+Three fields are for the evaluation framework. Each is optional.
+
+| Field | Contents |
+| --- | --- |
+| `evaluation` | With `--reference` only. The score of `transcript`: WER, CER, the counts, the utterances and the breakdowns. Refer to [BENCHMARKS.md](BENCHMARKS.md#the-evaluation-framework). |
+| `provenance` | The label, the model, the model revision, the hardware, the inference settings and the build. |
+| `performance` | The whole-file RTF, the live commit latency, the process peak footprint and the model residency, each apart, each "unavailable" when the run did not measure it. |
+
+`transcribe --score` reads these reports as hypotheses.
+
 In a live report, `rtf` is the **replay** RTF, not a per-hop cost. With every
 decode awaited it is how fast the Mac replays the file. With `--realtime` it is
 about 1.0 by construction.
+
+## Score saved transcripts
+
+`--score` applies the evaluation framework to transcripts that already exist.
+It loads no model, opens no audio device and uses no network.
+
+```bash
+# One system:
+./.build/release/transcribe --score ../eval/fixtures/scoring/manifest.json \
+    --hypotheses ../eval/fixtures/scoring/hyp-baseline --out-dir /tmp/eval-one
+
+# Two systems on the same references, with a paired bootstrap:
+./.build/release/transcribe --score ../eval/fixtures/scoring/manifest.json \
+    --hypotheses ../eval/fixtures/scoring/hyp-baseline --label baseline \
+    --compare ../eval/fixtures/scoring/hyp-candidate --compare-label candidate \
+    --out-dir /tmp/eval-ab
+```
+
+For each manifest item, the tool reads `<id>.json` from the hypothesis folder.
+This is the `--json` report of a `transcribe` run. If there is no such file,
+it reads `<id>.txt`, plain text from any system. To make the hypotheses of one
+build, run `transcribe --audio … --json DIR/<id>.json` once for each item.
+
+An item without a reference or without a hypothesis is "unavailable" in the
+report, with the reason. The corpus figures do not include it. The tool exits
+with 3 when no item of a system could be scored.
+
+[BENCHMARKS.md](BENCHMARKS.md#the-evaluation-framework) describes the reference
+forms, the scoring policies, the metrics, the intervals and the output files.
 
 ## Live mode
 

@@ -1,0 +1,5 @@
+Okay, tingnan natin ang pull request.
+Medyo mahaba 'yung function na ito.
+
+Pwede ba nating i-split into two smaller functions?
+Yes, gagawin ko 'yan bukas.

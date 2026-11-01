@@ -1,0 +1,1 @@
+Good morning team. Simulan na natin ang standup. Kahapon, tinapos ko na 'yung deployment script. Ayos, salamat. I'm still blocked on the database migration, kasi wala pa 'yung access ko. Sige, i-follow up ko 'yan mamaya.

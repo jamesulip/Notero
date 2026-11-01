@@ -50,6 +50,13 @@ formats), the search index, `RingBuffer`, `HighPassFilter`, `WordErrorRate`,
 `Benchmark`, and the `PCMSource` protocol. `Catalogues.swift` holds the model
 catalogue, the language catalogue, `ModelTier` and `DiarizationMode`.
 
+`Evaluation/` is the evaluation framework: text normalization, word and
+character alignment, the corpus scores, the seeded bootstrap and the JSON and
+Markdown reports. It reads no file. `transcribe --score` loads the inputs and
+gives them to it. `EvaluationProvenance` in `TranscriberEngine` reads the model
+revision from the local download cache. [BENCHMARKS.md](BENCHMARKS.md#the-evaluation-framework)
+gives the method.
+
 ### `TranscriberStore`
 
 The SwiftData schema and the queries. The model objects are `StoredRecording`,

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "corpusId": "synthetic-scoring-fixture-v1",
+  "items": [
+    {"id": "standup", "ref": "refs/standup.json", "category": "mixed"},
+    {"id": "review", "ref": "refs/review.txt", "category": "mixed"},
+    {"id": "unreferenced", "category": "english"}
+  ]
+}

@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+### Evaluation framework
+
+- **`transcribe --score` scores saved transcripts with one written method,** and loads no model,
+  opens no audio device and uses no network. It reads a manifest, plain-text or JSON references
+  and one hypothesis for each item, and writes a JSON and a Markdown report.
+  [BENCHMARKS.md](docs/BENCHMARKS.md#the-evaluation-framework) gives the method.
+- **The reports give WER and CER for the corpus, each recording and each utterance,** with
+  substitutions, deletions and insertions. They also give results by utterance language, by word
+  language and at code-switch points, and by speaker overlap. They list deletion bursts and the
+  reference speech that no hypothesis word covers. Each breakdown needs its annotation, and
+  without it the report says "unavailable" with the reason.
+- **The intervals are a seeded, stratified percentile bootstrap,** and `--compare` adds a paired
+  comparison of two systems on the same references. The same inputs give the same bytes.
+- **Scoring is versioned.** The configuration (`eval/evaluation-config.v1.json`) and the scoring
+  policy have a version and a fingerprint, and each report records them. The report also records
+  the corpus ID, the model, the model revision from the local download cache, the hardware and the
+  inference settings. It keeps the whole-file RTF, the live commit latency, the process footprint
+  and the model residency apart.
+- The default policy gives the same words and counts as `eval/score.py`. The older scorers do not
+  change: `--reference` still prints the same `WER` line, and the `evaluation (…)` line is new.
+- `--reference` accepts the JSON reference form, and the tool checks the reference and the
+  configuration before the decode. `transcribe --json` reports gain the optional fields
+  `evaluation`, `provenance` and `performance`. A saved benchmark gains `evaluation` and
+  `modelRevision`, and older saved benchmarks still load.
+- **No benchmark result comes with this change.** The framework was tested on synthetic text only.
+
 ## 1.2.0 — 2026-11-01
 
 ### Speed, memory and stability (second cycle)

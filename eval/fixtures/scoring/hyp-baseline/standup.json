@@ -1,0 +1,26 @@
+{
+  "audio": "standup.wav", "mode": "offline", "model": "synthetic-model-a", "language": "tl",
+  "windowLanguages": [], "durationMs": 17000, "decodeMs": 2550, "rtf": 0.15, "wordCount": 25,
+  "transcript": "Good morning team. Simulan na natin ang stand up. Kahapon tinapos ko na yung deployment script. I'm still blocked on the migration kasi wala pa yung access ko.",
+  "words": [
+    {"text": " Good", "startMs": 100, "endMs": 400}, {"text": " morning", "startMs": 400, "endMs": 800},
+    {"text": " team.", "startMs": 800, "endMs": 1100}, {"text": " Simulan", "startMs": 1300, "endMs": 1700},
+    {"text": " na", "startMs": 1700, "endMs": 1850}, {"text": " natin", "startMs": 1850, "endMs": 2200},
+    {"text": " ang", "startMs": 2200, "endMs": 2400}, {"text": " stand", "startMs": 2400, "endMs": 2700},
+    {"text": " up.", "startMs": 2700, "endMs": 3000}, {"text": " Kahapon", "startMs": 3500, "endMs": 4000},
+    {"text": " tinapos", "startMs": 4100, "endMs": 4600}, {"text": " ko", "startMs": 4600, "endMs": 4750},
+    {"text": " na", "startMs": 4750, "endMs": 4900}, {"text": " yung", "startMs": 4900, "endMs": 5100},
+    {"text": " deployment", "startMs": 5100, "endMs": 5900}, {"text": " script.", "startMs": 5900, "endMs": 6500},
+    {"text": " I'm", "startMs": 9600, "endMs": 9800}, {"text": " still", "startMs": 9800, "endMs": 10100},
+    {"text": " blocked", "startMs": 10100, "endMs": 10500}, {"text": " on", "startMs": 10500, "endMs": 10600},
+    {"text": " the", "startMs": 10600, "endMs": 10700}, {"text": " migration", "startMs": 10700, "endMs": 11500},
+    {"text": " kasi", "startMs": 11700, "endMs": 12000}, {"text": " wala", "startMs": 12000, "endMs": 12300},
+    {"text": " pa", "startMs": 12300, "endMs": 12400}, {"text": " yung", "startMs": 12400, "endMs": 12600},
+    {"text": " access", "startMs": 12600, "endMs": 13100}, {"text": " ko.", "startMs": 13100, "endMs": 13400}
+  ],
+  "memory": [
+    {"stage": "beforeModelLoad", "physFootprintMB": 40, "lifetimePeakFootprintMB": 41, "residentMB": 60, "internalMB": 20, "externalMB": 10, "compressedMB": 0, "neuralMB": 0, "neuralPeakMB": 0},
+    {"stage": "afterModelLoad", "physFootprintMB": 77, "lifetimePeakFootprintMB": 80, "residentMB": 90, "internalMB": 30, "externalMB": 10, "compressedMB": 0, "neuralMB": 1581, "neuralPeakMB": 1581},
+    {"stage": "end", "physFootprintMB": 120, "lifetimePeakFootprintMB": 160, "residentMB": 130, "internalMB": 50, "externalMB": 10, "compressedMB": 0, "neuralMB": 1581, "neuralPeakMB": 1581}
+  ]
+}

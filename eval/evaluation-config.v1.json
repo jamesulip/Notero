@@ -1,0 +1,30 @@
+{
+  "bootstrap" : {
+    "confidenceLevel" : 0.95,
+    "minimumUnits" : 2,
+    "resamples" : 2000,
+    "seed" : 20261102,
+    "stratify" : true,
+    "unit" : "utterance"
+  },
+  "deletionBurstMinWords" : 3,
+  "id" : "notero-eval-v1",
+  "missingSpeech" : {
+    "coverageThreshold" : 0.2,
+    "minRegionMs" : 1000,
+    "wordPaddingMs" : 200
+  },
+  "schemaVersion" : 1,
+  "scoring" : {
+    "apostrophes" : "keepIntraWord",
+    "caseFolding" : true,
+    "contractionTableVersion" : 1,
+    "contractions" : "keep",
+    "hyphens" : "split",
+    "id" : "notero-standard",
+    "punctuation" : "remove",
+    "stripDiacritics" : false,
+    "unicodeForm" : "nfkc",
+    "version" : 1
+  }
+}

@@ -29,16 +29,29 @@ public struct BenchmarkRun: Identifiable, Sendable, Codable, Equatable {
     public var wordCount: Int
     public var language: String
     public var startedAt: Date
-    /// Word error rate against a reference, when one was supplied.
+    /// Word error rate against a reference, when one was supplied, by the
+    /// legacy scorer (`WordErrorRate`). Kept so earlier saved runs and this one
+    /// read the same way; `evaluation` holds the documented, versioned score.
     public var wer: Double?
     public var failure: String?
+    /// The reference-based score of the evaluation framework, when a reference
+    /// was supplied: WER and CER with substitutions, deletions and insertions,
+    /// under `evaluationConfigFingerprint`. Nil for runs without a reference
+    /// and for runs saved before it existed.
+    public var evaluation: ItemScore?
+    public var evaluationConfigFingerprint: String?
+    /// The Hugging Face commit of the model files on disk, when the local
+    /// download cache records one.
+    public var modelRevision: String?
 
     public init(id: UUID = UUID(), modelId: String, tier: ModelTier? = nil,
                 label: String, audioMs: Int, processMs: Int, loadMs: Int = 0,
                 peakMemoryMB: Int = 0, modelResidencyMB: Int? = nil,
                 segmentCount: Int = 0, wordCount: Int = 0,
                 language: String = "tl", startedAt: Date = Date(),
-                wer: Double? = nil, failure: String? = nil) {
+                wer: Double? = nil, failure: String? = nil,
+                evaluation: ItemScore? = nil, evaluationConfigFingerprint: String? = nil,
+                modelRevision: String? = nil) {
         self.id = id
         self.modelId = modelId
         self.tier = tier
@@ -54,6 +67,9 @@ public struct BenchmarkRun: Identifiable, Sendable, Codable, Equatable {
         self.startedAt = startedAt
         self.wer = wer
         self.failure = failure
+        self.evaluation = evaluation
+        self.evaluationConfigFingerprint = evaluationConfigFingerprint
+        self.modelRevision = modelRevision
     }
 
     /// Processing time over audio duration. Below 1.0 is faster than real time.

@@ -55,11 +55,14 @@ test harness. [CLI.md](CLI.md) gives the options.
 
 - **RTF** is the wall-clock decode time divided by the audio duration. Lower is
   faster. 0.10 means 10 times faster than real time.
-- **WER** is the word error rate against the reference file. Two scorers exist.
+- **WER** is the word error rate against the reference file. Two scorers exist
+  for the tables in this file.
   The WER of the command-line tool splits an intra-word hyphen.
   `eval/langscore.py` keeps it, thus "i-send" stays one Filipino word there.
   The two therefore report different numbers for the same transcript, and each
-  table below says which one produced it.
+  table below says which one produced it. For new numbers, use
+  [the evaluation framework](#the-evaluation-framework). It records its scoring
+  policy in each report.
 - **"Peak memory"** is what the older numbers in this file call it, and it is
   neither a peak nor a model's memory. `transcribe` printed `phys_footprint`,
   read once at exit: the footprint of one process at that instant. It leaves
@@ -103,6 +106,220 @@ not look. Compare footprints only between stages of one build, and quote the
 Neural Engine figure beside them. `eval/residency.py` measures the same stages
 from outside the process, with `footprint(1)`, as an independent check on the
 in-process figures.
+
+## The evaluation framework
+
+`transcribe --score` and the `Evaluation` module of `TranscriberCore` score
+transcripts against references with one written method. Use it for new accuracy
+numbers. This section is the method. [CLI.md](CLI.md#score-saved-transcripts)
+gives the commands.
+
+**The framework has produced no benchmark result yet.** It was added on
+2026-11-02 and tested on synthetic text only. No table in this file comes from
+it. The older tables keep the scorer that each one names.
+
+### What the framework guarantees
+
+1. **The same inputs give the same bytes.** The reports contain no clock, no
+   random value without a seed, and no absolute path. Two runs on one corpus
+   give identical JSON and Markdown files.
+2. **The raw text stays unchanged.** The report keeps the reference and the
+   hypothesis exactly as supplied, byte for byte. The scorer normalizes a copy.
+3. **A metric without ground truth is "unavailable", with a reason.** The
+   framework never reports 0, 1 or a blank for a missing value. A WER over an
+   empty reference is unavailable. A WER over an empty hypothesis is 100%, and
+   it is a real measurement.
+4. **Scoring uses no network and no model.** `--score` reads files and writes
+   files. It stops before the tool opens an audio device or loads a model.
+
+### The inputs
+
+| Input | Form |
+| --- | --- |
+| Manifest | The array that `eval/manifest.json` and the corrections export already use, `[{"id", "audio", "ref", "category"}]`. Or the versioned form `{"schemaVersion": 1, "corpusId": "...", "items": [...]}`. Paths are relative to the manifest. |
+| Corpus ID | The `corpusId` of a versioned manifest, or `--corpus-id`. An array manifest gets `manifest-sha256:` and the first 16 hex digits of the SHA-256 of its bytes. |
+| Reference, plain text | One utterance on each line that is not empty. It has no times, no speakers and no language. The manifest `category` (`tagalog`, `english` or `mixed`) becomes the language of each line. |
+| Reference, JSON | `{"schemaVersion": 1, "itemId", "utterances": [...]}`. Each utterance has `id` and `text`. It can also have `startMs`, `endMs`, `speaker`, `overlap`, `language` and `languageSpans`. |
+| Hypothesis | `<id>.json`, the `--json` report of a `transcribe` run, or `<id>.txt`, plain text from any system. Only the JSON form has word times and run measurements. |
+| Configuration | `eval/evaluation-config.v1.json` is the default. `transcribe --print-eval-config` writes it. A file with an unknown `schemaVersion` is refused. |
+
+`languageSpans` marks the language word by word. The spans of an utterance,
+in sequence, must join to its `text` exactly, or the reference is refused. Put
+each span boundary between two words. `eval/fixtures/scoring/refs/standup.json`
+is an example.
+
+### The scoring policy
+
+A policy changes text into the units that the framework counts. A policy has an
+`id`, a `version` and a SHA-256 fingerprint. Each report records all three.
+The steps always run in this sequence:
+
+1. Unicode normalization: none, NFC, NFD, NFKC or NFKD.
+2. U+2019, U+2018, U+02BC, U+0060 and U+00B4 become the apostrophe U+0027.
+3. Case folding, if set.
+4. Contraction expansion, if set, from table version 1.
+5. Diacritic removal, if set.
+6. Tokenization. Letters, combining marks and digits make words. Apostrophes
+   and hyphens follow their own settings. All other characters are
+   punctuation. Punctuation is removed or kept as separate tokens.
+
+| Policy | Rules | Use |
+| --- | --- | --- |
+| `notero-standard` | NFKC, case folded, punctuation removed, hyphens split, apostrophes kept inside a word, diacritics kept. | **The default.** It gives the same tokens and the same counts as `eval/score.py`, which produced the 2026-11-01 tables. |
+| `notero-keep-hyphens` | As `notero-standard`, but "i-send" stays one word. | Close to `eval/langscore.py`. It is not identical: the two scorers treat en dashes and U+2010 differently. |
+| `notero-legacy-cli` | No normalization, case folded, diacritics removed, every character that is not a letter or a digit splits words. | The same tokens as `WordErrorRate`, the scorer of `--reference` in builds before this one. |
+| `notero-expand-contractions` | As `notero-standard`, with contractions expanded on both sides. | Compare transcripts that write "ako'y" and "ako ay", or "don't" and "do not", in different ways. |
+
+`notero-standard` and `eval/score.py` differ on four rare inputs. The framework
+splits words at an underscore, keeps a combining mark in its word, changes
+U+02BC and the backtick to an apostrophe, and lower-cases final sigma as "σ".
+The tests record each difference.
+
+Contraction table version 1 expands the English negations ("don't"), the
+English pronoun and verb forms ("I'm", "we're", "it's", "I'll", "I've"), the
+Tagalog enclitic "'y" ("ako'y" to "ako ay"), and the clipped Tagalog forms
+"di", "wag", "yan", "yun", "yon" and "yung", with or without an apostrophe.
+It does not expand "'to", because "to" is also an English word. It does not
+expand "'d" or "'s", because each has more than one meaning.
+
+### The metrics
+
+- **WER** is (S + D + I) / N, where N is the number of reference words. One
+  word alignment covers the whole recording. At each cell the alignment takes
+  a match if the two words are equal. Otherwise it takes the first minimum of
+  substitution, deletion and insertion, in that sequence. This rule gives the
+  same split into S, D and I as `eval/score.py`.
+- **The corpus WER** is the sum of the errors of all scored recordings divided
+  by the sum of their reference words. It is not a mean of the WER values of
+  the recordings.
+- **Utterance results** come from the alignment of the recording. A matched or
+  substituted word belongs to the utterance of its reference word. An inserted
+  word belongs to the utterance of the nearest reference word before it. If no
+  reference word comes before it, it belongs to the utterance of the first
+  reference word after it. The results of the utterances add up exactly to the
+  result of the recording.
+- **CER** is the character error rate. For each utterance, the framework aligns
+  the characters of its normalized words, joined by single spaces, against the
+  characters of the hypothesis words that belong to it. The CER of a recording
+  is the sum over its utterances. A character is a grapheme cluster, thus "ñ"
+  is one character in NFC and in NFD.
+- **By utterance language** gives WER and CER for each language class:
+  `tagalog`, `english`, `code-switched`, `other` and `unannotated`. The class
+  comes from the language spans, or from the `language` of the utterance, or
+  from the manifest category.
+- **By word language** needs `languageSpans`, or an utterance that has one
+  language. For each language it gives (S + D) / N. An insertion has no
+  reference word, thus it has no language and is counted apart. A
+  **code-switch point** is a reference word whose language is different from
+  the language of the word before it in the same utterance.
+- **By speaker overlap** gives the strata `overlap`, `no-overlap` and
+  `unknown`. An `overlap` mark in the reference has priority. Without a mark,
+  an utterance overlaps if its time intersects the time of an utterance of a
+  different speaker. An utterance without a mark, without times or without a
+  speaker is `unknown`. The three strata add up to the recording.
+- **Deletion bursts** are runs of 3 or more consecutive deleted reference
+  words, with the utterance and the time where each run starts. A window that
+  did not decode makes this shape.
+- **Missing speech** needs reference times and hypothesis word times. The
+  framework merges the reference utterances into speech regions. It widens
+  each hypothesis word by 200 ms on each side. It checks each region of
+  1 second or more. A region is missing if hypothesis words cover less than
+  20% of it. The report gives the missing regions, their total duration and
+  their share of the checked speech.
+
+A breakdown that needs an annotation covers only the recordings that have the
+annotation. The report lists those recordings and adds a warning.
+
+### Confidence intervals
+
+The interval of a corpus WER or CER is a **percentile bootstrap** of the
+pooled rate.
+
+- The unit of the resample is the utterance (the default) or the recording.
+- The default is 2000 resamples at a 95% level, with seed 20261102.
+- The resamples are stratified. With utterance units, the strata are the
+  utterance language classes. With recording units, the strata are the
+  manifest categories. Each resample keeps the mix of the corpus.
+- The generator is SplitMix64. Index draws use rejection sampling. The
+  quantiles are type 7, the default of numpy and R. The sequence of draws is
+  part of the method, thus the same seed gives the same interval on each Mac
+  and with each Swift version.
+- **A comparison is paired.** Each resample uses the same units for the
+  baseline and the candidate. The report gives the difference (candidate minus
+  baseline) and its interval. It also gives the share of resamples in which
+  the candidate had the lower rate. That share describes the resamples. It is
+  not a p-value.
+- The framework refuses a comparison of two reports that have a different
+  corpus ID, a different configuration, a different set of scored recordings or
+  different references.
+
+**Read the warnings with an interval.** With fewer than 30 units the interval
+is rough and too narrow. Utterances of one recording share the speaker, the
+room and the microphone. When you resample them as if they were independent,
+the interval does not show the variation between recordings. Below 5
+recordings the report says so. With fewer than 2 units there is no interval.
+
+### What each report records
+
+| Field | Source |
+| --- | --- |
+| Corpus ID | The manifest or `--corpus-id`. |
+| Configuration | The complete configuration, its `id`, its schema version and its fingerprint. |
+| Scoring policy | `id`, `version` and fingerprint. |
+| Model | `--model`, or the `model` that all hypothesis reports agree on. |
+| Model revision | `--model-revision`, or the Hugging Face commit in the local download cache of the model. The cache keeps it in the first line of each `.metadata` file. The tool reads the file and does not connect to the network. |
+| Hardware | The Mac model, the core count, the macOS version and the installed memory. |
+| Inference settings | The mode, the language, the prompt, the speaker mode, room mode and the live hop, context and pre-roll. |
+| Build | `--build`, for example a commit. |
+
+A field that the inputs do not give is "unavailable", with a reason. The
+framework does not guess it. A plain-text hypothesis has no model, no settings
+and no measurements.
+
+The **performance** part keeps four figures apart.
+[Which number is which](#which-number-is-which) defines them.
+
+| Figure | When the report has it |
+| --- | --- |
+| Whole-file RTF | Offline runs only. The corpus figure is the total decode time divided by the total audio, and only when each scored recording has both. |
+| Live commit latency | Live replays only. With `--realtime` it uses the wall clock. Otherwise it uses the audio fed so far. |
+| Process peak footprint | The highest `phys_footprint` of the decoding process. It does not include the model. |
+| Model residency | The Neural Engine memory that the model load added. |
+
+### The outputs
+
+`report.json` is the machine-readable report, with sorted keys. Each value that
+can be absent has the form `{"status": "available", "value": ...}` or
+`{"status": "unavailable", "reason": "..."}`. `report.md` gives the same
+results as tables. With `--compare`, the tool writes `baseline`, `candidate` and
+`comparison`, each as `.json` and `.md`.
+
+`--score` exits with 0 when it scored at least one recording of each system.
+It exits with 3 when a system has no scored recording, with 2 for an input
+error and with 1 for an output error or a refused comparison.
+
+### Limitations of the framework
+
+1. **No result yet.** The framework was tested on synthetic fixtures only.
+   No real Taglish, Tagalog or English corpus was scored with it.
+2. **The language of a word comes from the annotation.** Without
+   `languageSpans` or a one-language utterance there is no word-language
+   breakdown. `eval/langscore.py` guesses the language from a word list; the
+   framework does not.
+3. **The utterance of a word is one choice among equal alignments.** When two
+   alignments have the same cost, the fixed rule chooses one. A repeated word
+   at an utterance boundary can then count against the neighbouring
+   utterance. The totals of the recording do not change.
+4. **A very long recording has no utterance results and no CER.** Above
+   120 million alignment cells (about 11,000 by 11,000 words), the framework
+   counts the WER in linear memory. It then reports utterance results, CER,
+   breakdowns and deletion bursts as unavailable.
+5. **Missing speech depends on the word times of the model.** Whisper word
+   times are approximate. The 200 ms padding and the 20% threshold are
+   settings. The framework did not calibrate them on real audio.
+6. **Corrections references lean toward the model.** The cautions of
+   [Corrections exported from the app](#corrections-exported-from-the-app)
+   apply without change.
 
 ## 2026-11-01 baseline: f022c6e on the Mac mini M2 Pro
 
@@ -1089,7 +1306,10 @@ smaller footprint as smaller models.
 11. **Memory figures describe one process.** None describes the whole machine, and
     none of the footprints contains the model. [Which number is which](#which-number-is-which)
     says what each figure is.
-12. **The findings are engineering results and not product guarantees.** The
+12. **The evaluation framework has no results yet.** It exists since
+   2026-11-02. [Limitations of the framework](#limitations-of-the-framework)
+   gives its own limits.
+13. **The findings are engineering results and not product guarantees.** The
    caveat section of [FINDINGS.md](FINDINGS.md) says which findings are
    structural, and which ones must be derived again against your own
    recordings.

@@ -60,6 +60,24 @@ struct Options {
     /// the other.
     var lane: CaptureLane?
     var logFile: URL?
+    // Evaluation (docs/BENCHMARKS.md, "The evaluation framework"). None of
+    // these loads a model or opens a connection.
+    /// `--score MANIFEST`: score saved hypotheses; no audio, no model.
+    var score: URL?
+    var hypotheses: URL?
+    var label: String?
+    var compare: URL?
+    var compareLabel: String?
+    var evalConfig: URL?
+    var policy: String?
+    var corpusId: String?
+    var modelRevision: String?
+    var build: String?
+    var outDir: URL?
+    /// With `--reference`: a one-item evaluation report beside the run report.
+    var evalJSON: URL?
+    var evalMarkdown: URL?
+    var printConfig = false
 }
 
 func parse() -> Options {
@@ -105,6 +123,20 @@ func parse() -> Options {
         case "--hop": options.hopMs = value().flatMap(Int.init) ?? options.hopMs
         case "--pre-roll": options.preRollMs = value().flatMap(Int.init) ?? options.preRollMs
         case "--context": options.contextMs = value().flatMap(Int.init) ?? options.contextMs
+        case "--score": options.score = value().map { URL(fileURLWithPath: $0) }
+        case "--hypotheses": options.hypotheses = value().map { URL(fileURLWithPath: $0) }
+        case "--label": options.label = value()
+        case "--compare": options.compare = value().map { URL(fileURLWithPath: $0) }
+        case "--compare-label": options.compareLabel = value()
+        case "--eval-config": options.evalConfig = value().map { URL(fileURLWithPath: $0) }
+        case "--policy": options.policy = value()
+        case "--corpus-id": options.corpusId = value()
+        case "--model-revision": options.modelRevision = value()
+        case "--build": options.build = value()
+        case "--out-dir": options.outDir = value().map { URL(fileURLWithPath: $0, isDirectory: true) }
+        case "--eval-json": options.evalJSON = value().map { URL(fileURLWithPath: $0) }
+        case "--eval-md": options.evalMarkdown = value().map { URL(fileURLWithPath: $0) }
+        case "--print-eval-config": options.printConfig = true
         case "--help", "-h":
             print("""
             transcribe --audio FILE [--reference FILE] [--models DIR]
@@ -118,6 +150,14 @@ func parse() -> Options {
             transcribe --mic-check [--device UID] [--seconds N] [--gui]
             transcribe --audio FILE --lane room|remote   # one channel of a two-lane file
             transcribe --devices
+            transcribe --score MANIFEST --hypotheses DIR [--label NAME]
+                       [--compare DIR [--compare-label NAME]]
+                       [--eval-config FILE | --policy ID] [--corpus-id ID]
+                       [--model ID] [--model-revision REV] [--build SHA] [--out-dir DIR]
+            transcribe --print-eval-config        # the default evaluation config, as JSON
+            With --audio and --reference: [--eval-config FILE | --policy ID] [--label NAME]
+                       [--model-revision REV] [--build SHA] [--eval-json FILE] [--eval-md FILE]
+            Scoring policies: \(ScoringPolicy.presets.map(\.id).joined(separator: ", "))
             """)
             exit(0)
         default:
@@ -180,6 +220,13 @@ struct RunReport: Codable {
     /// Offline only: the decode windows, in order, so a difference between two runs can be
     /// placed in a window. Absent from older binaries and from live replays.
     var windows: [WindowSpan]?
+    /// With `--reference`: the evaluation framework's score of `transcript`.
+    /// `wer` above stays the legacy scorer's number.
+    var evaluation: ItemScore?
+    /// What produced this run: model, revision, machine, settings.
+    var provenance: RunProvenance?
+    /// Whole-file RTF, live latency, process footprint and model residency, apart.
+    var performance: PerformanceSummary?
 }
 
 let options = parse()
@@ -187,6 +234,23 @@ let options = parse()
 if let logURL = options.logFile {
     FileManager.default.createFile(atPath: logURL.path, contents: nil)
     logFileHandle = try? FileHandle(forWritingTo: logURL)
+}
+
+// Scoring needs no audio device, no model and no network: handled before
+// anything that touches one.
+if options.printConfig {
+    do {
+        var data = try CanonicalJSON.encodePretty(loadEvaluationConfig(options))
+        data.append(contentsOf: Array("\n".utf8))
+        FileHandle.standardOutput.write(data)
+        exit(0)
+    } catch {
+        log("error: \(error)")
+        exit(1)
+    }
+}
+if options.score != nil {
+    runScore(options)
 }
 
 if options.listDevices {
@@ -226,6 +290,22 @@ guard let audioURL = options.audio else {
 guard FileManager.default.fileExists(atPath: audioURL.path) else {
     log("error: no such file: \(audioURL.path)")
     exit(2)
+}
+
+// The evaluation inputs are checked before the decode, so a bad config or
+// reference fails in a second rather than after a long transcription.
+let itemId = audioURL.deletingPathExtension().lastPathComponent
+var evaluationConfig: EvaluationConfig?
+var evaluationReference: EvaluationReference?
+if let referenceURL = options.reference {
+    evaluationConfig = loadEvaluationConfig(options)
+    switch loadReference(referenceURL, name: referenceURL.lastPathComponent, item: CorpusManifest.Item(id: itemId),
+                         checkItemId: false) {
+    case let .success(loaded): evaluationReference = loaded
+    case let .failure(missing):
+        log("error: \(missing.reason)")
+        exit(2)
+    }
 }
 
 let started = Date()
@@ -468,25 +548,80 @@ if let output = options.output {
 }
 
 let hypothesis = segments.map(\.displayText).joined(separator: " ")
+let mode = options.live ? (options.realtime ? "live-realtime" : "live") : "offline"
+var settings: [String: String] = [
+    "diarization": options.diarizationMode.rawValue,
+    "roomMode": String(options.roomMode),
+    "styleHint": String(options.styleHint),
+]
+if let lane = options.lane { settings["lane"] = lane.rawValue }
+if let config = liveConfig {
+    settings["hopMs"] = String(config.hopMs)
+    settings["contextMs"] = String(config.contextMs)
+    settings["preRollMs"] = String(config.preRollMs)
+    settings["adaptiveHop"] = String(config.adaptiveHop)
+}
+let provenance = RunProvenance(
+    label: options.label ?? modelId,
+    modelId: .available(modelId),
+    modelRevision: options.modelRevision.map { .available($0) }
+        ?? EvaluationProvenance.modelRevision(modelId: modelId, modelsDirectory: options.models),
+    hardware: .available(EvaluationProvenance.hardware),
+    inference: .available(InferenceSettings(mode: mode, language: options.language, prompt: prompt,
+                                            settings: settings)),
+    toolVersion: options.build.map { .available($0) } ?? .unavailable(reason: "no --build given"))
+
 var wer: Double?
-if let referenceURL = options.reference {
-    let reference: String
-    do {
-        reference = try String(contentsOf: referenceURL, encoding: .utf8)
-    } catch {
-        log("error: could not read \(referenceURL.path): \(error.localizedDescription)")
-        exit(1)
+var evaluation: ItemScore?
+if let referenceURL = options.reference, let config = evaluationConfig, let reference = evaluationReference {
+    // A plain-text reference is scored exactly as before by the legacy scorer.
+    // A JSON reference (times, speakers, languages) gives the legacy scorer its
+    // joined text, so `wer` never scores JSON syntax as words.
+    let legacyText: String
+    if referenceURL.pathExtension.lowercased() == "json" {
+        legacyText = reference.rawText
+    } else {
+        do {
+            legacyText = try String(contentsOf: referenceURL, encoding: .utf8)
+        } catch {
+            log("error: could not read \(referenceURL.path): \(error.localizedDescription)")
+            exit(1)
+        }
     }
-    let score = WordErrorRate.score(reference: reference, hypothesis: hypothesis)
+    let score = WordErrorRate.score(reference: legacyText, hypothesis: hypothesis)
     wer = score
     log(String(format: "WER %.4f (%.1f%%)", score, score * 100))
+    let scored = Evaluator.score(reference: reference,
+                                 hypothesis: EvaluationHypothesis(text: hypothesis, words: tokens),
+                                 config: config)
+    evaluation = scored
+    func pct(_ m: MetricValue) -> String { m.value.map { String(format: "%.2f%%", $0 * 100) } ?? "unavailable" }
+    log("evaluation (\(config.scoring.id) v\(config.scoring.version)): WER \(pct(scored.wer)) "
+        + "(S \(scored.words.substitutions) D \(scored.words.deletions) I \(scored.words.insertions) "
+        + "N \(scored.words.referenceLength)), CER \(pct(scored.cer))"
+        + (scored.missingSpeech.value.map { ", missing speech \(pct($0.missingShare))" } ?? ""))
 }
 
 memory.append(.current(stage: "end"))
+let performance = performanceSummary(mode: mode, decodeMs: decodeMs, durationMs: source.durationMs,
+                                     commitLatency: commitLatency.summary,
+                                     commitLatencyWall: commitLatencyWall.summary, memory: memory)
+if let config = evaluationConfig, let reference = evaluationReference,
+   options.evalJSON != nil || options.evalMarkdown != nil {
+    let report = CorpusEvaluation.evaluate(
+        corpusId: options.corpusId ?? "single:\(itemId)",
+        inputs: [CorpusItemInput(item: CorpusManifest.Item(id: itemId, audio: audioURL.path),
+                                 reference: .success(reference),
+                                 hypothesis: .success(EvaluationHypothesis(text: hypothesis, words: tokens)),
+                                 performance: performance)],
+        system: provenance, config: config)
+    writeReport(report, markdown: EvaluationMarkdown.render(report),
+                json: options.evalJSON, markdown: options.evalMarkdown)
+}
 if let jsonURL = options.json {
     let report = RunReport(
         audio: audioURL.path,
-        mode: options.live ? (options.realtime ? "live-realtime" : "live") : "offline",
+        mode: mode,
         model: modelId,
         language: options.language,
         detectedLanguage: detectedLanguage,
@@ -505,7 +640,10 @@ if let jsonURL = options.json {
         commitLatency: commitLatency.summary,
         commitLatencyWall: commitLatencyWall.summary,
         memory: memory,
-        windows: windowSpans.isEmpty ? nil : windowSpans
+        windows: windowSpans.isEmpty ? nil : windowSpans,
+        evaluation: evaluation,
+        provenance: provenance,
+        performance: performance
     )
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
