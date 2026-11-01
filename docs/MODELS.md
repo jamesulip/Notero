@@ -154,8 +154,12 @@ that the download finished and did not merely start.
 directory that already holds them, and no download happens.
 
 **The first load of a model compiles CoreML for the Neural Engine.** That took
-284 seconds on the measurement Mac. Later loads hit the cache at 9 to 11
-seconds. Know this before you assume that a restart is cheap.
+284 seconds on the measurement Mac (160 s for the default model on the Mac mini M2 Pro,
+82 s for Fast and 158 s for Best, n = 1 each). Later loads hit the cache. They took 9 to 11
+seconds while every load asked the Hugging Face Hub, and they take about 1.6 seconds now that
+a model that is already on disk is loaded from its folder with no Hub request (finding 30
+in [FINDINGS.md](FINDINGS.md)). The first compile is still slow, so do not assume that the
+first start is cheap.
 
 ## Memory
 
@@ -163,8 +167,8 @@ The models set the memory budget on a 16 GB Mac:
 
 | Component | Resident memory |
 | --- | ---: |
-| large-v3-turbo (Balanced) | approximately 1.6 GB |
-| The two speaker models | approximately 200 MB |
+| large-v3-turbo (Balanced) | approximately 1.6 GB of Neural Engine memory (1,580 MB measured), and 66 to 77 MB of process footprint. Fast is 878 MB and Best is 3,000 MB. |
+| The two speaker models | 13 MB on disk, about 23 MB of process footprint when loaded, and no Neural Engine memory (measured on 2026-11-01; the earlier figure of 200 MB was never measured) |
 
 macOS starts to compress memory well before the ceiling. `EngineHost` therefore
 holds exactly one instance of each model, shares them between the live path and

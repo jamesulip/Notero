@@ -541,7 +541,7 @@ Two different questions, two different figures. Read
 | Question | Figure | Value |
 | --- | --- | ---: |
 | What does the loaded model occupy? | Neural Engine memory owned by the process, large-v3-turbo (Balanced) | approximately 1.6 GB (1580 MB measured on the Mac mini M2 Pro on 2026-11-01, constant across 12 runs) |
-| What do the two speaker models occupy? | Neural Engine memory | approximately 200 MB, **not re-measured** |
+| What do the two speaker models occupy? | Neural Engine memory | 0 MB on the Neural Engine, 13 MB on disk and about 23 MB of footprint when loaded (measured on 2026-11-01; the earlier 200 MB was never measured) |
 | What does the process cost to run? | Lifetime peak **footprint** of a whole-file run on the test clip | 150 MB median, 142 to 254 MB over 24 runs (Mac mini M2 Pro, 2026-11-01) |
 
 The figure that earlier versions of this file gave for the process, "approximately

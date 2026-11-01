@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+### Speed, memory and stability (second cycle)
+
+- **A model that is already on disk loads in about 1.6 seconds, not 8 to 11.** Every load asked
+  the Hugging Face Hub, even for a model that was on disk, and failed offline. The load now
+  reads the model folder directly, and the transcript is byte-identical. Entry 30 gives the
+  measurements.
+- **A model switch releases the old model first,** which cuts the Neural Engine peak by about a
+  third (2,458 to 1,580 MB, and 4,581 to 3,000 MB). Pressing Record while a job loads another
+  model now reloads the live model.
+- **The window no longer freezes while Stop saves a long transcript.** The writer and the readers
+  ran on the main thread, which froze the window for 6.9 s on a six-hour meeting. Entry 32.
+- **A recording file that will not close can no longer freeze Stop or a quit,** and a recording
+  killed in its first seconds keeps what was written after the first second.
+- **A long device gap no longer holds up capture.** A two-lane, ten-minute gap held it for 0.56 s
+  in a release build.
+- **A speaker's name and colour follow the voice, not the label number,** when speakers are
+  identified again, and a named speaker that the new run does not find is kept. In 12 of 52
+  re-runs at least one voice had been renumbered. Entry 28.
+- **Transcribe Again works on a two-lane recording whose file cannot be opened,** from the mixed copy,
+  with a warning.
+- **Cancelled and failed jobs release the speaker models,** and a caller that was cancelled while
+  it waited for a model load no longer waits for it. The speaker models are small (13 MB); the
+  figure of 200 MB in the documentation was never measured.
+- Live decoding gained an opt-in trace and property tests that commit immutability holds. Head-tolerant
+  agreement, which cut median commit latency by 35 to 43% on two synthetic clips, is implemented
+  and off until a second session on real audio confirms it. Entry 27.
+
+### Tools and evidence
+
+- **`eval/regress.py`** compares two builds in one command, with one collapse rule and one decision
+  rule that flags 1.7 to 2.6% of simulated A/A sessions (an uncorrected table flags 11 to 24%). It adds
+  a determinism check, a fixture manifest and committed baselines in `eval/baselines/`.
+- **`eval/fleurs_eval.py`** evaluates read Tagalog on the public FLEURS set, and
+  `eval/REAL-TAGLISH-PROTOCOL.md` describes how to build a real Taglish reference from the app's
+  corrections export. On read Tagalog, the first cycle's changes alter nothing, `auto` equals `tl`,
+  and the Best tier is not more accurate. Entries 24 and 25. None of this is Taglish.
+- **`diarbench`** times the speaker stage alone, with the tools to measure whether a name follows the voice.
+
 ### Recording and recovery
 
 - **A recording that is killed, crashes or is force-quit now leaves a playable

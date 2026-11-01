@@ -323,8 +323,10 @@ library.
 ## Memory management
 
 The models set the memory budget on a 16 GB Mac. large-v3-turbo holds
-approximately 1.6 GB, and the two speaker models hold approximately 200 MB
-more. macOS starts to compress memory well before the ceiling.
+approximately 1.6 GB (of Neural Engine memory, outside the process footprint),
+and the two speaker models are small: 13 MB on disk, no Neural Engine memory
+(finding 30 in [FINDINGS.md](FINDINGS.md)). A model switch releases the old model
+before it loads the new one, so the peak is the larger of the two, not their sum. macOS starts to compress memory well before the ceiling.
 
 `EngineHost` is therefore the one owner:
 
