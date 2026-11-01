@@ -128,6 +128,22 @@ final class ArchiveCloseTests: XCTestCase {
         XCTAssertEqual(Int(file.length), 80 * 4_080, "a clean close holds exactly the frames written (finding 17)")
     }
 
+    // MARK: - The limits themselves
+
+    /// QA mutated each of these to a hundred times its value and nothing failed: every
+    /// test shortens the timeout, so the shipped number was never looked at. Stop waits
+    /// 10 s for the archive, inside the quit gate's 30 s, so a quit gets its answer from
+    /// here; the writer gives up on a thread that has not answered in 30 s.
+    @MainActor
+    func testTheShippedCloseLimitsStayInsideTheQuitGate() {
+        let session = LiveSession(
+            engines: EngineHost(modelsDirectory: URL(fileURLWithPath: "/nonexistent")),
+            supportDirectory: scratch)
+        XCTAssertEqual(session.archiveCloseTimeout, 10)
+        XCTAssertLessThan(session.archiveCloseTimeout, 30, "the quit gate's own timeout")
+        XCTAssertEqual(ArchiveWriter.closeLimit, 30)
+    }
+
     // MARK: - The main actor stays free
 
     /// A stop on the main actor with an archive that hangs. The main actor ticks

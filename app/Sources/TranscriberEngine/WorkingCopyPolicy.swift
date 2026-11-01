@@ -101,6 +101,20 @@ public enum WorkingCopyPolicy {
                 + "and its lines do not say which side they came from.")
     }
 
+    /// May the working copy of a recording that has just stopped be deleted when the
+    /// work on it is done?
+    ///
+    /// Not when the archive's close timed out. A fragmented archive that is still
+    /// closing is up to one fragment (5 s) shorter than the audio, and `archiveCovers`
+    /// forgives 2 s: of 11 unclosed archives QA probed, 8 were 0.3-1.8 s short and
+    /// still counted as covering the copy, so deleting it lost that tail for good while
+    /// the notice promised a copy was kept (FINDINGS 35). The close goes on in the
+    /// background; a later Transcribe Again rebuilds the copy if the archive finished.
+    public static func discardsAfterStop(keepSetting: Bool, notices: [CaptureNotice]) -> Bool {
+        guard !keepSetting else { return false }
+        return !notices.contains { if case .archiveNotClosed = $0 { true } else { false } }
+    }
+
     /// `canDiscard` with the real probe, for a caller outside the queue.
     public static func canDiscard(workingCopy: URL, archive: URL?) async -> Bool {
         await canDiscard(workingCopy: workingCopy, archive: archive,

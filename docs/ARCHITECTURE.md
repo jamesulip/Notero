@@ -270,7 +270,7 @@ says were in the room. It is a target for the clustering and never a cap.
 
 `TranscriptReader` in `TranscriberStore` reads the rows of one transcript as
 value types: one fetch with a predicate on the transcript and a sort descriptor
-on `startMs`, on a `@ModelActor` with its own context. `StoredTranscript.
+on `startMs`, on a plain actor with its own context. `StoredTranscript.
 orderedSegments` runs the same fetch on the context of the row. Before this,
 each reader walked the `segments` relationship, which returned a fault for
 each row and fired every fault in the sort. A 4000-row transcript took 278 ms

@@ -231,4 +231,18 @@ final class WorkingCopyRetentionTests: XCTestCase {
         XCTAssertFalse(WorkingCopyPolicy.isTruncated(workingCopyMs: 5_000, archiveMs: nil),
                        "an unreadable archive says nothing about the copy")
     }
+
+    // MARK: - After a stop
+
+    /// An archive whose close timed out is up to 5 s short, and the 2 s tolerance cannot
+    /// tell: the copy has to stay until the archive is known to be whole (FINDINGS 35).
+    func testTheCopyIsKeptWhenTheArchiveDidNotClose() {
+        XCTAssertTrue(WorkingCopyPolicy.discardsAfterStop(keepSetting: false, notices: []))
+        XCTAssertTrue(WorkingCopyPolicy.discardsAfterStop(
+            keepSetting: false, notices: [.audioGap(seconds: 3), .recordingNotSaved("x")]))
+        XCTAssertFalse(WorkingCopyPolicy.discardsAfterStop(
+            keepSetting: false, notices: [.audioGap(seconds: 3), .archiveNotClosed(seconds: 10)]))
+        XCTAssertFalse(WorkingCopyPolicy.discardsAfterStop(keepSetting: true, notices: []),
+                       "the person's own setting still wins")
+    }
 }

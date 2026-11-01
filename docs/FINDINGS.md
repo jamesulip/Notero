@@ -1319,6 +1319,51 @@ on a quiet machine (load 1.2), nothing was significant (WER 28.1% against 26.2%,
 nondeterministic live. The baselines of the first cycle are committed in `eval/baselines/`, so the next
 cycle compares against files and not against `/tmp`.
 
+## 35. Independent review of the second cycle: one blocker, one data-loss path, one stale-row race (2026-11-01)
+
+A reviewer who had not written the code built the combined branch, ran 34 mutants against the new tests,
+and probed the riskiest claims. 31 of 34 mutants were killed by the right test; ThreadSanitizer found no
+data race on 337 engine and store tests. It also found what the tests did not.
+
+- **B1 (blocker, reproduced 3 of 3).** `TapInput`, the system-audio and "both" input, hands the same scratch
+  buffer to every callback. The gap-fill queue kept a callback's buffers for later, and the next callback
+  wrote over them: a quiet second after a gap became loud (0.5 against 0.0) in the working copy and in the
+  archive. `GapFillTests` handed over a fresh buffer each time, so it could not fail. A callback that arrives
+  behind a fill now queues a deep copy (a callback during a gap is the only one that pays for it), and a
+  test with an input that reuses its buffer fails 3 of 3 runs without the copy and passes with it. The
+  microphone-only path allocates in `downmix` and was never affected.
+- **S1 (should-fix).** A fragmented archive whose close timed out is up to 5 s short, while the
+  "does the archive cover the working copy" check forgives 2 s. Of 11 unclosed archives probed, 8 were
+  0.3–1.8 s short and still counted as covering it, so the working copy could be deleted after the stop, a
+  tail of up to about 2 s lost, and the notice still said a copy was kept. A stop that reported
+  `archiveNotClosed` now keeps the copy (`WorkingCopyPolicy.discardsAfterStop`; the person's own setting
+  still wins). The end-to-end path after a real timeout was not run.
+- **S2 (should-fix, mechanism older than this cycle).** `appendWarning` saved through the writer without
+  refreshing the main context. The held row's warning was stale 400 of 400 times, and a later save from
+  that stale row reverted the writer's status in 266 of 400 cycles (0 of 400 when refreshed first). It
+  refreshes now. The app target has no tests, so this is covered by the reviewer's probe and not by a
+  shipped test.
+- **Survivors.** Three constants and orderings had no assertion: Stop's 10 s archive timeout, the writer's
+  30 s close limit, and a job that stepped aside going to the front of the queue. Each now has one,
+  and each was killed by mutation.
+
+Not fixed, recorded:
+- **S3 (hypothesis from the code, not run).** A benchmark that is already running keeps unloading and
+  loading models under a recording that starts after it, because the benchmark runner is outside the queue.
+  The Start button is disabled only while recording. Older than this cycle.
+- **N1.** `setLiveActive(true)` waits for a running job's model load, which cannot be cancelled, and Record
+  shows nothing meanwhile. Record-to-first-hop was never measured.
+- **N2.** A speaker's colour follows the voice on Identify Again but not on Transcribe Again.
+- **N3.** A range job's lane plan drops its warning, so the mixed-copy fallback is silent for that job.
+- **N4.** The 1 s first fragment moves the schedule to 1, 6, 11 s: a kill at 5.5 s keeps 1.04 s where it kept
+  5.05 s before. The worst case is still about 5 s.
+- **N5, corrected.** `isDownloaded` was documented as "the decoder is the last file written"; it is not
+  (random order), and the fallback is what makes a partial folder safe. Documentation and comments that
+  said otherwise, the 75-test count, `@ModelActor` and the 200 MB figure were fixed.
+- The CLI's offline path calls `OfflinePipeline.transcribe` once and so never exercises the 5-minute
+  chunking the app uses. Head-tolerant agreement is confirmed off: a differential test against the first
+  cycle's agreement gave identical output over 4,000 random scripts.
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a

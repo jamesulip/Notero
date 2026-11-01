@@ -58,7 +58,8 @@ extension AppState {
     // MARK: - Memory
 
     /// Called when the app is idle. Releasing the diarizer between recordings
-    /// is 200 MB back on a machine that is going to want it for the model.
+    /// returns its few tens of megabytes (the speaker models are 13 MB on disk; the
+    /// earlier figure of 200 MB was never measured).
     func releaseIdleModels() {
         guard !isRecording else { return }
         Task { await engines.releaseDiarizer() }

@@ -22,6 +22,9 @@
   re-runs at least one voice had been renumbered. Entry 28.
 - **Transcribe Again works on a two-lane recording whose file cannot be opened,** from the mixed copy,
   with a warning.
+- **Audio that arrives during a long device gap is no longer overwritten** when the input reuses its
+  buffer (system audio and "both"), and **a recording whose file did not finish closing keeps its
+  working copy.** Found in independent review; entry 35.
 - **Cancelled and failed jobs release the speaker models,** and a caller that was cancelled while
   it waited for a model load no longer waits for it. The speaker models are small (13 MB); the
   figure of 200 MB in the documentation was never measured.

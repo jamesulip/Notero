@@ -123,6 +123,47 @@ final class GapFillTests: XCTestCase {
         XCTAssertGreaterThan(try archiveLevel(63, 64), 0.3)
     }
 
+    /// `TapInput` (system audio, and both) hands over the same buffer on every callback.
+    /// Audio that waits behind a fill is read later, after the input has written the next
+    /// callback's samples into that buffer (QA, FINDINGS 35). The quiet second here comes
+    /// out loud when the queue keeps the input's buffer instead of a copy.
+    func testAudioBehindTheFillSurvivesAnInputThatReusesItsBuffer() throws {
+        let rate = 48_000.0
+        let sink = AudioSink()
+        let (capture, input) = try start(.microphone, rate: rate, sink: sink)
+        let one = constant(0, frames: Int(rate), rate: rate)
+        func deliver(_ value: Float) {
+            for index in 0..<Int(one.frameLength) { one.floatChannelData![0][index] = value }
+            input.deliver([.room: one])
+        }
+
+        deliver(0.5)                      // 0-1 s, loud
+        input.onGap?(Int(60 * rate))      // 1-61 s, silence, still being written
+        deliver(0.5)                      // 61-62 s, loud
+        deliver(0.0)                      // 62-63 s, quiet: the same buffer, written over in place
+        deliver(0.5)                      // 63-64 s, loud
+        let stopped = capture.stop()
+        XCTAssertEqual(Int(stopped.frames), 64 * Int(rate))
+
+        let samples = sink.pcm.withUnsafeBytes { Array($0.bindMemory(to: Int16.self)) }
+        func level(_ from: Double, _ to: Double) -> Double {
+            let slice = samples[Int(from * 16_000 + 400)..<Int(to * 16_000 - 400)]
+            return slice.map { abs(Double($0)) }.reduce(0, +) / Double(slice.count) / 32_768
+        }
+        XCTAssertGreaterThan(level(61, 62), 0.3)
+        XCTAssertLessThan(level(62, 63), 0.001, "working copy: the quiet second holds a later callback's audio")
+        XCTAssertGreaterThan(level(63, 64), 0.3)
+
+        let file = try AVAudioFile(forReading: scratch.appendingPathComponent("a.m4a"))
+        let frames = AVAudioFrameCount(0.8 * rate)
+        let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frames)!
+        file.framePosition = AVAudioFramePosition(62.1 * rate)
+        try file.read(into: buffer, frameCount: frames)
+        var sum = 0.0
+        for index in 0..<Int(buffer.frameLength) { sum += Double(abs(buffer.floatChannelData![0][index])) }
+        XCTAssertLessThan(sum / Double(buffer.frameLength), 0.01, "archive: the quiet second holds a later callback's audio")
+    }
+
     /// The same with two lanes: a lane that is in the middle of its own gap has its
     /// silence written ahead of both lanes' later audio.
     func testTwoLanesStayTogetherAcrossAGap() throws {

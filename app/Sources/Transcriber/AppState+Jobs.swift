@@ -28,6 +28,10 @@ extension AppState {
             .joined(separator: " ")
         warnings[id] = joined
         try? await writer.setWarning(joined, for: id)
+        // The writer saved on its own context. A row the main context holds is stale until
+        // it is refreshed, and a later save from it writes the old warning and status back
+        // (QA: 266 of 400 cycles reverted the writer's status).
+        syncStore(id)
     }
 
     private func handle(_ event: JobEvent) async {

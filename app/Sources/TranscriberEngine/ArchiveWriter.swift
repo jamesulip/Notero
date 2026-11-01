@@ -66,7 +66,7 @@ final class ArchiveWriter: @unchecked Sendable {
     /// How long `close` waits for `finishWriting` before it gives up on the
     /// thread. Closing a six-hour recording writes a 4 MB index and takes well
     /// under a second; a writer that has not answered in this long is not going to.
-    private static let closeLimit: TimeInterval = 30
+    static let closeLimit: TimeInterval = 30
 
     /// Touched only on `queue`, after `init`.
     private var writer: AVAssetWriter?

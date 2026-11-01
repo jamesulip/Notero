@@ -146,9 +146,12 @@ The app downloads the weights at the first start to
 `~/Library/Application Support/Transcriber/Models`. WhisperKit lays them out
 under `<base>/models/argmaxinc/whisperkit-coreml/<model-id>/`.
 
-`ModelCatalogue.isDownloaded` tests for `TextDecoder.mlmodelc`, because the
-decoder is the last file that WhisperKit writes. Its presence therefore means
-that the download finished and did not merely start.
+`ModelCatalogue.isDownloaded` tests for `TextDecoder.mlmodelc`. That is a hint and not
+proof that the download finished: WhisperKit fetches its file names as a `Set`, so the
+order is random and the decoder folder can exist after its first file. A folder that is
+missing a part, or truncated, makes the folder load throw (QA tried a missing encoder,
+missing weights and truncated weights with the network denied, and each threw a Swift
+error and fell through), and the loader then takes the download path.
 
 `transcribe --models DIR` reads the weights from `DIR` instead. Point it at a
 directory that already holds them, and no download happens.

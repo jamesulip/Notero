@@ -120,6 +120,23 @@ final class TranscriptionQueueSchedulingTests: XCTestCase {
         XCTAssertEqual(rig.log.all.filter { $0 == "finished" }.count, 1)
     }
 
+    /// The job that stepped aside had the front of the queue; it is not sent behind the
+    /// jobs that were waiting (QA mutant: `insert(at: 0)` became `append`).
+    func testTheJobThatSteppedAsideRunsAgainBeforeTheOnesWaitingBehindIt() async throws {
+        let rig = rig()
+        defer { rig.reader.cancel() }
+        await rig.queue.enqueue(job("A"))
+        try await eventually("A to start") { rig.pipeline.runs == ["A"] }
+        await rig.queue.enqueue(job("B"))
+
+        await rig.queue.setLiveActive(true)
+        rig.pipeline.finishOnStart = true
+        await rig.queue.setLiveActive(false)
+
+        try await eventually("both to run") { rig.pipeline.runs.count == 3 }
+        XCTAssertEqual(rig.pipeline.runs, ["A", "A", "B"])
+    }
+
     func testAJobQueuedDuringARecordingWaitsForIt() async throws {
         let rig = rig()
         defer { rig.reader.cancel() }

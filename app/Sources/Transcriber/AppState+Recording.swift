@@ -228,6 +228,8 @@ extension AppState {
         // transcript can afford -- so what it produced has no idea which side
         // of the meeting each line came from. Only the whole-file pass reads
         // the channels apart, and it is the better transcript in any case.
+        let discardsCopy = WorkingCopyPolicy.discardsAfterStop(
+            keepSetting: settings.keepWorkingCopy, notices: result.notices)
         let followUp = StopFollowUp.after(
             decodedLive: decodedLive, laneCount: result.lanes.count,
             diarizes: settings.diarizationMode.performsDiarization
@@ -253,7 +255,7 @@ extension AppState {
                 // Capture-only session: the whole-file pass is the transcript.
                 // The working copy it needs is the one the session just wrote.
                 if let stored = recording(result.recordingId) {
-                    enqueueTranscription(stored, work: .full)
+                    enqueueTranscription(stored, work: .full, discardsCopy: discardsCopy)
                 }
             case .speakersOnly:
                 let job = TranscriptionJob(
@@ -265,7 +267,7 @@ extension AppState {
                     language: result.language,
                     diarizationMode: settings.diarizationMode,
                     work: .diarizeOnly,
-                    discardCacheWhenDone: !settings.keepWorkingCopy,
+                    discardCacheWhenDone: discardsCopy,
                     expectedSpeakers: recording(result.recordingId)?.expectedSpeakers
                 )
                 queuedJobs[job.id] = job
@@ -285,7 +287,7 @@ extension AppState {
                 // Only when the archive can stand in for it: a recording file
                 // that did not close, or that holds less than the copy, leaves
                 // the copy as the only audio.
-                if !settings.keepWorkingCopy,
+                if discardsCopy,
                    await WorkingCopyPolicy.canDiscard(
                        workingCopy: result.cacheURL,
                        archive: result.archiveFileName.map { Paths.recordingURL($0) }) {

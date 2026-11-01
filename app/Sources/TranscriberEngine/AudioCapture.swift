@@ -340,17 +340,22 @@ public final class AudioCapture: @unchecked Sendable {
         stateLock.unlock()
         guard let onAudio, !chains.isEmpty, !paused else { return }
 
-        let pending = Pending(frames: frames, chains: chains, onAudio: onAudio, archive: archive,
-                              muted: muted, gain: gain, roomMode: roomMode)
         if behindAFill {
-            // The buffers are this callback's to keep: the inputs make a fresh one for
-            // each, and `process` already changes them in place.
+            // The buffers have to be copied. `TapInput` reuses one buffer per lane for
+            // every callback, because everything downstream used to be done with it
+            // when the callback returned; a callback that waits behind a fill is not,
+            // and the next one would write over it (QA, FINDINGS 35). Only a callback
+            // that arrives during a gap pays for the copy.
+            let pending = Pending(frames: frames.mapValues { $0.deepCopy() }, chains: chains,
+                                  onAudio: onAudio, archive: archive, muted: muted, gain: gain,
+                                  roomMode: roomMode)
             fillQueue.async { [self] in
                 run(pending)
                 stateLock.withLock { queuedWork -= 1 }
             }
         } else {
-            run(pending)
+            run(Pending(frames: frames, chains: chains, onAudio: onAudio, archive: archive,
+                        muted: muted, gain: gain, roomMode: roomMode))
         }
     }
 
@@ -668,5 +673,21 @@ extension AVAudioConverter {
 
     private final class Flag: @unchecked Sendable {
         var value = false
+    }
+}
+
+extension AVAudioPCMBuffer {
+    /// A buffer of its own holding the same samples. Nil-safe: a buffer whose copy cannot be
+    /// allocated comes back as itself, which is what it was before.
+    func deepCopy() -> AVAudioPCMBuffer {
+        guard let copy = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCapacity) else { return self }
+        copy.frameLength = frameLength
+        let channels = Int(format.channelCount)
+        if let source = floatChannelData, let target = copy.floatChannelData {
+            for channel in 0..<channels { target[channel].update(from: source[channel], count: Int(frameLength)) }
+        } else if let source = int16ChannelData, let target = copy.int16ChannelData {
+            for channel in 0..<channels { target[channel].update(from: source[channel], count: Int(frameLength)) }
+        }
+        return copy
     }
 }

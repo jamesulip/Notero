@@ -116,7 +116,8 @@ extension AppState {
 
     func enqueueTranscription(_ recording: StoredRecording, work: TranscriptionJob.Work,
                               modelId: String? = nil,
-                              diarizationMode: DiarizationMode? = nil) {
+                              diarizationMode: DiarizationMode? = nil,
+                              discardsCopy: Bool? = nil) {
         guard let name = recording.audioFileName else { return }
         let plan = lanePlan(for: recording)
         warnings[recording.id] = plan.warning
@@ -131,7 +132,7 @@ extension AppState {
             prompt: settings.promptOrNil,
             diarizationMode: diarizationMode ?? settings.diarizationMode,
             work: work,
-            discardCacheWhenDone: !settings.keepWorkingCopy,
+            discardCacheWhenDone: discardsCopy ?? !settings.keepWorkingCopy,
             roomMode: settings.roomMode,
             expectedSpeakers: recording.expectedSpeakers,
             lanes: plan.lanes
