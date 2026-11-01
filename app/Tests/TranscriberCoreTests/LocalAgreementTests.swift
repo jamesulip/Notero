@@ -294,3 +294,69 @@ extension LocalAgreementTests {
         XCTAssertEqual(la.committed.map(\.confidence), [0.8, 0.6])
     }
 }
+
+/// Head-tolerant agreement: one word two passes hear differently must not hold
+/// back everything after it, and must never loosen what "committed" promises.
+extension LocalAgreementTests {
+
+    func testStrictAgreementIsHeldBackByADisagreeingFirstWord() {
+        let la = LocalAgreement(agreement: 2)
+        la.insert(toks("dens ok kai muhang nandito"))
+        XCTAssertTrue(la.insert(toks("s ok kai muhang nandito na")).isEmpty,
+                      "the default is the prefix rule: nothing after a differing first word")
+        XCTAssertEqual(la.committedText, "")
+        XCTAssertEqual(la.headSkips, 0)
+    }
+
+    func testAgreementWithHeadToleranceCommitsTheRunAndTheNewestHead() {
+        let la = LocalAgreement(agreement: 2, headTolerance: 2, headMinRun: 3)
+        la.insert(toks("dens ok kai muhang nandito"))
+        let newly = la.insert(toks("s ok kai muhang nandito na"))
+        XCTAssertEqual(newly.joinedText, "s ok kai muhang nandito",
+                       "the newest pass's own head, then the run both passes heard")
+        XCTAssertEqual(la.committedText, "s ok kai muhang nandito")
+        XCTAssertEqual(la.partial, "na", "the rest stays provisional")
+        XCTAssertEqual(la.headSkips, 1)
+        XCTAssertEqual(la.headSkippedWords, 1, "one word committed without agreement")
+    }
+
+    func testAnExtraWordInTheOlderPassIsSkippedNotCommitted() {
+        let la = LocalAgreement(agreement: 2, headTolerance: 2, headMinRun: 3)
+        la.insert(toks("uh ok kai muhang"))
+        la.insert(toks("ok kai muhang nandito"))
+        XCTAssertEqual(la.committedText, "ok kai muhang")
+        XCTAssertEqual(la.headSkippedWords, 0, "the newest pass had nothing in front of the run")
+    }
+
+    func testARunShorterThanTheMinimumDoesNotTriggerTheSkip() {
+        let la = LocalAgreement(agreement: 2, headTolerance: 2, headMinRun: 3)
+        la.insert(toks("dens ok kai"))
+        la.insert(toks("s ok kai nandito"))
+        XCTAssertEqual(la.committedText, "", "two words agreeing is a coincidence, not agreement")
+        XCTAssertEqual(la.headSkips, 0)
+    }
+
+    func testADisagreementDeeperThanTheToleranceStillBlocks() {
+        let la = LocalAgreement(agreement: 2, headTolerance: 1, headMinRun: 3)
+        la.insert(toks("a b c d e f"))
+        la.insert(toks("x y z d e f"))
+        XCTAssertEqual(la.committedText, "", "the run starts three words in, past a tolerance of one")
+    }
+
+    func testHeadToleranceNeverRewritesWhatItCommitted() {
+        let la = LocalAgreement(agreement: 2, headTolerance: 3, headMinRun: 3)
+        la.insert(toks("dens ok kai muhang nandito"))
+        la.insert(toks("s ok kai muhang nandito na"))
+        let committed = la.committed
+        // The next passes disagree about the committed words again; none of it may matter.
+        la.insert(toks("totally different words here now", start: 1_500))
+        la.insert(toks("na lahat so ang agenda", start: 1_500))
+        XCTAssertEqual(Array(la.committed.prefix(committed.count)), committed)
+        XCTAssertEqual(la.committedText.prefix("s ok kai muhang nandito".count), "s ok kai muhang nandito")
+    }
+
+    func testHeadToleranceIsIgnoredAtHigherAgreement() {
+        let la = LocalAgreement(agreement: 3, headTolerance: 3, headMinRun: 3)
+        XCTAssertEqual(la.headTolerance, 0, "defined for two passes only")
+    }
+}

@@ -1,0 +1,135 @@
+{
+ "arms": {
+  "A": {
+   "build": "main at addf5f8 (pre-P6)",
+   "collapsed_by_current_rule": [
+    2,
+    3,
+    4,
+    6
+   ],
+   "collapsed_by_p6_rule": [
+    6
+   ],
+   "n": 6,
+   "rows": [
+    {
+     "decode_ms": 5128,
+     "hyp_words": 120,
+     "index": 1,
+     "rtf": 0.09055,
+     "wer": 0.351562
+    },
+    {
+     "decode_ms": 4891,
+     "hyp_words": 134,
+     "index": 2,
+     "rtf": 0.08637,
+     "wer": 0.609375
+    },
+    {
+     "decode_ms": 7283,
+     "hyp_words": 121,
+     "index": 3,
+     "rtf": 0.1286,
+     "wer": 0.632812
+    },
+    {
+     "decode_ms": 5100,
+     "hyp_words": 123,
+     "index": 4,
+     "rtf": 0.09006,
+     "wer": 0.59375
+    },
+    {
+     "decode_ms": 13672,
+     "hyp_words": 118,
+     "index": 5,
+     "rtf": 0.24142,
+     "wer": 0.296875
+    },
+    {
+     "decode_ms": 5305,
+     "hyp_words": 90,
+     "index": 6,
+     "rtf": 0.09368,
+     "wer": 0.570312
+    }
+   ]
+  },
+  "B": {
+   "build": "P6 branch (greedy-first + lead-in retry)",
+   "collapsed_by_current_rule": [],
+   "collapsed_by_p6_rule": [],
+   "n": 6,
+   "rows": [
+    {
+     "decode_ms": 4673,
+     "hyp_words": 120,
+     "index": 1,
+     "rtf": 0.08252,
+     "wer": 0.242188
+    },
+    {
+     "decode_ms": 4590,
+     "hyp_words": 120,
+     "index": 2,
+     "rtf": 0.08105,
+     "wer": 0.242188
+    },
+    {
+     "decode_ms": 4691,
+     "hyp_words": 120,
+     "index": 3,
+     "rtf": 0.08283,
+     "wer": 0.242188
+    },
+    {
+     "decode_ms": 4649,
+     "hyp_words": 120,
+     "index": 4,
+     "rtf": 0.08209,
+     "wer": 0.242188
+    },
+    {
+     "decode_ms": 4677,
+     "hyp_words": 120,
+     "index": 5,
+     "rtf": 0.08259,
+     "wer": 0.242188
+    },
+    {
+     "decode_ms": 4639,
+     "hyp_words": 120,
+     "index": 6,
+     "rtf": 0.08192,
+     "wer": 0.242188
+    }
+   ]
+  }
+ },
+ "environment": {
+  "cpu": "Apple M2 Pro",
+  "hardware_model": "Mac14,12",
+  "macos": "26.6.2",
+  "memory_gb": 16
+ },
+ "fixtures": {
+  "synthetic-taglish": {
+   "ref_words": 128,
+   "reference_sha256": "29ed96618fdf2b67924e4c113b02ce6317efa7a98a3b0c59ab3fa6a8ed78572c",
+   "sha256": "e858bd6a1da505428823efb749017a81659b028742810f34deca10dbddd05f25"
+  }
+ },
+ "kind": "notero-baseline",
+ "model": "openai_whisper-large-v3-v20240930_turbo",
+ "name": "p6-lead-ab-main-vs-p6-branch",
+ "provenance": {
+  "caveat": "n = 6 per arm: below the 8 the harness needs for a verdict. Context for the collapse rule, not a test.",
+  "lock": "taken once for the whole 12-run loop",
+  "script": "run.sh in that directory",
+  "source_dir": "/tmp/notero-team/lead-ab"
+ },
+ "schema": 2,
+ "what": "The lead's A/B of pre-P6 main (addf5f8) against the P6 branch on the synthetic clip, offline, 6 runs each, interleaved. Evidence that the first-window collapse was fixed: main collapsed 4 of 6, the P6 branch gave the same 24.2% WER six times. The P6 rule counted 1 of main's 6 runs as collapsed (its best-half median is 35.2%, so the WER threshold was 70.4%; that one run was caught by the word floor); the current rule counts 4."
+}

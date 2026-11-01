@@ -99,3 +99,86 @@ final class LiveTranscriptPersisterTests: XCTestCase {
         XCTAssertEqual(transcript.orderedSegments.map(\.text), ["Buong."])
     }
 }
+
+// MARK: - A store that will not take the rows (finding 16)
+
+private struct BrokenWriter: LiveTranscriptWriting {
+    struct Refused: LocalizedError { var errorDescription: String? { "the store refused the write" } }
+    var failOpen = false
+    var failAppend = false
+
+    func openPartialTranscript(modelId: String, language: String, for id: UUID) async throws -> UUID? {
+        if failOpen { throw Refused() }
+        return UUID()
+    }
+    func appendPartial(_ segments: [Segment], to transcriptId: UUID) async throws {
+        if failAppend { throw Refused() }
+    }
+    func completeTranscript(_ transcriptId: UUID?, segments: [Segment], roster: [SpeakerLabel],
+                            modelId: String, language: String, processMs: Int, didDiarize: Bool,
+                            performanceJSON: String?, for id: UUID) async throws -> Int { 1 }
+}
+
+private final class Notices {
+    var sentences: [String] = []
+}
+
+@MainActor
+final class LiveTranscriptPersisterDegradedTests: XCTestCase {
+
+    private func segment(_ index: Int) -> Segment {
+        Segment(index: index, startMs: index * 2_000, endMs: index * 2_000 + 1_800, text: "line \(index)")
+    }
+
+    private func persister(_ writer: BrokenWriter, notices: Notices) -> LiveTranscriptPersister {
+        let persister = LiveTranscriptPersister(writer: writer, recordingId: UUID(), modelId: "turbo",
+                                                language: "tl", flushIntervalMs: 0)
+        persister.onDegraded = { notices.sentences.append($0) }
+        return persister
+    }
+
+    func testAFailedOpenIsToldToThePersonOnceAndTheRecordingGoesOn() async {
+        let notices = Notices()
+        let persister = persister(BrokenWriter(failOpen: true), notices: notices)
+
+        await persister.open()
+        persister.append([segment(0)])
+        await persister.drain()
+        persister.append([segment(1)])
+        await persister.drain()
+
+        XCTAssertNil(persister.transcriptId)
+        XCTAssertEqual(notices.sentences.count, 1, "told once, however many lines follow")
+        XCTAssertTrue(notices.sentences[0].contains("the store refused the write"))
+        XCTAssertTrue(notices.sentences[0].contains("not being saved"))
+        XCTAssertTrue(notices.sentences[0].contains("Stop saves everything"),
+                      "and says what is still safe")
+    }
+
+    func testAFailedBatchIsToldOnceNotOncePerBatch() async {
+        let notices = Notices()
+        let persister = persister(BrokenWriter(failAppend: true), notices: notices)
+        await persister.open()
+
+        for index in 0..<4 {
+            persister.append([segment(index)])
+            await persister.drain()
+        }
+
+        XCTAssertEqual(persister.failedWrites, 4)
+        XCTAssertEqual(notices.sentences.count, 1)
+        XCTAssertNotNil(persister.degradedReason)
+    }
+
+    func testAHealthyStoreIsNeverMentioned() async {
+        let notices = Notices()
+        let persister = persister(BrokenWriter(), notices: notices)
+        await persister.open()
+        persister.append([segment(0)])
+        await persister.drain()
+
+        XCTAssertTrue(notices.sentences.isEmpty)
+        XCTAssertNil(persister.degradedReason)
+        XCTAssertEqual(persister.writes, 1)
+    }
+}

@@ -18,12 +18,15 @@ No recording, no transcript and no note goes off your Mac.
 - Whole-file transcription after a recording or an import. Live text during a
   recording is optional, and off by default.
 - Pause and resume a recording. The break is not in the file.
+- A recording that is killed or crashes still leaves a playable file. It is saved in
+  5-second pieces, so the last few seconds can be lost. A power cut can lose more.
 - A menu bar item with Record, Pause and Stop, and two shortcuts that work in
   every application.
 - Two modes. Simple shows the transcript, the notes and two buttons. Advanced
   shows every control.
 - 15 languages and automatic detection. Tagalog and Taglish are the default.
-- Speaker identification, with manual merge and reassignment.
+- Speaker identification, with manual merge and reassignment. A name you give a
+  speaker follows that voice when speakers are identified again.
 - Meeting notes: a summary and five lists, which are key points, decisions,
   action items, questions and follow-ups. Each item keeps the timestamp and the
   transcript line that it came from.
@@ -124,8 +127,8 @@ Taglish test clip, with the default Balanced model:
 | Measurement | Result |
 | --- | --- |
 | Whole-file real-time factor (RTF) | 0.09 to 0.14, which is 7 to 11 times faster than real time |
-| Word error rate (WER) | 20.3% to 25.8% |
-| Peak memory | approximately 300 MB |
+| Word error rate (WER) | 24.2% in every run after the first-window fix, on this clip; 24% to 70% before it (see [FINDINGS.md](docs/FINDINGS.md) entries 15 and 16) |
+| Process memory | A lifetime peak footprint of about 150 MB. Core ML holds about 1.6 GB more for the default model on the Neural Engine, and that memory is not in the footprint ([docs/BENCHMARKS.md](docs/BENCHMARKS.md) says how each figure was measured) |
 
 **Read these numbers with their conditions.** The test clip is synthetic, the
 reference transcript is small, and the measurement Mac is faster than the 16 GB
@@ -141,7 +144,8 @@ no analytics and no crash reports.
 
 **The app makes one network request, and no other.** At the first start, it
 gets the model weights from Hugging Face over HTTPS. After that the app works
-with no network at all. It does not update itself, thus it asks no server
+with no network at all. That was checked with the network blocked at the
+operating-system level, using a model that was already on disk. It does not update itself, thus it asks no server
 whether a newer version exists. To move to a newer version, get it from the
 [releases page](https://github.com/jamesulip/notero/releases) yourself.
 
@@ -172,14 +176,15 @@ encryption of its own, thus FileVault is the only protection.
 history and not current documentation.
 
 **Read [docs/FINDINGS.md](docs/FINDINGS.md) before you trust a number on this
-page.** Eleven findings changed the design. In one of them, a single refused
+page.** The findings in that file changed the design. In one of them, a single refused
 decode window deleted 44% of a transcript and reported no error. In another,
 the speaker model merged two different voices that shared a 10-second chunk.
 
 ## Status
 
 Version 1.0.0 is the first public release. Every feature in the list above is
-complete and tested. [CHANGELOG.md](CHANGELOG.md) gives what it contains, and
+complete. The logic below the windows has automated tests, and the windows
+themselves do not. [CHANGELOG.md](CHANGELOG.md) gives what it contains, and
 the private builds that came before it.
 
 Version 1.0.0 does **not** contain a local LLM, automatic summaries, automatic

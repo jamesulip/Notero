@@ -13,9 +13,9 @@ speed and not a model name.
 
 | Tier | Model | Behaviour |
 | --- | --- | --- |
-| **Fast** | `openai_whisper-large-v3-v20240930_626MB` | The quantized turbo model. The lowest latency and the smallest memory footprint. It gives up some accuracy on Taglish, and the amount is unmeasured. |
+| **Fast** | `openai_whisper-large-v3-v20240930_626MB` | The quantized turbo model. The lowest latency and the smallest memory footprint. On read Tagalog it gave up no measurable accuracy and was not faster on the Mac mini M2 Pro. Taglish is unmeasured. |
 | **Balanced** | `openai_whisper-large-v3-v20240930_turbo` | **The default.** The full large-v3 encoder with a 4-layer decoder. This is what keeps live transcription at real-time speed. |
-| **Best** | `openai_whisper-large-v3_turbo` | The full large-v3, and the largest model here. The decode cost is approximately 5 times the cost for each window. Use it to transcribe a finished recording again, and not for the live path. **This project has not measured its accuracy.** Read [Measured and inferred](#measured-and-inferred). |
+| **Best** | `openai_whisper-large-v3_turbo` | The full large-v3, and the largest model here. The decode cost is approximately 4 times the cost for each window, measured on read Tagalog. Use it to transcribe a finished recording again, and not for the live path. **On read Tagalog it was not more accurate than Balanced** and it failed on one long utterance in every repeat. Read [Measured and inferred](#measured-and-inferred). |
 
 **The Best tier was named Accurate before.** The app reads a stored
 `accurate` and gives you the Best tier, and `transcribe --tier accurate` also
@@ -57,9 +57,9 @@ measurement compares one model against another model.
 | --- | --- |
 | Balanced keeps live transcription at real-time speed | Measured. [BENCHMARKS.md](BENCHMARKS.md) gives the numbers. |
 | Balanced is the model behind the offline Tagalog word error rate | Measured. Finding 1 in [FINDINGS.md](FINDINGS.md) records it. |
-| Best gives a better transcript than Balanced | **Not measured.** The weights are not in `models/`, thus this project has never run the model. |
-| Fast gives up some accuracy against Balanced | **Not measured.** |
-| The full large-v3 costs approximately 5 times the decode | Inferred from the decoder sizes in [The `_turbo` trap](#the-_turbo-trap), and not timed. |
+| Best gives a better transcript than Balanced | **Measured on read Tagalog, and not supported.** On 29 utterances of the FLEURS Filipino test set, Best scored 10.0% WER against 9.75% for Balanced, at about 4 times the decode time. On one 35 s utterance Best failed in 8 of 8 repeats (WER 30–86%) while Balanced scored 9.5%. This is read speech, and not Taglish or a meeting. [FINDINGS.md](FINDINGS.md) entry 25. |
+| Fast gives up some accuracy against Balanced | **Measured on read Tagalog: no loss found.** 9.3% against 9.7% over 30 utterances (confidence interval −1.4 to +0.4 points). Fast was not faster on the Mac mini M2 Pro (RTF 0.081 against 0.065). Not measured on Taglish. |
+| The full large-v3 costs approximately 5 times the decode | Measured at about 4 times on read Tagalog (RTF 0.254 against 0.065), with a Neural Engine residency of 3,000 MB against 1,580 MB for Balanced. |
 
 **Do not treat the Best tier as a known-better transcript.** The tier names a
 position on the speed ladder, and not a measured result. To make it a measured
@@ -76,7 +76,7 @@ list. Each entry carries what the model **is**, and not what it is called.
 | Model ID | Label | Size | Multilingual | What it is |
 | --- | --- | ---: | --- | --- |
 | `openai_whisper-large-v3-v20240930_turbo` | large-v3-turbo | 1638 MB | yes | The turbo model of OpenAI: large-v3 with the decoder cut from 32 layers to 4. The same encoder, approximately 809M parameters. **The default.** |
-| `openai_whisper-large-v3-v20240930_626MB` | large-v3-turbo (quantized) | 626 MB | yes | The same turbo model, quantized. Faster and lighter. The accuracy cost on Tagalog is unmeasured. |
+| `openai_whisper-large-v3-v20240930_626MB` | large-v3-turbo (quantized) | 626 MB | yes | The same turbo model, quantized. Faster and lighter. No accuracy cost was measured on read Tagalog, and Taglish is unmeasured. |
 | `openai_whisper-large-v3_turbo` | large-v3 (full, not turbo) | 3195 MB | yes | The full 1.5B large-v3. The `_turbo` suffix here is a compute variant of WhisperKit and **not** the turbo model. Its decoder is 5.3 times heavier. |
 | `openai_whisper-medium` | medium | 1530 MB | yes | Much lighter. Expect a real accuracy drop on Taglish. |
 | `openai_whisper-small` | small | 483 MB | yes | The fastest multilingual option. Use it to check the pipeline, and not for a transcript that you intend to keep. |
@@ -130,7 +130,11 @@ decoder picks a language for each window, and it can translate instead of
 transcribe. On the Taglish test clip, the decoder reported Indonesian for all
 three windows and lost 48 words to deletion. The decoder listens to the voice.
 It does not read the script. Pooled over the test set, forced `tl` is 23 points
-better than `auto` and costs half the decode time.
+better than `auto` and costs half the decode time on the synthetic clip. On
+real read Tagalog (FLEURS, 40 utterances) `auto` gave the same text as forced
+`tl` every time, at the same speed, so the difference above comes from the
+Indonesian voice of that clip and not from Tagalog speech. Nothing has measured
+`auto` on real Taglish. The default stays `tl`.
 [BENCHMARKS.md](BENCHMARKS.md) gives the table.
 
 **A model that is not multilingual translates instead of transcribes.** The
@@ -142,16 +146,23 @@ The app downloads the weights at the first start to
 `~/Library/Application Support/Transcriber/Models`. WhisperKit lays them out
 under `<base>/models/argmaxinc/whisperkit-coreml/<model-id>/`.
 
-`ModelCatalogue.isDownloaded` tests for `TextDecoder.mlmodelc`, because the
-decoder is the last file that WhisperKit writes. Its presence therefore means
-that the download finished and did not merely start.
+`ModelCatalogue.isDownloaded` tests for `TextDecoder.mlmodelc`. That is a hint and not
+proof that the download finished: WhisperKit fetches its file names as a `Set`, so the
+order is random and the decoder folder can exist after its first file. A folder that is
+missing a part, or truncated, makes the folder load throw (QA tried a missing encoder,
+missing weights and truncated weights with the network denied, and each threw a Swift
+error and fell through), and the loader then takes the download path.
 
 `transcribe --models DIR` reads the weights from `DIR` instead. Point it at a
 directory that already holds them, and no download happens.
 
 **The first load of a model compiles CoreML for the Neural Engine.** That took
-284 seconds on the measurement Mac. Later loads hit the cache at 9 to 11
-seconds. Know this before you assume that a restart is cheap.
+284 seconds on the measurement Mac (160 s for the default model on the Mac mini M2 Pro,
+82 s for Fast and 158 s for Best, n = 1 each). Later loads hit the cache. They took 9 to 11
+seconds while every load asked the Hugging Face Hub, and they take about 1.6 seconds now that
+a model that is already on disk is loaded from its folder with no Hub request (finding 30
+in [FINDINGS.md](FINDINGS.md)). The first compile is still slow, so do not assume that the
+first start is cheap.
 
 ## Memory
 
@@ -159,8 +170,8 @@ The models set the memory budget on a 16 GB Mac:
 
 | Component | Resident memory |
 | --- | ---: |
-| large-v3-turbo (Balanced) | approximately 1.6 GB |
-| The two speaker models | approximately 200 MB |
+| large-v3-turbo (Balanced) | approximately 1.6 GB of Neural Engine memory (1,580 MB measured), and 66 to 77 MB of process footprint. Fast is 878 MB and Best is 3,000 MB. |
+| The two speaker models | 13 MB on disk, about 23 MB of process footprint when loaded, and no Neural Engine memory (measured on 2026-11-01; the earlier figure of 200 MB was never measured) |
 
 macOS starts to compress memory well before the ceiling. `EngineHost` therefore
 holds exactly one instance of each model, shares them between the live path and

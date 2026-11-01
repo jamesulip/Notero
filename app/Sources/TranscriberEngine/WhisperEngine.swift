@@ -11,71 +11,280 @@ import WhisperKit
 /// the whole window every hop is the difference between real-time and not.
 public actor WhisperEngine: SpeechRecognizing {
 
+    /// Builds a ready WhisperKit for a model id, downloading it first if it is
+    /// not on disk. A seam: a test can stand in for the 1.6 GB load.
+    typealias PipelineFactory = @Sendable (
+        _ model: String, _ modelsDirectory: URL, _ progress: ProgressReport?
+    ) async throws -> sending WhisperKit
+
     private let modelsDirectory: URL
+    private let makePipeline: PipelineFactory
     private var pipeline: WhisperKit?
     private var currentModel: String?
     public private(set) var loadMs: Int = 0
 
+    /// How a load that other callers waited on ended, as each of them sees it.
+    private enum LoadOutcome {
+        case loaded
+        /// The load failed. The failure belongs to callers that asked for the
+        /// same model.
+        case failed(Error)
+        /// The caller that was running the load was cancelled. That says
+        /// nothing about the callers waiting behind it, which load for
+        /// themselves.
+        case ownerCancelled
+    }
+
+    private struct Waiter {
+        var id: Int
+        var continuation: CheckedContinuation<LoadOutcome, Error>
+    }
+
+    /// The load in progress, and the callers waiting for it.
+    private struct LoadInFlight {
+        var model: String
+        var waiters: [Waiter] = []
+    }
+    private var inFlight: LoadInFlight?
+    private var nextWaiterId = 0
+
+    /// Counts releases. A switch that fails puts the old model back only if no
+    /// release happened while it was loading.
+    private var releases = 0
+
     public init(modelsDirectory: URL) {
         self.modelsDirectory = modelsDirectory
+        self.makePipeline = Self.loadPipeline
+    }
+
+    init(modelsDirectory: URL, makePipeline: @escaping PipelineFactory) {
+        self.modelsDirectory = modelsDirectory
+        self.makePipeline = makePipeline
     }
 
     public var loadedModel: String? { currentModel }
 
+    /// Callers parked behind the load in progress. For tests.
+    var waitingLoads: Int { inFlight?.waiters.count ?? 0 }
+
     // MARK: - Lifecycle
 
+    /// Loads `model`, once.
+    ///
+    /// The `pipeline` guard below only sees a *finished* load, and a load takes
+    /// seconds to minutes (the first compile of a model took 284 s). The actor
+    /// is re-entered at every `await`, so a second call that arrived while the
+    /// first was still loading found `pipeline == nil` and started a second
+    /// 1.6 GB load of the same model: the launch warm-up and a Dock-drop import
+    /// can both ask within that window. A call for the model that is loading now
+    /// waits for that load and shares its result; a call for a different model
+    /// waits its turn, because two loads at once cannot both leave `pipeline`
+    /// as the caller asked.
     public func load(model: String, progress: ProgressReport?) async throws {
-        if pipeline != nil, currentModel == model { return }
+        // Not a cancellable load: once a load has started it runs to its end.
+        // This only refuses to start one for a caller that has already gone.
+        try Task.checkCancellation()
+        while true {
+            if pipeline != nil, currentModel == model { return }
+            guard let running = inFlight else { break }
+            // Throws only if *this* caller is cancelled while it waits.
+            switch try await waitForLoad() {
+            case .failed(let error):
+                // The failure belongs to whoever asked for that model.
+                if running.model == model { throw error }
+            case .loaded:
+                if running.model == model, pipeline != nil, currentModel == model {
+                    progress?("Ready", 1)
+                }
+            case .ownerCancelled:
+                break
+            }
+        }
 
-        let option = ModelCatalogue.option(model)
-        let label = option?.label ?? model
-        let known = ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory)
-
-        let previous = pipeline
-        let previousName = currentModel
+        inFlight = LoadInFlight(model: model)
+        // The model being replaced is released BEFORE the new one loads. Holding
+        // it until the switch succeeded meant both were resident at the peak:
+        // 2458 MB of Neural Engine memory for Balanced to Fast (1580 MB for
+        // Balanced alone), and 4581 MB for Balanced to Best (3000 MB for Best
+        // alone). On a 16 GB Mac that is wired memory, which the system can
+        // neither compress nor swap. Nothing
+        // is given up: `pipeline` is nil while the new model loads either way, so
+        // no decode could have used the old one. A failed switch loads the old
+        // model again, from the compile cache.
+        let replacedName = currentModel
+        let releasesAtStart = releases
         pipeline = nil
+        currentModel = nil
 
         let started = Date()
         do {
-            if !known {
-                // Fetched separately first: the combined download-and-load
-                // path reports nothing until the weights are on disk, and a
-                // 1.6 GB wait behind a spinner reads as a hang.
-                let title = "Downloading \(label) (\(option?.sizeLabel ?? "~1.6 GB"))…"
-                progress?(title, 0)
-                _ = try await WhisperKit.download(variant: model, downloadBase: modelsDirectory) { report in
-                    progress?(title, report.fractionCompleted)
-                }
-            }
-            progress?("Loading \(label)…", nil)
-            let config = WhisperKitConfig(
-                model: model,
-                downloadBase: modelsDirectory,
-                verbose: false,
-                prewarm: true,
-                load: true,
-                download: true
-            )
-            pipeline = try await WhisperKit(config)
+            let loaded = try await makePipeline(model, modelsDirectory, progress)
+            pipeline = loaded
             currentModel = model
             loadMs = Int(Date().timeIntervalSince(started) * 1000)
             progress?("Ready", 1)
+            finishLoad(.loaded)
         } catch {
             // Leave the working model in place rather than no model at all --
-            // a failed switch should not take the session down with it.
-            pipeline = previous
-            currentModel = previousName
+            // a failed switch should not take the session down with it. Not if
+            // it was released while this loaded: that is someone's decision, and
+            // a failure does not undo it. The reload is one attempt, quiet; if it
+            // fails too (or the caller was cancelled and the reload with it) the
+            // engine is empty and the next `load` starts clean.
+            if let replacedName, releases == releasesAtStart,
+               let back = try? await makePipeline(replacedName, modelsDirectory, nil),
+               releases == releasesAtStart, pipeline == nil {
+                pipeline = back
+                currentModel = replacedName
+            }
+            // A cancelled owner may report its cancellation as another error
+            // (a URLSession task, a Core ML wrapper), so the task is asked too.
+            let cancelled = error is CancellationError || Task.isCancelled
+            finishLoad(cancelled ? .ownerCancelled : .failed(error))
             throw error
         }
+    }
+
+    /// Parks the caller behind the load in progress. A caller that is cancelled
+    /// while parked leaves at once; it used to stay until the load finished, which
+    /// for a first compile is minutes, and `setLiveActive` waits on the job that
+    /// it belongs to.
+    private func waitForLoad() async throws -> LoadOutcome {
+        let id = nextWaiterId
+        nextWaiterId += 1
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                // Runs on the actor before any suspension, so `inFlight` is still
+                // the load that was seen a line ago.
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                } else {
+                    inFlight?.waiters.append(Waiter(id: id, continuation: continuation))
+                }
+            }
+        } onCancel: {
+            Task { await self.abandonWait(id) }
+        }
+    }
+
+    private func abandonWait(_ id: Int) {
+        guard let index = inFlight?.waiters.firstIndex(where: { $0.id == id }),
+              let waiter = inFlight?.waiters.remove(at: index) else { return }
+        waiter.continuation.resume(throwing: CancellationError())
+    }
+
+    private func finishLoad(_ outcome: LoadOutcome) {
+        let waiters = inFlight?.waiters ?? []
+        inFlight = nil
+        for waiter in waiters { waiter.continuation.resume(returning: outcome) }
+    }
+
+    /// The configuration that loads a model already on disk straight from its
+    /// folder, or nil when the model is not there.
+    ///
+    /// With `download: true` and no folder, WhisperKit asks the Hub which files
+    /// the model has and checks each against the disk on every load, whether or
+    /// not anything is missing. On the Mac mini M2 Pro that cost 7 s of an 8.7 s
+    /// load of a model that was already complete, and it needs the network for a
+    /// model that is local. Handed the folder it loads in 1.6 s with the same
+    /// 1580 MB on the Neural Engine and the same transcript.
+    static func localConfiguration(model: String, modelsDirectory: URL) -> WhisperKitConfig? {
+        guard ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory) else { return nil }
+        let folder = ModelCatalogue.directory(for: model, modelsDirectory: modelsDirectory)
+        return WhisperKitConfig(
+            model: model,
+            downloadBase: modelsDirectory,
+            modelFolder: folder.path,
+            verbose: false,
+            prewarm: true,
+            load: true,
+            download: false
+        )
+    }
+
+    private static func loadPipeline(model: String, modelsDirectory: URL,
+                                     progress: ProgressReport?) async throws -> sending WhisperKit {
+        let option = ModelCatalogue.option(model)
+        let label = option?.label ?? model
+
+        if let local = localConfiguration(model: model, modelsDirectory: modelsDirectory) {
+            progress?("Loading \(label)…", nil)
+            do {
+                return try await WhisperKit(local)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // A folder that is damaged or missing a file: fall through to the
+                // path that asks the Hub, which downloads whatever is missing.
+            }
+        }
+
+        let known = ModelCatalogue.isDownloaded(model, modelsDirectory: modelsDirectory)
+        if !known {
+            // Fetched separately first: the combined download-and-load
+            // path reports nothing until the weights are on disk, and a
+            // 1.6 GB wait behind a spinner reads as a hang.
+            let title = "Downloading \(label) (\(option?.sizeLabel ?? "~1.6 GB"))…"
+            progress?(title, 0)
+            _ = try await WhisperKit.download(variant: model, downloadBase: modelsDirectory) { report in
+                progress?(title, report.fractionCompleted)
+            }
+        }
+        progress?("Loading \(label)…", nil)
+        let config = WhisperKitConfig(
+            model: model,
+            downloadBase: modelsDirectory,
+            verbose: false,
+            prewarm: true,
+            load: true,
+            download: true
+        )
+        return try await WhisperKit(config)
     }
 
     public func unload() {
         pipeline = nil
         currentModel = nil
+        releases += 1
         loadMs = 0
     }
 
     // MARK: - Inference
+
+    /// Where WhisperKit's temperature ladder starts and how long it is.
+    struct Sampling: Equatable {
+        var temperature: Float
+        var fallbackCount: Int
+    }
+
+    /// The standard ladder, and the two halves of it that the offline pass runs
+    /// separately.
+    ///
+    /// Attempt 0 is greedy. A retry warms the sampler: the failure being
+    /// retried is a window whose greedy first token looked improbable, and
+    /// repeating the same deterministic decode would fail identically.
+    ///
+    /// Zero fallbacks on a request that is allowed to fall back is silent data
+    /// loss: WhisperKit discards any window whose first token looks improbable,
+    /// and with nothing to fall back to the window returns empty rather than
+    /// being retried. Sliding windows start mid-word every hop, so this fires
+    /// often -- measured at 37% of hops with no fallbacks, 16% with two.
+    /// `.greedyOnly` is for a caller that retries on its own.
+    static func sampling(for request: ASRRequest) -> Sampling {
+        let attempt = request.decodeAttempt
+        switch request.sampling {
+        case .standard:
+            return Sampling(temperature: Float(attempt) * 0.2, fallbackCount: 2 + attempt * 2)
+        case .greedyOnly:
+            return Sampling(temperature: 0, fallbackCount: 0)
+        case .resampleOnly:
+            // The standard ladder at attempt 0 is temperatures 0, 0.2, 0.4;
+            // this is 0.2, 0.4. Later attempts never started at 0.
+            return attempt == 0
+                ? Sampling(temperature: 0.2, fallbackCount: 1)
+                : Sampling(temperature: Float(attempt) * 0.2, fallbackCount: 2 + attempt * 2)
+        }
+    }
 
     public func transcribe(_ request: ASRRequest) async throws -> ASROutput {
         guard let pipeline else { throw EngineError.modelNotLoaded }
@@ -92,17 +301,10 @@ public actor WhisperEngine: SpeechRecognizing {
         options.wordTimestamps = request.wordTimestamps
         options.withoutTimestamps = false
         options.chunkingStrategy = nil
-        // Attempt 0 is greedy. A retry warms the sampler: the failure being
-        // retried is a window whose greedy first token looked improbable, and
-        // repeating the same deterministic decode would fail identically.
-        options.temperature = Float(request.decodeAttempt) * 0.2
+        let sampling = Self.sampling(for: request)
+        options.temperature = sampling.temperature
         options.temperatureIncrementOnFallback = 0.2
-        // Zero fallbacks is silent data loss: WhisperKit discards any window
-        // whose first token looks improbable, and with nothing to fall back to
-        // the window returns empty rather than being retried. Sliding windows
-        // start mid-word every hop, so this fires often -- measured at 37% of
-        // hops with no fallbacks, 16% with two.
-        options.temperatureFallbackCount = 2 + request.decodeAttempt * 2
+        options.temperatureFallbackCount = sampling.fallbackCount
 
         if request.language == "auto" {
             // Auto-detect resolves Taglish elsewhere and starts translating; on
@@ -127,12 +329,20 @@ public actor WhisperEngine: SpeechRecognizing {
 
         var tokens: [Token] = []
         var logProbs: [Double] = []
+        // The gates are WhisperKit's own, read back from the segments of the
+        // decode it returned. See `DecodeQuality`.
+        var worstLogProb = Double.infinity
+        var worstCompression = 0.0
         for result in results {
             for segment in result.segments {
                 // Whisper reports how sure it is that a window is silence.
                 // Above this it is almost always about to invent a sentence.
                 if segment.noSpeechProb > 0.85 { continue }
                 logProbs.append(Double(segment.avgLogprob))
+                if !segment.text.trimmed.isEmpty {
+                    worstLogProb = min(worstLogProb, Double(segment.avgLogprob))
+                    worstCompression = max(worstCompression, Double(segment.compressionRatio))
+                }
 
                 if let words = segment.words, !words.isEmpty {
                     for word in words where !word.word.trimmed.isEmpty {
@@ -160,9 +370,18 @@ public actor WhisperEngine: SpeechRecognizing {
         let confidence = logProbs.isEmpty
             ? nil
             : min(1, max(0, exp(logProbs.reduce(0, +) / Double(logProbs.count))))
+        var quality: DecodeQuality?
+        if worstLogProb.isFinite {
+            quality = DecodeQuality(
+                avgLogProb: worstLogProb,
+                compressionRatio: worstCompression,
+                isRepetitive: options.compressionRatioThreshold.map { worstCompression > Double($0) } ?? false,
+                isLowConfidence: options.logProbThreshold.map { worstLogProb < Double($0) } ?? false
+            )
+        }
         return ASROutput(tokens: tokens, audioMs: audioMs, inferMs: inferMs,
                          detectedLanguage: results.first?.language ?? request.language,
-                         confidence: confidence)
+                         confidence: confidence, quality: quality)
     }
 }
 

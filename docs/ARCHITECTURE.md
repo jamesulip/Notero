@@ -78,7 +78,7 @@ address of the releases page, which is the only address in the app target.
 
 ### `TranscriberCLI`
 
-`transcribe` is two files, `main.swift` and `Record.swift`. It is not a second
+`transcribe` is three files, `main.swift`, `Record.swift` and `MicCheck.swift`. It is not a second
 implementation. It calls `OfflinePipeline`, `LiveDecoder`, `SpeakerEngine` and
 `Exporter` exactly as the app does. It therefore verifies the real path on real
 audio with no window, no microphone and no person. That is what makes it usable
@@ -103,8 +103,11 @@ is why they need no model weights.
 
 The app writes two files from one audio tap:
 
-1. A 64 kbps AAC archive at the hardware sample rate. This is the recording
-   that you keep.
+1. A 64 kbps AAC archive at the hardware sample rate (the nearest rate that the
+   encoder takes, for an interface above 48 kHz). This is the recording that you
+   keep. It is written as movie fragments, 5 s each, so a recording that is
+   killed still opens and loses at most the last few seconds. Finding 17 in
+   [FINDINGS.md](FINDINGS.md) gives the measurements and what is not covered.
 2. A 16 kHz mono working copy for the models.
 
 Both files come from the same tap, thus their samples stay aligned. An imported
@@ -142,7 +145,7 @@ interface reads. This split makes the schedule testable: give the decoder a
 scripted recognizer and a scripted voice detector, and each rule below runs in
 a test with no model and no microphone.
 
-Three rules govern the schedule:
+Four rules govern the schedule:
 
 - **A hop happens every 1.5 seconds of audio.** It decodes the whole window,
   which is the committed pre-roll, the active region and the silence that
@@ -217,9 +220,14 @@ call for each hop.
    250 ms past the audio that the window contained.
 
 **A refused window is retried on different audio.** WhisperKit can return an
-empty result set for a window and report no error. The retry widens the window
-by 700 ms, then by 1400 ms, then cuts the window in half and retries each half,
-to two levels of splitting. The pipeline counts a window that nothing decodes
+empty result set for a window and report no error. The pipeline first decodes the
+window greedily, with no random re-sampling. If that is refused with no text, it
+retries with 250 ms and then 450 ms of silence in front of the window, because
+the same file otherwise decoded differently on each run (findings 15 and 16). The
+rest of the old retry follows: the sampled retries, widening the window by 700 ms,
+then by 1400 ms, then cutting the window in half and retrying each half, to two
+levels of splitting. The live path does not use this stage and keeps the standard
+ladder. The pipeline counts a window that nothing decodes
 and shows the count to the user. A short transcript must never pass for a
 complete one. Finding 9 in [FINDINGS.md](FINDINGS.md) records the failure that
 made this necessary: one refused window deleted 44% of a transcript, and every
@@ -262,7 +270,7 @@ says were in the room. It is a target for the clustering and never a cap.
 
 `TranscriptReader` in `TranscriberStore` reads the rows of one transcript as
 value types: one fetch with a predicate on the transcript and a sort descriptor
-on `startMs`, on a `@ModelActor` with its own context. `StoredTranscript.
+on `startMs`, on a plain actor with its own context. `StoredTranscript.
 orderedSegments` runs the same fetch on the context of the row. Before this,
 each reader walked the `segments` relationship, which returned a fault for
 each row and fired every fault in the sort. A 4000-row transcript took 278 ms
@@ -315,17 +323,22 @@ library.
 ## Memory management
 
 The models set the memory budget on a 16 GB Mac. large-v3-turbo holds
-approximately 1.6 GB, and the two speaker models hold approximately 200 MB
-more. macOS starts to compress memory well before the ceiling.
+approximately 1.6 GB (of Neural Engine memory, outside the process footprint),
+and the two speaker models are small: 13 MB on disk, no Neural Engine memory
+(finding 30 in [FINDINGS.md](FINDINGS.md)). A model switch releases the old model
+before it loads the new one, so the peak is the larger of the two, not their sum. macOS starts to compress memory well before the ceiling.
 
 `EngineHost` is therefore the one owner:
 
 - **One instance of each model.** The live path and the background queue share
   them.
 - **The speaker models are released** as soon as no job needs them.
-- **The queue refuses to start work while a recording runs.** A background
-  decode competes for the Neural Engine and makes a live hop 3 seconds long
-  instead of 0.9 seconds. A dropped hop is dropped words.
+- **The queue does not work while a recording runs.** A background decode
+  competes for the Neural Engine and makes a live hop 3 seconds long instead of
+  0.9 seconds. A dropped hop is dropped words. A job that is already running
+  steps aside when a recording starts and begins again, from the start, when the
+  recording ends. The recording also loads its own model, which can unload the
+  one that the job is decoding with.
 
 **The app never reads a complete audio file into memory.** It maps the 16 kHz
 working copy through `MappedPCM` and reads it in slices through the `PCMSource`
@@ -333,8 +346,10 @@ protocol. Two hours of audio in a `[Float]` array holds 460 MB. On a Mac that
 already holds the model, that difference makes the Mac swap memory to disk.
 
 The app deletes the working copy after transcription and speaker
-identification are complete. If you run either stage again, the app builds the
-working copy again from the archive. `TranscriptionJob.discardCacheWhenDone` is
+identification are complete, but only when the archive opens and holds at least
+as much audio (`WorkingCopyPolicy`). After a crash or a kill the working copy can
+be the only complete audio, and it stays. If you run either stage again, the app
+builds the working copy again from the archive. `TranscriptionJob.discardCacheWhenDone` is
 false while the user is likely to run a stage again.
 
 ## Room mode

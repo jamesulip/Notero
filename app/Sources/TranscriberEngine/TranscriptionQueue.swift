@@ -111,6 +111,14 @@ public struct TranscriptionPayload: Sendable {
     public var metrics: TranscriptionMetrics
 }
 
+/// How a run of a job ended.
+enum JobEnd: Sendable {
+    /// The job completed or failed, and said which.
+    case finished
+    /// The task was cancelled before it completed.
+    case cancelled
+}
+
 public enum JobEvent: Sendable {
     case queued(id: UUID, title: String)
     case stage(id: UUID, status: TranscriptionStatus, progress: Double)
@@ -155,9 +163,22 @@ public actor TranscriptionQueue {
     }
 
     private let engines: EngineHost
+    /// How long the audio in an archive file is. Injected so a test can stand
+    /// in for the file that a crash left unclosed.
+    private let archiveProbe: @Sendable (URL) async -> Int?
     private var pending: [TranscriptionJob] = []
     private var running: (job: TranscriptionJob, task: Task<Void, Never>)?
     private var liveActive = false
+    /// Jobs that the user cancelled and that are still unwinding. A request
+    /// for the same recording in that time waits behind them.
+    private var cancelling: Set<UUID> = []
+    /// Jobs that a recording asked to step aside for. They start over after it.
+    private var steppingAside: Set<UUID> = []
+    /// Jobs queued behind a cancelled run of the same recording, whose
+    /// `.queued` event waits for that run's `.finished`.
+    private var announceWhenStarted: Set<UUID> = []
+    /// What stands in for the pipeline in a test.
+    private let runner: (@Sendable (TranscriptionJob, @Sendable (JobEvent) -> Void) async -> JobEnd)?
 
     /// `nonisolated` so the UI can start consuming without an await hop just to
     /// reach the stream. `AsyncStream` is Sendable; so is its continuation.
@@ -170,8 +191,17 @@ public actor TranscriptionQueue {
     /// sequence, so the bar could jump backwards.
     private nonisolated let sink: AsyncStream<JobEvent>.Continuation
 
-    public init(engines: EngineHost) {
+    public init(engines: EngineHost,
+                archiveProbe: (@Sendable (URL) async -> Int?)? = nil) {
+        self.init(engines: engines, archiveProbe: archiveProbe, runner: nil)
+    }
+
+    init(engines: EngineHost,
+         archiveProbe: (@Sendable (URL) async -> Int?)?,
+         runner: (@Sendable (TranscriptionJob, @Sendable (JobEvent) -> Void) async -> JobEnd)?) {
         self.engines = engines
+        self.archiveProbe = archiveProbe ?? { url in await ArchiveProbe.durationMs(of: url) }
+        self.runner = runner
         var continuation: AsyncStream<JobEvent>.Continuation!
         events = AsyncStream(bufferingPolicy: .unbounded) { continuation = $0 }
         sink = continuation
@@ -182,8 +212,18 @@ public actor TranscriptionQueue {
     public var isBusy: Bool { running != nil }
 
     public func enqueue(_ job: TranscriptionJob) {
-        guard !pending.contains(where: { $0.id == job.id }),
-              running?.job.id != job.id else { return }
+        guard !pending.contains(where: { $0.id == job.id }) else { return }
+        if running?.job.id == job.id {
+            // A request that arrives while the cancelled run of the same
+            // recording unwinds waits behind it. It used to be dropped without
+            // a word, and the old run's `.finished` then cleared the row the
+            // request had just set up. Its events come when it starts, which
+            // is after that `.finished`.
+            guard cancelling.contains(job.id) else { return }
+            pending.append(job)
+            announceWhenStarted.insert(job.id)
+            return
+        }
         pending.append(job)
         sink.yield(.queued(id: job.id, title: job.title))
         sink.yield(.stage(id: job.id, status: .pending, progress: 0))
@@ -193,6 +233,7 @@ public actor TranscriptionQueue {
     public func cancel(_ id: UUID) {
         if let index = pending.firstIndex(where: { $0.id == id }) {
             pending.remove(at: index)
+            announceWhenStarted.remove(id)
             // A queued job has no task whose `finish` defer can close it, so
             // cancellation must emit both events here. Without `.finished`,
             // the app kept its progress row and Cancel appeared to do nothing.
@@ -204,30 +245,88 @@ public actor TranscriptionQueue {
             // Reflect the click immediately. Core ML cancellation is
             // cooperative, so the current inference call may need a moment to
             // return before `finish` can release the queue.
+            cancelling.insert(id)
+            steppingAside.remove(id)
             sink.yield(.stage(id: id, status: .cancelled, progress: 0))
             running?.task.cancel()
         }
     }
 
     /// Holds the queue while a recording runs, and releases it afterwards.
-    public func setLiveActive(_ active: Bool) {
+    ///
+    /// A job that is already running steps aside, and the call returns when it
+    /// has: the recording is about to load its own model, which can unload the
+    /// one the job is decoding with, and a decode that carries on makes a live
+    /// hop three seconds long instead of 0.9. Before this the flag only kept
+    /// new jobs from starting. The job goes back to the front of the queue and
+    /// starts over when the recording ends.
+    public func setLiveActive(_ active: Bool) async {
         liveActive = active
-        if !active { pump() }
+        if !active {
+            pump()
+            return
+        }
+        guard let current = running, !cancelling.contains(current.job.id) else { return }
+        steppingAside.insert(current.job.id)
+        current.task.cancel()
+        await current.task.value
     }
 
     private func pump() {
         guard running == nil, !liveActive, !pending.isEmpty else { return }
         let job = pending.removeFirst()
+        if announceWhenStarted.remove(job.id) != nil {
+            sink.yield(.queued(id: job.id, title: job.title))
+            sink.yield(.stage(id: job.id, status: .pending, progress: 0))
+        }
         let task = Task { [weak self] in
-            await self?.run(job)
-            await self?.finish(job)
+            guard let self else { return }
+            let end = await self.execute(job)
+            await self.finish(job, end: end)
         }
         running = (job, task)
     }
 
-    private func finish(_ job: TranscriptionJob) {
+    private func execute(_ job: TranscriptionJob) async -> JobEnd {
+        await engines.beginJob()
+        let end: JobEnd
+        if let runner {
+            end = await runner(job) { self.sink.yield($0) }
+        } else {
+            end = await run(job)
+            // Every way out of `run` passes through here, and the speaker models
+            // must not outlive the job on any of them. The releases inside `run`
+            // sit on the success path only: a diarization that is cancelled (by
+            // the user, or by a recording that wants the Neural Engine) rethrows
+            // before them, and so does a failure in the second lane after the
+            // first lane diarized. Each of those left the speaker models loaded
+            // until the user pressed "Release the Models" in Settings (F13). That
+            // is about 23 MB of footprint and nothing on the Neural Engine, not
+            // the 200 MB older notes give. The release is cheap and does nothing
+            // when nothing is loaded.
+            await engines.releaseDiarizer()
+        }
+        await engines.endJob()
+        return end
+    }
+
+    private func finish(_ job: TranscriptionJob, end: JobEnd) {
         running = nil
-        sink.yield(.finished(id: job.id))
+        cancelling.remove(job.id)
+        if end == .cancelled, steppingAside.remove(job.id) != nil {
+            // Not over: it waits for the recording and starts again. `.queued`
+            // clears what the app kept about the run that stopped, such as the
+            // revision it was appending to, so the new run opens its own.
+            pending.insert(job, at: 0)
+            sink.yield(.queued(id: job.id, title: job.title))
+            sink.yield(.stage(id: job.id, status: .pending, progress: 0))
+        } else {
+            steppingAside.remove(job.id)
+            if end == .cancelled {
+                sink.yield(.stage(id: job.id, status: .cancelled, progress: 0))
+            }
+            sink.yield(.finished(id: job.id))
+        }
         pump()
     }
 
@@ -237,7 +336,7 @@ public actor TranscriptionQueue {
 
     // MARK: - The pipeline
 
-    private func run(_ job: TranscriptionJob) async {
+    private func run(_ job: TranscriptionJob) async -> JobEnd {
         let started = Date()
         var metrics = TranscriptionMetrics()
         do {
@@ -250,8 +349,8 @@ public actor TranscriptionQueue {
             if case .range(let request) = job.work {
                 try await transcribeRange(job, request: request,
                                           source: job.roomMode ? HighPassPCM(source) : source)
-                if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
-                return
+                await discardWorkingCopy(of: job)
+                return .finished
             }
 
             let waveform = WaveformAnalyzer.envelope(of: source)
@@ -267,13 +366,13 @@ public actor TranscriptionQueue {
 
             if job.work == .diarizeOnly {
                 try await diarizeOnly(job, source: source)
-                return
+                return .finished
             }
 
             if job.hasSeparateLanes {
                 try await runLanes(job, started: started, durationMs: durationMs,
                                    waveform: waveform, metrics: metrics)
-                return
+                return .finished
             }
 
             // The model, which may first have to arrive. A download reports
@@ -439,15 +538,16 @@ public actor TranscriptionQueue {
                 metrics: metrics
             )))
             emit(.stage(id: job.id, status: .completed, progress: 1))
-            if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
+            await discardWorkingCopy(of: job)
+            return .finished
         } catch is CancellationError {
-            // Cancellation is deliberate and terminal. Calling it pending
-            // makes a relaunch "recover" it as an interrupted failure and
-            // leaves no honest indication of what the user asked for.
-            emit(.stage(id: job.id, status: .cancelled, progress: 0))
+            // Said by `finish`, which knows whether the job was cancelled
+            // for good or only stepped aside for a recording.
+            return .cancelled
         } catch {
             emit(.failed(id: job.id, message: error.localizedDescription))
             emit(.stage(id: job.id, status: .failed, progress: 0))
+            return .finished
         }
     }
 
@@ -527,7 +627,7 @@ public actor TranscriptionQueue {
             emit(.stage(id: job.id, status: .completed, progress: 1))
         }
         await engines.releaseDiarizer()
-        if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
+        await discardWorkingCopy(of: job)
     }
 
     // MARK: - Two lanes
@@ -681,7 +781,7 @@ public actor TranscriptionQueue {
             metrics: metrics
         )))
         emit(.stage(id: job.id, status: .completed, progress: 1))
-        if job.discardCacheWhenDone { try? FileManager.default.removeItem(at: job.cacheURL) }
+        await discardWorkingCopy(of: job)
     }
 
     /// One lane's 16 kHz working copy, taken from its own channel of the
@@ -701,12 +801,50 @@ public actor TranscriptionQueue {
         return try MappedPCM(contentsOf: url)
     }
 
+    /// Deletes the 16 kHz working copy when the job asked for that and the
+    /// archive can rebuild it. When the archive cannot be read, or holds less
+    /// audio than the copy, the copy is the audio and stays. Refer to
+    /// `WorkingCopyPolicy`.
+    private func discardWorkingCopy(of job: TranscriptionJob) async {
+        guard job.discardCacheWhenDone else { return }
+        guard await WorkingCopyPolicy.canDiscard(
+            workingCopy: job.cacheURL, archive: job.sourceURL, probe: archiveProbe
+        ) else { return }
+        try? FileManager.default.removeItem(at: job.cacheURL)
+    }
+
+    /// A working copy that is shorter than its archive was cut off: a writer
+    /// that stopped on a low disk leaves one, and a capture-only session
+    /// transcribed it and then deleted it, which lost the end for good. Built
+    /// again beside the old one, and kept only if it is longer: an archive
+    /// that is itself cut short must not replace a better copy.
+    private func lengthenedIfTruncated(_ copy: MappedPCM,
+                                       for job: TranscriptionJob) async -> MappedPCM {
+        guard let sourceURL = job.sourceURL else { return copy }
+        let archiveMs = await archiveProbe(sourceURL)
+        guard WorkingCopyPolicy.isTruncated(workingCopyMs: copy.durationMs,
+                                            archiveMs: archiveMs) else { return copy }
+        let beside = job.cacheURL.appendingPathExtension("rebuilt")
+        defer { try? FileManager.default.removeItem(at: beside) }
+        do {
+            _ = try await AudioCache.build(from: sourceURL, to: beside) { fraction in
+                self.emit(.stage(id: job.id, status: .preparing, progress: fraction))
+            }
+            let longer = try MappedPCM(contentsOf: beside)
+            guard longer.durationMs > copy.durationMs else { return copy }
+            _ = try FileManager.default.replaceItemAt(job.cacheURL, withItemAt: beside)
+            return try MappedPCM(contentsOf: job.cacheURL)
+        } catch {
+            return copy
+        }
+    }
+
     /// The 16 kHz working copy, rebuilt from the original if it has been
     /// cleaned up since the recording was made.
     private func workingCopy(for job: TranscriptionJob) async throws -> MappedPCM {
         if FileManager.default.fileExists(atPath: job.cacheURL.path),
            let mapped = try? MappedPCM(contentsOf: job.cacheURL), mapped.sampleCount > 0 {
-            return mapped
+            return await lengthenedIfTruncated(mapped, for: job)
         }
         guard let sourceURL = job.sourceURL else {
             throw EngineError.audioUnreadable("no audio to work from")

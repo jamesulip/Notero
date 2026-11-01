@@ -4,11 +4,29 @@ import TranscriberCore
 
 /// Writes transcription results off the main actor.
 ///
-/// A `@ModelActor` owns its own `ModelContext`, so a two-hour transcript can be
-/// inserted a few thousand rows at a time without the UI waiting on it.
-/// SwiftData merges the change into the main context and the views update.
-@ModelActor
+/// It owns its own `ModelContext`, so a two-hour transcript can be inserted a few
+/// thousand rows at a time without the UI waiting on it. SwiftData merges the
+/// change into the main context and the views update.
+///
+/// **A plain actor, not `@ModelActor`, and that is the point.** A `@ModelActor`'s
+/// executor runs a call on *the thread of the caller*: measured, a call from
+/// the main actor ran on the main thread 20 times in 20 whether the actor had been
+/// created on the main actor or in a detached task, and a call from a detached task
+/// never did (finding 32). `AppState` is main-actor, so every `await writer.x()`
+/// in it was main-thread work: `completeTranscript` took 6.5 s at 15,000 rows with
+/// the window frozen for it. A plain actor runs on the default executor whoever
+/// calls it, so no caller can bring the stall back by forgetting to hop.
+///
+/// The context is made on the first call, on the actor's own executor, rather than
+/// in `init`: that may run on the main thread.
 public actor TranscriptWriter {
+
+    public nonisolated let modelContainer: ModelContainer
+    lazy var modelContext = ModelContext(modelContainer)
+
+    public init(modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+    }
 
     public func updateStatus(_ status: TranscriptionStatus, progress: Double = 0,
                              error: String? = nil, for id: UUID) throws {
@@ -31,13 +49,9 @@ public actor TranscriptWriter {
     public func attachAudio(fileName: String, sampleRate: Int, durationMs: Int,
                             waveform: [Float]?, lanes: [CaptureLane] = [.room],
                             for id: UUID) throws {
-        guard let recording = try find(id), !fileName.isEmpty else { return }
-        recording.audioFileName = fileName
-        if sampleRate > 0 { recording.audioSampleRate = sampleRate }
-        if !lanes.isEmpty { recording.lanes = lanes }
-        recording.durationMs = durationMs
-        if let waveform { recording.waveform = waveform }
-        recording.updatedAt = Date()
+        guard let recording = try find(id) else { return }
+        recording.applyCapturedAudio(fileName: fileName, sampleRate: sampleRate,
+                                     durationMs: durationMs, waveform: waveform, lanes: lanes)
         try modelContext.save()
     }
 
@@ -75,9 +89,13 @@ public actor TranscriptWriter {
         transcript.didDiarize = didDiarize
         transcript.recording = recording
         modelContext.insert(transcript)
-        insert(segments, into: transcript)
+        // A new diarization numbers the speakers afresh; keep the labels, names and
+        // colours a person has already given to the same voices (SpeakerMatching).
+        let carried = carriedSpeakers(segments: segments, roster: roster, on: recording,
+                                      excluding: [transcript.id])
+        insert(carried.segments, into: transcript)
 
-        syncSpeakers(roster, on: recording)
+        syncSpeakers(carried.roster, on: recording)
         recording.updatedAt = Date()
         RecordingStore.reindexOffMain(recording)
         try modelContext.save()
@@ -122,6 +140,19 @@ public actor TranscriptWriter {
     /// same way it does after a re-transcription. With no open revision
     /// (nothing was decoded, or the job predates this path) it stores a new
     /// one as `storeTranscript` does.
+    ///
+    /// The order is what keeps the transcript safe. The final rows are saved,
+    /// complete, as the newest revision *beside* the open one, in one save.
+    /// Only then does the open revision go. The old order deleted the partial
+    /// rows and saved, then inserted the final rows and saved again, and a
+    /// quit, a crash or a failed second save (a full disk, say) between the
+    /// two left a transcript with nothing in it while the live rows were gone.
+    /// Deleting by relationship also made the delete's save cost grow with the
+    /// square of the rows (159 s for 15,000 rows, a six-hour meeting), where
+    /// deleting by predicate costs 50 ms (finding 16).
+    ///
+    /// If the cleanup after the final save fails, the open revision stays as
+    /// an older revision. That is clutter and not a loss.
     @discardableResult
     public func completeTranscript(
         _ transcriptId: UUID?, segments: [Segment], roster: [SpeakerLabel],
@@ -130,8 +161,8 @@ public actor TranscriptWriter {
         for id: UUID
     ) throws -> Int {
         guard let transcriptId,
-              let transcript = try findTranscript(transcriptId),
-              let recording = transcript.recording
+              let open = try findTranscript(transcriptId),
+              let recording = open.recording
         else {
             return try storeTranscript(segments: segments, roster: roster, modelId: modelId,
                                        language: language, processMs: processMs,
@@ -139,24 +170,42 @@ public actor TranscriptWriter {
                                        performanceJSON: performanceJSON, for: id)
         }
 
-        for row in transcript.segments ?? [] { modelContext.delete(row) }
-        // Saved before the inserts, so the relationship the reindex walks
-        // holds only the final rows.
-        try modelContext.save()
+        let openRevision = open.revision
+        let openId = open.id
+        let final = StoredTranscript(
+            revision: ((recording.transcripts ?? []).map(\.revision).max() ?? 0) + 1,
+            modelId: modelId, language: language
+        )
+        final.processMs = processMs
+        final.performanceJSON = performanceJSON
+        final.didDiarize = didDiarize
+        final.isComplete = true
+        modelContext.insert(final)
+        final.recording = recording
+        // See `storeTranscript`: the open revision of this job has no speakers and
+        // `final` is empty, so neither is the earlier run.
+        let carried = carriedSpeakers(segments: segments, roster: roster, on: recording,
+                                      excluding: [openId, final.id])
+        insert(carried.segments, into: final)
 
-        insert(segments, into: transcript)
-        transcript.modelId = modelId
-        transcript.language = language
-        transcript.processMs = processMs
-        transcript.performanceJSON = performanceJSON
-        transcript.didDiarize = didDiarize
-        transcript.isComplete = true
-
-        syncSpeakers(roster, on: recording)
+        syncSpeakers(carried.roster, on: recording)
         recording.updatedAt = Date()
         RecordingStore.reindexOffMain(recording)
         try modelContext.save()
-        return transcript.revision
+
+        // The final rows are safe. Now the partial ones go: by predicate, which
+        // is one statement where a delete of each row is a walk of the
+        // relationship for each row.
+        do {
+            try modelContext.delete(model: StoredSegment.self,
+                                    where: #Predicate { $0.transcript?.id == openId })
+            if let stale = try findTranscript(openId) { modelContext.delete(stale) }
+            final.revision = openRevision
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+        }
+        return final.revision
     }
 
     /// Replaces the rows of the latest transcript that start inside a range
@@ -166,6 +215,10 @@ public actor TranscriptWriter {
     ///
     /// The rows are renumbered afterwards, so `index` stays the order.
     /// Returns how many rows went out.
+    ///
+    /// One save for the delete, the insert and the renumbering. Saving the
+    /// delete first meant that a failure before the second save left the turn
+    /// out of the transcript altogether, with the old text already gone.
     @discardableResult
     public func replaceSegments(fromMs: Int, toMs: Int, with segments: [Segment],
                                 for id: UUID) throws -> Int {
@@ -176,12 +229,12 @@ public actor TranscriptWriter {
             modelContext.delete(row)
             removed += 1
         }
-        // Saved before the inserts, so the renumbering below walks only the
-        // rows that stay.
-        try modelContext.save()
         insert(segments, into: transcript)
-        for (index, row) in try TranscriptReader.segmentRows(ofTranscript: transcript.id,
-                                                              in: modelContext).enumerated() {
+        // The rows that stay and the rows that arrived, in time order. A row
+        // that is only marked for deletion still comes back from a fetch.
+        let kept = try TranscriptReader.segmentRows(ofTranscript: transcript.id, in: modelContext)
+            .filter { !$0.isDeleted }
+        for (index, row) in kept.enumerated() where row.index != index {
             row.index = index
         }
         recording.updatedAt = Date()
@@ -198,8 +251,13 @@ public actor TranscriptWriter {
                 textClean: segment.textClean, speakerId: segment.speakerId,
                 confidence: segment.confidence
             )
-            row.transcript = transcript
+            // Inserted before it is linked. Linking an unmanaged row first
+            // makes SwiftData update the transcript's `segments` for every
+            // row already in it, so a batch of 250 took 4.5 s with 4000 rows
+            // saved and the whole job grew quadratically; the other order
+            // costs 35 ms for the same batch (finding 16).
             modelContext.insert(row)
+            row.transcript = transcript
         }
     }
 
@@ -212,23 +270,47 @@ public actor TranscriptWriter {
     }
 
     /// Stamps speakers onto an existing transcript after diarization finishes.
+    ///
+    /// A pass that found nothing (no spans and no roster) changes nothing and
+    /// answers false. Applied literally it took the label off every line and
+    /// deleted every name that a person had typed, and the only thing that had
+    /// happened was that the voice detector found no speech.
+    @discardableResult
     public func applySpeakers(spans: [SpeakerSpan], roster: [SpeakerLabel],
-                              policy: SegmentPolicy = .default, for id: UUID) throws {
-        guard let recording = try find(id), let transcript = recording.transcript else { return }
-        let sorted = spans.sorted { $0.startMs < $1.startMs }
-        for row in transcript.orderedSegments {
+                              policy: SegmentPolicy = .default, for id: UUID) throws -> Bool {
+        guard let recording = try find(id), let transcript = recording.transcript else { return false }
+        guard !spans.isEmpty || !roster.isEmpty else { return false }
+        // Labels are numbered by who speaks first, which can differ between two
+        // runs over the same audio. Match the new speakers to the ones already
+        // on the transcript so a name and a colour follow the voice, not the
+        // number (see `SpeakerMatching`).
+        let rows = transcript.orderedSegments
+        let plan = speakerCarryPlan(rows: rows, recording: recording, spans: spans, roster: roster)
+        let sorted = plan.relabel(spans).sorted { $0.startMs < $1.startMs }
+        for row in rows {
             row.speakerId = SegmentMerger.dominantSpeaker(
                 startMs: row.startMs, endMs: row.endMs,
                 spans: sorted, minShare: policy.minSpeakerShare
             )?.speakerId
         }
         transcript.didDiarize = true
-        syncSpeakers(roster, on: recording)
+        syncSpeakers(plan.relabel(roster), on: recording)
+        restoreColours(plan, on: recording)
         recording.updatedAt = Date()
         try modelContext.save()
+        return true
     }
 
+    /// Makes the roster rows match what the transcript uses, and leaves the
+    /// names a person chose alone.
+    ///
+    /// An empty roster means no speaker identification ran (it is off in
+    /// Settings, or a live transcript is being finished and identifies later),
+    /// which says nothing about who was in the room. It used to delete every
+    /// row, and Transcribe Again with identification off took every name with
+    /// it, while the earlier revision still pointed at those labels.
     private func syncSpeakers(_ roster: [SpeakerLabel], on recording: StoredRecording) {
+        guard !roster.isEmpty else { return }
         var existing = Dictionary(
             (recording.speakers ?? []).map { ($0.speakerId, $0) },
             uniquingKeysWith: { first, _ in first }
@@ -269,5 +351,25 @@ extension RecordingStore {
         parts.append(contentsOf: (recording.items ?? []).map(\.text))
         parts.append(contentsOf: (recording.bookmarks ?? []).map(\.label))
         recording.searchText = parts.filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+}
+
+extension StoredRecording {
+    /// What a finished capture says about its file: the name, the rate, how
+    /// long it ran, what it looks like and which lane each channel holds.
+    ///
+    /// One function for the writer and for the app's second try on the main
+    /// context. When the writer failed, the lanes were left at their default,
+    /// a single room channel, and a two-lane recording was then transcribed as
+    /// one.
+    public func applyCapturedAudio(fileName: String, sampleRate: Int, durationMs: Int,
+                                   waveform: [Float]?, lanes: [CaptureLane]) {
+        guard !fileName.isEmpty else { return }
+        audioFileName = fileName
+        if sampleRate > 0 { audioSampleRate = sampleRate }
+        if !lanes.isEmpty { self.lanes = lanes }
+        self.durationMs = durationMs
+        if let waveform { self.waveform = waveform }
+        updatedAt = Date()
     }
 }

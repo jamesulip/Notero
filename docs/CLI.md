@@ -128,13 +128,26 @@ stdout or to `--out`. It reports:
 - The model id that it loaded.
 - The speech regions and the windows that the voice detector found.
 - The number of decoded words, the decode time and the RTF.
-- The number of windows that needed a warmer retry.
+- The number of windows that needed a retry: a lead-in of silence, wider audio or half the window. Builds before 2026-11-01 printed "a warmer retry".
 - **A warning for each window that never decoded.** That audio is missing from
   the transcript. Finding 9 in [FINDINGS.md](FINDINGS.md) explains why this
   warning exists.
+- The model load time, which no RTF includes.
+- The cost of each call to the recognizer, apart from the RTF: median, p95 and
+  maximum of the model's own time and of the wall time around it.
+- With `--live`, the **commit latency**: how far behind the audio each committed
+  word trails. With `--live --realtime`, the same against wall time.
 - The number of speakers and the time that speaker identification took.
 - The WER, if you gave `--reference`.
-- The peak memory and the total time.
+- **Memory, in two lines.** The footprint of this process at exit, its lifetime
+  peak footprint, and its footprint before and after the model loads. Then the
+  Neural Engine memory that the process owns, which the footprint does not
+  include. Until 2026-11-01 the tool printed one line, `peak memory N MB`. N was
+  `phys_footprint` read once at exit. It was not a peak and it was not the
+  model's memory: after the model loaded, the footprint was 77 MB and the Neural
+  Engine memory was 1581 MB. [BENCHMARKS.md](BENCHMARKS.md#which-number-is-which)
+  says which figure answers which question.
+- The total time.
 
 ### The WER
 
@@ -155,6 +168,22 @@ the language that you asked for, the language that the model detected, the
 language of each window, the duration, the decode time, the RTF, the word
 count, the transcript, each token, the WER, the live statistics and the live
 configuration.
+
+Six fields are for the benchmark harness, and each is optional: a report from an
+older binary lacks them, and a reader has to cope.
+
+| Field | Contents |
+| --- | --- |
+| `loadMs` | Wall time to load the model. |
+| `decodeTiming` | Per-call recognizer cost: `calls`, `inferRtf`, `wallRtf`, mean, median, p95 and maximum of `inferMs` and of the wall time. |
+| `commitLatency` | Live only. Words committed, with minimum, median, mean, p95 and maximum of (audio fed so far − the word's end time), and `aheadOfAudio`, the number of words that ended after the audio fed so far. |
+| `commitLatencyWall` | Live with `--realtime` only. The same, against wall time since the replay began. |
+| `memory` | A list of snapshots at the stages `start`, `beforeModelLoad`, `afterModelLoad`, `afterVADLoad`, `afterDecode` and `end`. Each holds `physFootprintMB`, `lifetimePeakFootprintMB`, `residentMB`, `internalMB`, `externalMB`, `compressedMB`, `neuralMB` and `neuralPeakMB`. |
+| `windows` | Offline only. The decode windows in order, each `{startMs, endMs}`. `eval/regress.py determinism` uses it to name the window in which two runs of one binary first differ. A live replay has none. |
+
+In a live report, `rtf` is the **replay** RTF, not a per-hop cost. With every
+decode awaited it is how fast the Mac replays the file. With `--realtime` it is
+about 1.0 by construction.
 
 ## Live mode
 
@@ -192,6 +221,54 @@ This runs `tl` and `auto` over `eval/manifest.json`, scores each run with
 
 **Do not build while a `--realtime` run is in progress.** The build competes
 for the machine and changes the drop count.
+
+### Repeated runs and an A/B comparison
+
+One run proves nothing: the offline pass is not deterministic (finding 15 in
+[FINDINGS.md](FINDINGS.md)). `eval/bench_runs.py` runs a binary several times, or
+two binaries interleaved, summarizes with the median and the range, counts the
+collapsed runs, and compares two builds. `eval/regress.py` does the same over a
+whole suite in one command. Both decide with one rule (rank-sum permutation tests,
+Holm's correction over every metric together, effect-size floors, timing believed
+only on a quiet machine) and one collapse rule, and both refuse below 8 runs per arm.
+[BENCHMARKS.md](BENCHMARKS.md#compare-two-builds) gives the commands and the rules,
+and [how often the rule raises a false alarm](BENCHMARKS.md#how-often-this-harness-cries-wolf).
+`eval/residency.py` measures the memory of a run from outside the process, with
+`footprint(1)`.
+
+```bash
+# One clip, two builds
+python3 eval/bench_runs.py run --interleave BASE/transcribe CAND/transcribe \
+    --audio clip.wav --ref clip.txt --mode offline --runs 12 --out-dir /tmp/ab
+
+# A whole suite, two git revisions (built from `git archive` into /tmp/notero-regress)
+python3 eval/regress.py --base addf5f8 --cand HEAD --suite quick
+```
+
+`regress.py` takes these options. A BUILD is an executable `transcribe`, a git revision, or
+`WORKTREE` (the working copy of `app/`).
+
+| Option | Function |
+| --- | --- |
+| `--base BUILD`, `--cand BUILD` | The two builds. `--base` may be omitted when `--baseline` names a commit. |
+| `--suite quick\|full` | `quick`: the synthetic clip offline and live, DER on two synthetic multi-speaker clips. `full` adds the paused clip, five more multi-speaker clips and the FLEURS subset when present. |
+| `--only SERIES …` | Run only these series: `offline-synthetic`, `live-synthetic`, `live-paused`, `offline-fleurs`, `der-quick`, `der-full`. |
+| `--runs N` | Runs per arm for the transcription series (default 8). `--rounds N` sets the DER rounds. |
+| `--order abba\|abab` | The interleave order. `abba` (the default) alternates who goes first. |
+| `--out-dir DIR` | Where `report.md`, `report.json`, `plan.json` and the raw runs go. Default `/tmp/notero-regress/reports/<session>-<base>-<cand>`. |
+| `--confirm-with REPORT.json` | A report of an earlier session of the same pair: only a metric that it flagged and this one reproduces is CONFIRMED. |
+| `--baseline FILE` | A committed baseline from `eval/baselines/`. Prints a baseline drift warning when the machine, OS, model or fixture differs. |
+| `--dry-run` | Resolve the builds and fixtures and print the plan, running nothing. |
+| `--scratch DIR`, `--fixture-dir DIR`, `--fleurs-dir DIR` | Where builds and generated fixtures go (default `$NOTERO_REGRESS_SCRATCH` or `/tmp/notero-regress`), where to look for fixture audio first, and where FLEURS is. |
+| `--hold-seconds S` | Aim for bench-lock holds of about this long (default 240). |
+| `--no-lock`, `--no-build`, `--timeout S`, `--models DIR`, `--extra …` | Run unlocked (the report says so), never build, seconds per run, `transcribe --models`, and the rest passed to `transcribe`. |
+
+Other commands: `regress.py reanalyze DIR` redoes the analysis of a stored session;
+`regress.py determinism --bin BUILD --runs N` checks that one build gives byte-identical
+transcripts and names the first diverging window; `regress.py stream --bin BUILD --runs N
+--out-dir DIR` takes consecutive runs of one build for `eval/calibrate_aa.py`;
+`regress.py save-baseline REPORT.json --name NAME --out FILE` writes a small baseline;
+`eval/fixtures.py generate|verify|list|path` regenerates and checks the fixtures.
 
 ## Capture check
 

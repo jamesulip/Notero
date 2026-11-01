@@ -2,6 +2,105 @@
 
 ## Unreleased
 
+### Speed, memory and stability (second cycle)
+
+- **A model that is already on disk loads in about 1.6 seconds, not 8 to 11.** Every load asked
+  the Hugging Face Hub, even for a model that was on disk, and failed offline. The load now
+  reads the model folder directly, and the transcript is byte-identical. Entry 30 gives the
+  measurements.
+- **A model switch releases the old model first,** which cuts the Neural Engine peak by about a
+  third (2,458 to 1,580 MB, and 4,581 to 3,000 MB). Pressing Record while a job loads another
+  model now reloads the live model.
+- **The window no longer freezes while Stop saves a long transcript.** The writer and the readers
+  ran on the main thread, which froze the window for 6.9 s on a six-hour meeting. Entry 32.
+- **A recording file that will not close can no longer freeze Stop or a quit,** and a recording
+  killed in its first seconds keeps what was written after the first second.
+- **A long device gap no longer holds up capture.** A two-lane, ten-minute gap held it for 0.56 s
+  in a release build.
+- **A speaker's name and colour follow the voice, not the label number,** when speakers are
+  identified again, and a named speaker that the new run does not find is kept. In 12 of 52
+  re-runs at least one voice had been renumbered. Entry 28.
+- **Transcribe Again works on a two-lane recording whose file cannot be opened,** from the mixed copy,
+  with a warning.
+- **Audio that arrives during a long device gap is no longer overwritten** when the input reuses its
+  buffer (system audio and "both"), and **a recording whose file did not finish closing keeps its
+  working copy.** Found in independent review; entry 35.
+- **Cancelled and failed jobs release the speaker models,** and a caller that was cancelled while
+  it waited for a model load no longer waits for it. The speaker models are small (13 MB); the
+  figure of 200 MB in the documentation was never measured.
+- Live decoding gained an opt-in trace and property tests that commit immutability holds. Head-tolerant
+  agreement, which cut median commit latency by 35 to 43% on two synthetic clips, is implemented
+  and off until a second session on real audio confirms it. Entry 27.
+
+### Tools and evidence
+
+- **`eval/regress.py`** compares two builds in one command, with one collapse rule and one decision
+  rule that flags 1.7 to 2.6% of simulated A/A sessions (an uncorrected table flags 11 to 24%). It adds
+  a determinism check, a fixture manifest and committed baselines in `eval/baselines/`.
+- **`eval/fleurs_eval.py`** evaluates read Tagalog on the public FLEURS set, and
+  `eval/REAL-TAGLISH-PROTOCOL.md` describes how to build a real Taglish reference from the app's
+  corrections export. On read Tagalog, the first cycle's changes alter nothing, `auto` equals `tl`,
+  and the Best tier is not more accurate. Entries 24 and 25. None of this is Taglish.
+- **`diarbench`** times the speaker stage alone, with the tools to measure whether a name follows the voice.
+
+### Recording and recovery
+
+- **A recording that is killed, crashes or is force-quit now leaves a playable
+  file.** The file used to be unreadable, because it only opened after a clean
+  close. It is written in 5-second fragments now, and at most the last few
+  seconds are lost. Quitting during a recording stops and saves it first.
+  [docs/FINDINGS.md](docs/FINDINGS.md) entry 17 gives the details and what is
+  not covered. A recording that was killed before this change stays unreadable.
+- **The working copy of the audio is kept when the recording file cannot
+  replace it.** After an interrupted recording, Transcribe Again no longer
+  deletes the only complete copy. The recovery messages say what survived.
+- **A job is no longer called Complete when its transcript could not be
+  saved,** and a failed job keeps its reason. The warning says when live lines
+  or the length of the recording are not being saved.
+- **A long meeting finishes in seconds and not minutes.** Saving the final
+  transcript of a six-hour meeting took 159 s in a measurement, and 6.5 s after
+  the change. Entry 19 gives the conditions.
+- **A running transcription steps aside when you start a recording,** and
+  starts again from the beginning afterwards. It no longer competes with the
+  live transcript.
+- **A recording can start again after a refused microphone, a failed model load
+  or a failed capture start.** It used to fail until the app was restarted.
+- **Interfaces at 88.2, 96 or 192 kHz can record.** They were refused.
+- **A Mac that sleeps during a recording no longer allocates the whole sleep at
+  once,** and the recording says how long the input was interrupted.
+- **Speaker names that you chose survive a re-run that finds no speakers.**
+- **Search no longer stalls the window on a long meeting.**
+
+### Transcription
+
+- **The same file no longer transcribes differently on each run.** The first
+  window of the test clip decoded as invented English filler in about half of
+  the runs. The pipeline now decodes greedily first and, if that is refused,
+  retries with a short lead-in of silence before any random re-sampling. On the
+  test clip, 0 of 20 runs collapsed against 7 of 20, and every run gave the same
+  transcript. That clip starts abruptly, which is the cause, so the change is
+  unproven on real recordings. Entry 16 gives the numbers.
+- **The live decoder's memory no longer grows with the length of the
+  session.** It grew about 110 MB an hour. Entry 18 gives the measurement.
+- **Two requests for the same model at the same time share one load.**
+- **Voice-activity batches that fail are counted** in the session stats.
+
+### Tools
+
+- **`eval/make_multispeaker.py` and `eval/der.py`** build synthetic
+  multi-speaker fixtures with known turn boundaries and score a diarization run
+  with a frame-level DER, for A/B comparison. They are not an accuracy measure
+  for real meetings.
+- **`eval/bench_runs.py` and `eval/residency.py`** run repeated, interleaved A/B
+  benchmarks with permutation and Fisher tests that refuse to call a result below
+  n = 8, and take a memory reading from outside the process.
+- **`transcribe` reports the memory it used properly.** Its "peak memory" line
+  was one reading at exit. It now prints the lifetime peak footprint and the Neural
+  Engine memory (about 1.6 GB for the default model), plus per-decode time and
+  commit latency in a live replay. Entry 22 gives the measurements.
+- FluidAudio is pinned to patch releases of 0.15.6. Entry 20 explains why 0.15.8
+  and 0.18.0 were not adopted.
+
 ### Audio
 
 - **Test the microphone in Settings › Audio.** Click **Test Microphone**, speak,
@@ -16,6 +115,14 @@
   recording refused to start with a CoreAudio error. The app now asks the
   encoder for the permitted range. [docs/FINDINGS.md](docs/FINDINGS.md) entry
   13 gives the measurements.
+- **A full disk no longer crashes a recording or loses its audio.** Writing
+  the transcription copy into a full disk crashed the app. The recording file
+  stopped silently, and it could not be opened afterwards because its index
+  was never written. Notero now stops saving audio while 100 MB is still free,
+  closes both files so that they stay playable, and shows a notice that is
+  kept with the recording. The live transcript continues. A recording does not
+  start when the disk is already that full. [docs/FINDINGS.md](docs/FINDINGS.md)
+  entry 14 gives the details.
 
 ## 1.1.0 — 2026-09-08
 

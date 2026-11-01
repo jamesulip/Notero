@@ -54,6 +54,8 @@ actor OracleRecognizer: SpeechRecognizing {
     struct Call: Sendable {
         var startMs: Int
         var endMs: Int
+        var attempt = 0
+        var sampling = ASRRequest.Sampling.standard
     }
 
     var words: [SpokenWord]
@@ -101,7 +103,8 @@ actor OracleRecognizer: SpeechRecognizing {
         let startMs = OraclePCM.startMs(of: request.samples)
         let durationMs = request.samples.count / 16
         let endMs = startMs + durationMs
-        calls.append(Call(startMs: startMs, endMs: endMs))
+        calls.append(Call(startMs: startMs, endMs: endMs, attempt: request.decodeAttempt,
+                          sampling: request.sampling))
         let index = calls.count
         if held {
             await withCheckedContinuation { waiters.append($0) }
@@ -189,5 +192,27 @@ actor ScriptedVAD: VoiceActivityDetecting {
         if consumed > 0 { leftover.removeFirst(consumed) }
         return VoiceActivityReading(isSpeech: lastWasSpeech, probability: lastWasSpeech ? 1 : 0,
                                     trailingSilenceMs: trailingSilenceMs, speechMs: speechMs)
+    }
+}
+
+/// A detector that throws, to see what the live path does with a broken one.
+/// Fails every push, or only the ones whose 1-based index is in `failOn`.
+actor ThrowingVAD: VoiceActivityDetecting {
+    struct Broken: Error {}
+
+    private let failOn: Set<Int>?
+    private(set) var pushes = 0
+
+    init(failOn: Set<Int>? = nil) { self.failOn = failOn }
+
+    func prepare(progress: ProgressReport?) async throws {}
+    func regions(in samples: [Float]) async throws -> [SpeechRegion] { [] }
+    func clearSpeechCounter() {}
+    func reset() {}
+
+    func push(_ samples: [Float]) async throws -> VoiceActivityReading {
+        pushes += 1
+        if failOn == nil || failOn!.contains(pushes) { throw Broken() }
+        return VoiceActivityReading(isSpeech: false, probability: 0, trailingSilenceMs: 0, speechMs: 0)
     }
 }

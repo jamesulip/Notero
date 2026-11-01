@@ -59,10 +59,7 @@ public final class RingBuffer {
     public func push(_ pcm: Data) {
         buffer.append(pcm)
         let overflow = buffer.count - capacityBytes
-        if overflow > 0 {
-            buffer.removeFirst(overflow)
-            discardedBytes += overflow
-        }
+        if overflow > 0 { discard(overflow) }
     }
 
     /// Anchors the window to a commit, keeping `preRollMs` of audio before it.
@@ -81,9 +78,17 @@ public final class RingBuffer {
         let keepFrom = Swift.max(0, absoluteMs - preRollMs)
         let target = Audio.msToBytes(keepFrom) - discardedBytes
         guard target > 0 else { return }
-        let drop = Swift.min(target, buffer.count)
-        buffer.removeFirst(drop)
-        discardedBytes += drop
+        discard(Swift.min(target, buffer.count))
+    }
+
+    /// Drops the first `count` bytes into fresh storage. `Data.removeFirst` only
+    /// moves the start of a slice over the same storage, and the next `append`
+    /// extends that storage, so the dead prefix is never freed: measured, the
+    /// ring grew by the whole PCM rate, 115 MB an hour, without bound.
+    private func discard(_ count: Int) {
+        guard count > 0 else { return }
+        buffer = Data(buffer.dropFirst(count))
+        discardedBytes += count
     }
 
     /// The current context and its absolute start.

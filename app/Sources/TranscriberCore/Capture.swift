@@ -105,6 +105,21 @@ public enum CaptureNotice: Equatable, Sendable {
     case microphoneLost(String)
     /// A device changed and capture could not be started again.
     case captureFailed(String)
+    /// The recording's audio file stopped being written -- the disk ran low,
+    /// or a write failed. What was written before is kept and still plays.
+    case recordingNotSaved(String)
+    /// The 16 kHz working copy stopped being written. The live transcript is
+    /// unaffected, but anything that reads the copy later -- Transcribe Again,
+    /// speaker identification -- ends where it does.
+    case workingCopyNotSaved(String)
+    /// The input stopped delivering for this long and the recording holds
+    /// silence for it. A Mac that slept, or a device change that took time to
+    /// recover from; the same microphone can come back, so no device notice
+    /// says it happened.
+    case audioGap(seconds: Int)
+    /// The recording file did not finish closing in time, and Stop went on without
+    /// it. It keeps closing in the background.
+    case archiveNotClosed(seconds: Int)
 
     /// One or two sentences for the recording screen and for the warning that
     /// the recording keeps.
@@ -121,6 +136,35 @@ public enum CaptureNotice: Equatable, Sendable {
         case .captureFailed(let why):
             return "The audio input changed and could not be restarted (\(why)). "
                  + "The recording is silent from that moment."
+        case .recordingNotSaved(let why):
+            return "The audio stopped being saved (\(why)). "
+                 + "What was recorded before that moment is kept."
+        case .workingCopyNotSaved(let why):
+            return "The copy of the audio used for transcription stopped being saved "
+                 + "(\(why)). Transcribe Again and speaker identification will cover only "
+                 + "the audio before that moment."
+        case .audioGap(let seconds):
+            return "The audio input was interrupted for \(Self.duration(seconds)). "
+                 + "The recording holds silence for that time, and the transcript has "
+                 + "nothing for it."
+        case .archiveNotClosed(let seconds):
+            return "The recording file did not finish closing within \(Self.duration(seconds)), "
+                 + "so the app stopped waiting for it. It goes on closing in the background: "
+                 + "if it does, the whole recording plays, and if it does not, the last few "
+                 + "seconds may be missing. A copy of the audio is kept for Transcribe Again."
         }
+    }
+
+    /// "3 seconds", "2 minutes 5 seconds", "1 hour 30 minutes".
+    private static func duration(_ seconds: Int) -> String {
+        func unit(_ count: Int, _ name: String) -> String { "\(count) \(name)\(count == 1 ? "" : "s")" }
+        if seconds < 60 { return unit(seconds, "second") }
+        if seconds < 3_600 {
+            let minutes = seconds / 60, rest = seconds % 60
+            return rest == 0 ? unit(minutes, "minute")
+                             : "\(unit(minutes, "minute")) \(unit(rest, "second"))"
+        }
+        let hours = seconds / 3_600, minutes = (seconds % 3_600) / 60
+        return minutes == 0 ? unit(hours, "hour") : "\(unit(hours, "hour")) \(unit(minutes, "minute"))"
     }
 }

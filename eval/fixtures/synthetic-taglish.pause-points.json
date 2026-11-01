@@ -1,0 +1,111 @@
+{
+ "_comment": "Pause points for eval/make_paused.py: the end time of each word that the P6 branch's offline pass ended with a full stop, question mark or comma on the SYNTHETIC Taglish clip (lead A/B run B-1, a deterministic 24.2% WER run). Fixed here so the paused clip does not depend on whichever binary is being tested. Text is synthetic.",
+ "source": "/tmp/notero-team/lead-ab/B-1.json (P6 branch, offline)",
+ "audio_sha256": "e858bd6a1da505428823efb749017a81659b028742810f34deca10dbddd05f25",
+ "words": [
+  {
+   "text": "lahat?",
+   "endMs": 1330
+  },
+  {
+   "text": "umaga.",
+   "endMs": 4130
+  },
+  {
+   "text": "magsimula,",
+   "endMs": 6050
+  },
+  {
+   "text": "attendance.",
+   "endMs": 9610
+  },
+  {
+   "text": "Okay,",
+   "endMs": 10510
+  },
+  {
+   "text": "lahat.",
+   "endMs": 12450
+  },
+  {
+   "text": "lang.",
+   "endMs": 16129
+  },
+  {
+   "text": "Una,",
+   "endMs": 16670
+  },
+  {
+   "text": "timeline.",
+   "endMs": 19030
+  },
+  {
+   "text": "Pangalawa,",
+   "endMs": 20170
+  },
+  {
+   "text": "quarter.",
+   "endMs": 22890
+  },
+  {
+   "text": "Panghuli,",
+   "endMs": 23990
+  },
+  {
+   "text": "m.",
+   "endMs": 24890
+  },
+  {
+   "text": "deployment.",
+   "endMs": 28492
+  },
+  {
+   "text": "Sige,",
+   "endMs": 29572
+  },
+  {
+   "text": "timeline.",
+   "endMs": 31512
+  },
+  {
+   "text": "Maria,",
+   "endMs": 33672
+  },
+  {
+   "text": "panaman.",
+   "endMs": 37672
+  },
+  {
+   "text": "kasih,",
+   "endMs": 39232
+  },
+  {
+   "text": "environment.",
+   "endMs": 42732
+  },
+  {
+   "text": "release.",
+   "endMs": 48532
+  },
+  {
+   "text": "budget.",
+   "endMs": 52624
+  },
+  {
+   "text": "Wala,",
+   "endMs": 53384
+  },
+  {
+   "text": "okay,",
+   "endMs": 53864
+  },
+  {
+   "text": "sigue,",
+   "endMs": 54604
+  },
+  {
+   "text": "tayo.",
+   "endMs": 56504
+  }
+ ]
+}

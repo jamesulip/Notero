@@ -49,7 +49,86 @@ public enum RecordingStore {
         try context.save()
     }
 
+    // MARK: - Seeing another context's save
+
+    /// Brings the main context's copy of one recording up to date with what the
+    /// writer has saved, now.
+    ///
+    /// A row held on the main context does not see another context's save until
+    /// the main context fetches it: measured, 0 of 40 held rows were current after
+    /// `await writer.updateStatus(...)`, however long the main actor waited, and 40
+    /// of 40 after a fetch. A `@Query` that is on screen does the fetch itself, a few
+    /// milliseconds after the save (at most 11 ms in 180 saves), so a view catches up
+    /// without help; what this closes is the gap between the writer returning and
+    /// that fetch, which was zero when the writer ran on the main thread and is not
+    /// now (finding 32). Called before the app tells a view to re-read, so that the
+    /// view reads the rows that were saved and not the ones before.
+    ///
+    /// Three small fetches, none of them of the segments: the recording, its
+    /// transcripts (a transcript is its own object, and `completeTranscript`
+    /// replaces one) and its speakers.
+    public static func refresh(_ id: UUID, in context: ModelContext) {
+        var recording = FetchDescriptor<StoredRecording>(predicate: #Predicate { $0.id == id })
+        recording.fetchLimit = 1
+        _ = try? context.fetch(recording)
+        _ = try? context.fetch(FetchDescriptor<StoredTranscript>(
+            predicate: #Predicate { $0.recording?.id == id }))
+        _ = try? context.fetch(FetchDescriptor<StoredSpeaker>(
+            predicate: #Predicate { $0.recording?.id == id }))
+    }
+
     // MARK: - Recovery
+
+    /// What is still on disk for a recording whose session ended without a
+    /// goodbye.
+    ///
+    /// `hasAudio` only says that a file with the right name exists. An AAC
+    /// archive is readable once its index is written at close, and a recording
+    /// that ended in a quit or a crash leaves a file that exists, has a size
+    /// and does not open (finding 16). The 16 kHz working copy is written
+    /// differently and survives. The recovery message has to say which of the
+    /// two is true, or it sends the user to a re-run that cannot work.
+    public struct SurvivingAudio: Equatable, Sendable {
+        /// How long the recording file is, when it opens. Nil when it is
+        /// missing or does not open.
+        public var archiveMs: Int?
+        /// How long the working copy is, when one is on disk.
+        public var workingCopyMs: Int?
+
+        public init(archiveMs: Int? = nil, workingCopyMs: Int? = nil) {
+            self.archiveMs = archiveMs
+            self.workingCopyMs = workingCopyMs
+        }
+
+        public var archivePlays: Bool { archiveMs != nil }
+        public var canTranscribe: Bool { archivePlays || workingCopyMs != nil }
+        public var durationMs: Int { max(archiveMs ?? 0, workingCopyMs ?? 0) }
+    }
+
+    /// The answer when nobody can look inside the files: a file with the
+    /// right name is taken to be intact, as before.
+    public static func assumeIntact(_ recording: StoredRecording) -> SurvivingAudio {
+        SurvivingAudio(archiveMs: recording.hasAudio ? max(1, recording.durationMs) : nil)
+    }
+
+    /// What a recovered row says about the audio, beyond what it says about
+    /// the transcript. Empty when the recording file opens.
+    ///
+    /// A recording of two lanes is a different promise when its file did not close.
+    /// The copy that was kept is the room and the call mixed, so it can be
+    /// transcribed, but as one: the lines will not say which side they came from.
+    static func audioClause(_ audio: SurvivingAudio, lanes: [CaptureLane] = [.room]) -> String {
+        if audio.archivePlays { return "" }
+        if audio.workingCopyMs != nil {
+            let mixed = lanes.count > 1
+                ? " It holds the room and the call mixed, so the transcript will not say "
+                    + "which side each line came from."
+                : ""
+            return " The recording file was never closed, so it will not play, "
+                + "but a copy of the audio was kept and can be transcribed." + mixed
+        }
+        return " No audio survived, so it cannot be transcribed again."
+    }
 
     /// Resolves work that a previous run left unfinished.
     ///
@@ -65,19 +144,37 @@ public enum RecordingStore {
     /// Nothing is deleted. A row that captured no audio is still a row the user
     /// made, and silently removing it would be worse than showing that it
     /// failed.
+    ///
+    /// `audio` says what is on disk for a row. The messages promise a re-run
+    /// only when one can work: a recording whose archive never closed has no
+    /// audio to play, and its working copy is all that a re-run can read.
     @discardableResult
-    public static func recoverInterrupted(in context: ModelContext) throws -> Int {
+    public static func recoverInterrupted(
+        in context: ModelContext,
+        audio: (@MainActor (StoredRecording) -> SurvivingAudio)? = nil
+    ) throws -> Int {
+        let audio = audio ?? { assumeIntact($0) }
         let descriptor = FetchDescriptor<StoredRecording>()
         let stale = try context.fetch(descriptor).filter { !$0.status.isTerminal }
         guard !stale.isEmpty else { return 0 }
 
         for recording in stale {
             let wasRecording = recording.status == .recording
+            let surviving = audio(recording)
+            let clause = audioClause(surviving, lanes: recording.lanes)
+            if recording.durationMs == 0, surviving.durationMs > 0 {
+                // The length is written at Stop, which never came.
+                recording.durationMs = surviving.durationMs
+            }
             if let transcript = recording.transcript, transcript.isComplete {
                 // The transcript exists and is readable; only the stage after
                 // it was lost. Re-running diarization is a menu item away.
                 recording.status = .completed
                 recording.progress = 1
+                if recording.audioFileName != nil, !surviving.archivePlays,
+                   recording.warningMessage == nil {
+                    recording.warningMessage = clause.trimmingCharacters(in: .whitespaces)
+                }
             } else if recording.transcript != nil, wasRecording {
                 // The live session was writing committed lines as it went and
                 // the app died mid-recording. Those lines are kept; the
@@ -85,17 +182,26 @@ public enum RecordingStore {
                 // Transcribe Again reads, so the rest is recoverable.
                 recording.status = .failed
                 recording.errorMessage = "Recording was interrupted. The transcript up to "
-                    + "the last line saved is kept — transcribe again to redo it from the audio."
+                    + "the last line saved is kept"
+                    + (surviving.canTranscribe
+                       ? " — transcribe again to redo it from the audio." : ".")
+                    + clause
             } else if recording.transcript != nil {
                 // A job quit part-way through decoding. The rows it wrote are
                 // kept and shown; the label says they are not the whole thing.
                 recording.status = .failed
                 recording.errorMessage = "Interrupted part-way through transcription. "
-                    + "What was transcribed so far is kept — transcribe again for the rest."
-            } else if recording.hasAudio {
+                    + "What was transcribed so far is kept"
+                    + (surviving.canTranscribe ? " — transcribe again for the rest." : ".")
+                    + clause
+            } else if surviving.archivePlays {
                 recording.status = .failed
                 recording.errorMessage = "Interrupted before this was transcribed. "
                     + "The audio is here — transcribe it again."
+            } else if surviving.workingCopyMs != nil {
+                recording.status = .failed
+                recording.errorMessage = "Interrupted before this was transcribed."
+                    + clause + " Use Transcribe Again to get the text."
             } else {
                 recording.status = .failed
                 recording.errorMessage = "Interrupted before any audio was captured, "

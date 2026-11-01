@@ -50,6 +50,11 @@ extension AppState {
         activeRecordingId = id
         let name = Paths.newRecordingName(id: id, ext: "m4a", on: recording.createdAt)
         recording.audioFileName = name
+        // Kept from the start and not only at Stop: a recording that is killed never
+        // reaches Stop, and with the default of one lane its archive -- which holds
+        // both channels and now survives a kill -- would be read as a single room
+        // channel by Transcribe Again.
+        recording.lanes = settings.captureSource.lanes
         recording.status = .preparing
         try? context.save()
 
@@ -83,6 +88,13 @@ extension AppState {
                     writer: writer, recordingId: id,
                     modelId: settings.liveModelId, language: settings.language
                 )
+                // Said while the recording runs, once: until Stop these rows
+                // are the only protection against a crash, so a person who
+                // cannot have them has to know.
+                persister.onDegraded = { [weak self] note in
+                    guard let self else { return }
+                    warnings[id] = [warnings[id], note].compactMap { $0 }.joined(separator: " ")
+                }
                 await persister.open()
                 live.onCommitted = { [weak persister] segments in
                     persister?.append(segments)
@@ -101,7 +113,30 @@ extension AppState {
         }
     }
 
-    func stopRecording() async {
+    /// - Parameter quitting: the app is closing. Everything that makes the
+    ///   recording whole still runs (the files close, the transcript is
+    ///   saved), but the job that would follow does not start, because it
+    ///   would die with the process.
+    func stopRecording(quitting: Bool = false) async {
+        // One stop at a time, and a second request joins the first. The Stop
+        // button and a quit can both ask, and the state leaves `.recording`
+        // as soon as the first one starts, long before it has saved anything;
+        // a quit that looked only at `isRecording` went straight through that
+        // window and ended the process before `attachAudio` ran.
+        if let running = stopTask {
+            await running.value
+            return
+        }
+        let task = Task { await performStop(quitting: quitting) }
+        stopTask = task
+        await task.value
+        stopTask = nil
+    }
+
+    /// True from the moment Stop is pressed until everything it saves is saved.
+    var isStopping: Bool { stopTask != nil }
+
+    private func performStop(quitting: Bool) async {
         let finished = await live.stop()
         live.onCommitted = nil
         let persister = livePersister
@@ -128,25 +163,64 @@ extension AppState {
             // The final list replaces the rows written during the recording,
             // through the same call the whole-file job uses; with no open
             // revision it stores a fresh one, as before.
-            if let persister {
-                _ = try? await persister.complete(segments: result.segments,
-                                                  processMs: result.stats.totalInferMs)
-            } else {
-                _ = try? await writer.storeTranscript(
-                    segments: result.segments, roster: [], modelId: result.modelId,
-                    language: result.language, processMs: result.stats.totalInferMs,
-                    didDiarize: false, for: result.recordingId
-                )
+            do {
+                if let persister {
+                    _ = try await persister.complete(segments: result.segments,
+                                                     processMs: result.stats.totalInferMs)
+                } else {
+                    _ = try await writer.storeTranscript(
+                        segments: result.segments, roster: [], modelId: result.modelId,
+                        language: result.language, processMs: result.stats.totalInferMs,
+                        didDiarize: false, for: result.recordingId
+                    )
+                }
+            } catch {
+                // Said, not swallowed: otherwise the recording reads as
+                // complete while its transcript stops at the last line the
+                // session happened to save, or is missing altogether.
+                let saved = "The transcript could not be saved "
+                    + "(\(error.localizedDescription)), so lines may be missing. "
+                    + "The audio was saved -- use Transcribe Again to recover it."
+                warnings[result.recordingId] = [warnings[result.recordingId], saved]
+                    .compactMap { $0 }.joined(separator: " ")
             }
         }
-        try? await writer.attachAudio(
-            fileName: result.archiveFileName ?? "",
-            sampleRate: result.archiveSampleRate,
-            durationMs: result.durationMs,
-            waveform: result.waveform.isEmpty ? nil : result.waveform,
-            lanes: result.lanes,
-            for: result.recordingId
-        )
+        // The transcript is saved on the writer's context. Brought across before
+        // anything below reads the row.
+        syncStore(result.recordingId)
+        let attached = await ledger.succeeded(.status, for: result.recordingId) {
+            try await writer.attachAudio(
+                fileName: result.archiveFileName ?? "",
+                sampleRate: result.archiveSampleRate,
+                durationMs: result.durationMs,
+                waveform: result.waveform.isEmpty ? nil : result.waveform,
+                lanes: result.lanes,
+                for: result.recordingId
+            )
+        }
+        syncStore(result.recordingId)
+        if !attached {
+            // Without these a two-lane recording is transcribed as one, and the
+            // library shows no length. The row the app holds is a second way
+            // to the same store; only if that fails too is the person told.
+            var saved = false
+            if let row = recording(result.recordingId) {
+                row.applyCapturedAudio(
+                    fileName: result.archiveFileName ?? "", sampleRate: result.archiveSampleRate,
+                    durationMs: result.durationMs,
+                    waveform: result.waveform.isEmpty ? nil : result.waveform,
+                    lanes: result.lanes)
+                saved = (try? context.save()) != nil
+            }
+            if !saved {
+                warnings[result.recordingId] = [
+                    warnings[result.recordingId],
+                    "The length and the channels of this recording could not be saved, "
+                        + "so a recording of two lanes would be transcribed as one. "
+                        + "Restart the app before you use Transcribe Again.",
+                ].compactMap { $0 }.joined(separator: " ")
+            }
+        }
 
         // A two-lane recording always gets the whole-file pass, even when the
         // live decoder already produced a transcript. Live decoding runs on
@@ -154,33 +228,74 @@ extension AppState {
         // transcript can afford -- so what it produced has no idea which side
         // of the meeting each line came from. Only the whole-file pass reads
         // the channels apart, and it is the better transcript in any case.
-        if !decodedLive || result.lanes.count > 1 {
-            // Capture-only session: the whole-file pass is the transcript.
-            // The working copy it needs is the one the session just wrote.
-            if let stored = recording(result.recordingId) {
-                enqueueTranscription(stored, work: .full)
-            }
-        } else if settings.diarizationMode.performsDiarization {
-            let job = TranscriptionJob(
-                id: result.recordingId,
-                title: recording(result.recordingId)?.title ?? "Recording",
-                sourceURL: result.archiveFileName.map { Paths.recordingURL($0) },
-                cacheURL: result.cacheURL,
-                modelId: result.modelId,
-                language: result.language,
-                diarizationMode: settings.diarizationMode,
-                work: .diarizeOnly,
-                discardCacheWhenDone: !settings.keepWorkingCopy,
-                expectedSpeakers: recording(result.recordingId)?.expectedSpeakers
+        let discardsCopy = WorkingCopyPolicy.discardsAfterStop(
+            keepSetting: settings.keepWorkingCopy, notices: result.notices)
+        let followUp = StopFollowUp.after(
+            decodedLive: decodedLive, laneCount: result.lanes.count,
+            diarizes: settings.diarizationMode.performsDiarization
+        )
+        if quitting, let closed = followUp.closedEarly {
+            // The app is going away. A job started now would die with the
+            // process and leave the row claiming work that never ran, so the
+            // row says what is true and the next launch offers the re-run.
+            try? await writer.updateStatus(
+                closed.status, progress: closed.status == .completed ? 1 : 0,
+                error: closed.errorMessage, for: result.recordingId
             )
-            queuedJobs[job.id] = job
-            await queue.enqueue(job)
+            if let note = closed.warning {
+                let combined = [warnings[result.recordingId], note]
+                    .compactMap { $0 }.joined(separator: " ")
+                warnings[result.recordingId] = combined
+                // On the row too: this process is about to end.
+                try? await writer.setWarning(combined, for: result.recordingId)
+            }
         } else {
-            try? await writer.updateStatus(.completed, progress: 1, for: result.recordingId)
-            if !settings.keepWorkingCopy {
-                try? FileManager.default.removeItem(at: result.cacheURL)
+            switch followUp {
+            case .wholeFile:
+                // Capture-only session: the whole-file pass is the transcript.
+                // The working copy it needs is the one the session just wrote.
+                if let stored = recording(result.recordingId) {
+                    enqueueTranscription(stored, work: .full, discardsCopy: discardsCopy)
+                }
+            case .speakersOnly:
+                let job = TranscriptionJob(
+                    id: result.recordingId,
+                    title: recording(result.recordingId)?.title ?? "Recording",
+                    sourceURL: result.archiveFileName.map { Paths.recordingURL($0) },
+                    cacheURL: result.cacheURL,
+                    modelId: result.modelId,
+                    language: result.language,
+                    diarizationMode: settings.diarizationMode,
+                    work: .diarizeOnly,
+                    discardCacheWhenDone: discardsCopy,
+                    expectedSpeakers: recording(result.recordingId)?.expectedSpeakers
+                )
+                queuedJobs[job.id] = job
+                requestedJobs[job.id] = job
+                await queue.enqueue(job)
+            case .finished:
+                let marked = await ledger.succeeded(.status, for: result.recordingId) {
+                    try await writer.updateStatus(.completed, progress: 1, for: result.recordingId)
+                }
+                if !marked {
+                    warnings[result.recordingId] = [
+                        warnings[result.recordingId],
+                        "The app could not record that this finished, so it may still look "
+                            + "as if it is recording. Restart the app if it does.",
+                    ].compactMap { $0 }.joined(separator: " ")
+                }
+                // Only when the archive can stand in for it: a recording file
+                // that did not close, or that holds less than the copy, leaves
+                // the copy as the only audio.
+                if discardsCopy,
+                   await WorkingCopyPolicy.canDiscard(
+                       workingCopy: result.cacheURL,
+                       archive: result.archiveFileName.map { Paths.recordingURL($0) }) {
+                    try? FileManager.default.removeItem(at: result.cacheURL)
+                }
             }
         }
+        syncStore(result.recordingId)
         // What changed under the recording: a microphone that was unplugged
         // and replaced, a default input that moved, an input that could not
         // be restarted. Kept with the recording, because the person reading
@@ -197,7 +312,7 @@ extension AppState {
         }
         await queue.setLiveActive(false)
 
-        if result.durationMs < Self.shortTakeMs {
+        if !quitting, result.durationMs < Self.shortTakeMs {
             shortTake = ShortTake(
                 id: result.recordingId,
                 durationMs: result.durationMs,

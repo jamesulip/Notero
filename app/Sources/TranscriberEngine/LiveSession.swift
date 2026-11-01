@@ -160,6 +160,27 @@ public final class LiveSession {
     private let engines: EngineHost
     private let supportDirectory: URL
 
+    /// The two things a session asks the outside world for, so a test can
+    /// answer them: the microphone permission and the capture itself.
+    @ObservationIgnored var requestMicrophoneAccess: @MainActor () async -> Bool = {
+        await MicrophoneAccess.request() == .granted
+    }
+    @ObservationIgnored var requestSystemAudioAccess: @MainActor () async -> Bool = {
+        await SystemAudioAccess.request().mightWork
+    }
+    @ObservationIgnored var makeCapture: @MainActor (CaptureSource, String?) -> AudioCapture? = {
+        AudioCapture(source: $0, microphoneUID: $1)
+    }
+    /// A decoder built from scripted parts, so a test can run the live path
+    /// with no model. When set, nothing is loaded.
+    @ObservationIgnored var decoderOverride: (@MainActor (SessionConfig) -> LiveDecoder)?
+
+    /// How long Stop waits for the archive to close before it goes on without it.
+    /// A healthy close takes milliseconds (a six-hour index is 4 MB). Below the quit
+    /// gate's 30 s, so that a quit gets its answer from here and not from the gate's
+    /// timeout. Tests shorten it.
+    @ObservationIgnored var archiveCloseTimeout: TimeInterval = 10
+
     private var capture: AudioCapture?
     private var cache: WavWriter?
     private var decoder: LiveDecoder?
@@ -194,11 +215,14 @@ public final class LiveSession {
     /// Loads the model and the VAD ahead of the first recording, so hitting
     /// record does not sit on a 20-second model load.
     public func prepare(model: String) async {
+        // A failed session is not a stuck one: the failure was about the last
+        // attempt, and the next one starts from scratch.
+        if case .failed = state { state = .idle }
         guard state == .idle || state == .ready else { return }
         modelId = model
         // Nothing to load for a capture-only session; the offline job loads
         // the model when it runs.
-        guard decodeLive else { state = .ready; return }
+        guard decodeLive, decoderOverride == nil else { state = .ready; return }
         state = .preparing("Loading model…", nil)
         do {
             try await engines.prepareForLive(model: model) { [weak self] message, fraction in
@@ -219,16 +243,21 @@ public final class LiveSession {
     public func start(recordingId id: UUID, archiveFileName: String?,
                       archiveURL: URL?) async throws {
         guard !state.isRecording else { return }
+        // Left by the previous attempt: a refused microphone, a model that did
+        // not load, a capture that did not start. Without this, `prepare` below
+        // refused to run from `.failed` and every later start threw the first
+        // failure's text until the app was relaunched.
+        if case .failed = state { state = .idle }
         // `.ready` from a capture-only prepare has no model behind it, so
         // when live decoding is wanted the check is on the model, not the state.
         let loaded = await engines.loadedModel
-        if !(state == .ready && (!decodeLive || loaded == modelId)) {
+        if !(state == .ready && (!decodeLive || decoderOverride != nil || loaded == modelId)) {
             await prepare(model: modelId)
         }
         guard case .ready = state else {
             throw EngineError.backendUnavailable(state.label)
         }
-        if captureSource.usesMicrophone, await !requestMicrophone() {
+        if captureSource.usesMicrophone, await !requestMicrophoneAccess() {
             state = .failed("Microphone access denied. Enable it in System Settings › "
                           + "Privacy & Security › Microphone.")
             throw EngineError.backendUnavailable("microphone access denied")
@@ -239,8 +268,7 @@ public final class LiveSession {
             // silence -- Core Audio reports success and never delivers a
             // sample -- so a session started without this permission looks
             // exactly like a call where nobody spoke.
-            let access = await SystemAudioAccess.request()
-            guard access.mightWork else {
+            guard await requestSystemAudioAccess() else {
                 state = .failed(SystemAudioTap.TapError.notPermitted.localizedDescription)
                 throw EngineError.backendUnavailable("system audio access denied")
             }
@@ -264,9 +292,14 @@ public final class LiveSession {
         await engines.resetVAD()
 
         if decodeLive {
-            let decoder = LiveDecoder(config: config,
+            let decoder: LiveDecoder
+            if let decoderOverride {
+                decoder = decoderOverride(config)
+            } else {
+                decoder = LiveDecoder(config: config,
                                       recognizer: await engines.recognizer,
                                       vad: await engines.voiceActivity)
+            }
             decoder.onCommitted = { [weak self] tokens in self?.emit(tokens) }
             decoder.onPartial = { [weak self] text in self?.partial = text }
             self.decoder = decoder
@@ -279,10 +312,13 @@ public final class LiveSession {
         // the reason, and replacing it with a generic string here is what made
         // this undiagnosable in the first place.
         let cache = try WavWriter(url: cacheURL)
+        cache.onFailure = { [weak self] error in
+            let notice = CaptureNotice.workingCopyNotSaved(error.localizedDescription)
+            Task { @MainActor in self?.notices.append(notice) }
+        }
         self.cache = cache
 
-        guard let capture = AudioCapture(source: captureSource,
-                                         microphoneUID: microphoneUID) else {
+        guard let capture = makeCapture(captureSource, microphoneUID) else {
             // Close the writer opened above, or its file keeps a zero-length
             // RIFF header until something else happens to overwrite it.
             cache.close()
@@ -327,6 +363,9 @@ public final class LiveSession {
             self.capture = nil
             cache.close()
             self.cache = nil
+            // The attempt is over: nothing of it may stay the live recording.
+            decoder = nil
+            recordingId = nil
             state = .failed(error.localizedDescription)
             throw error
         }
@@ -339,8 +378,15 @@ public final class LiveSession {
         guard let capture, let id = recordingId else { return nil }
         state = .finishing
 
-        let archive = capture.stop()
+        // Taken out of the session first, so that a second stop during the wait finds
+        // nothing to stop. Closed off the main actor: `stop` ends in the encoder's
+        // `finishWriting`, which was a bare wait on this thread, and an encoder that
+        // never answered froze the window, Stop and the quit gate's own timer.
         self.capture = nil
+        let archive = await Self.stopCapture(capture, closeWithin: archiveCloseTimeout)
+        if !archive.closed {
+            notices.append(.archiveNotClosed(seconds: Int(archiveCloseTimeout.rounded())))
+        }
 
         // `removeTap` can race the final callback. Close the stream only after
         // capture stops, then wait until every yielded chunk has reached the
@@ -399,6 +445,18 @@ public final class LiveSession {
         return result
     }
 
+    /// `capture.stop(closeWithin:)` on a thread that is not the main one, and not one
+    /// of the cooperative pool's either: it blocks, up to `closeWithin`.
+    private static func stopCapture(
+        _ capture: AudioCapture, closeWithin: TimeInterval
+    ) async -> (frames: AVAudioFramePosition, sampleRate: Int, closed: Bool) {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(returning: capture.stop(closeWithin: closeWithin))
+            }
+        }
+    }
+
     /// The moment to bookmark. Counted from the audio received rather than a
     /// wall clock, so it stays on the same timeline as the transcript.
     public var currentMs: Int { Audio.bytesToMs(ingestedBytes) }
@@ -454,9 +512,5 @@ public final class LiveSession {
         nextIndex += 1
         if let decoder { stats = decoder.stats }
         onCommitted?([segment])
-    }
-
-    private func requestMicrophone() async -> Bool {
-        await MicrophoneAccess.request() == .granted
     }
 }

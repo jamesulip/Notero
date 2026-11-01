@@ -52,7 +52,7 @@ public final class AudioCapture: @unchecked Sendable {
     private let stateLock = NSLock()
     private var input: (any LaneCapturing)?
     private var chains: [CaptureLane: LaneChain] = [:]
-    private var archive: ArchiveWriter?
+    private var archive: (any ArchiveWriting)?
     private var onAudio: (@Sendable (CapturedAudio) -> Void)?
     private var _isMuted = false
     private var _isPaused = false
@@ -60,8 +60,22 @@ public final class AudioCapture: @unchecked Sendable {
     private var _roomMode = false
     private var _onNotice: (@Sendable (CaptureNotice) -> Void)?
 
+    /// Where a gap's silence is written, and where audio that arrives while it is
+    /// being written waits its turn (finding 33).
+    private let fillQueue = DispatchQueue(label: "transcriber.capture.fill", qos: .userInitiated)
+    /// Jobs on `fillQueue` that have been accepted and have not finished. Under
+    /// `stateLock`. Audio is only queued behind a fill while this is above zero, so
+    /// the ordinary path stays a plain call on the audio thread.
+    private var queuedWork = 0
+    /// One thing at a time through the lane chains: their converters and filters
+    /// carry state, and are not safe to use from two threads. The audio thread and
+    /// the fill both take it, a slice or a buffer at a time.
+    private let processLock = NSLock()
+
     public private(set) var isRunning = false
     public private(set) var archiveFormat: AVAudioFormat?
+    /// The rate the device delivers, which `fillGap` counts its frames in.
+    private var captureRate: Double = 0
 
     /// Muted capture writes silence rather than dropping frames, so timestamps
     /// stay pinned to wall-clock and the transcript never desyncs from audio.
@@ -119,13 +133,39 @@ public final class AudioCapture: @unchecked Sendable {
     ///   - microphoneUID: which microphone, or nil to follow the system
     ///     default. A UID rather than a device id, because ids are reassigned
     ///     across reboots and a saved preference outlives one.
-    public init?(source: CaptureSource = .default, microphoneUID: String? = nil) {
+    public convenience init?(source: CaptureSource = .default, microphoneUID: String? = nil) {
+        self.init(source: source, microphoneUID: microphoneUID,
+                  makeInput: AudioCapture.hardwareInput)
+    }
+
+    /// The seams tests use: the lane source is built by `makeInput` instead of
+    /// being the microphone or the system tap, so the whole chain from a
+    /// buffer to the archive and the working-copy bytes runs with no device; and
+    /// the archive by `makeArchive`, so that one that stalls can stand in for the
+    /// encoder.
+    init(source: CaptureSource, microphoneUID: String?,
+         makeInput: @escaping @Sendable (CaptureSource, String?) -> any LaneCapturing,
+         makeArchive: @escaping @Sendable (URL, Double, [CaptureLane]) throws -> any ArchiveWriting
+            = { try ArchiveWriter(url: $0, sampleRate: $1, lanes: $2) }) {
         self.source = source
         self.lanes = source.lanes
         self.microphoneUID = microphoneUID
+        self.makeInput = makeInput
+        self.makeArchive = makeArchive
     }
 
     private let microphoneUID: String?
+    private let makeInput: @Sendable (CaptureSource, String?) -> any LaneCapturing
+    private let makeArchive: @Sendable (URL, Double, [CaptureLane]) throws -> any ArchiveWriting
+
+    private static func hardwareInput(_ source: CaptureSource,
+                                      _ microphoneUID: String?) -> any LaneCapturing {
+        switch source {
+        case .microphone: MicrophoneInput(deviceUID: microphoneUID)
+        case .systemAudio: TapInput(withMicrophone: false, microphoneUID: nil)
+        case .both: TapInput(withMicrophone: true, microphoneUID: microphoneUID)
+        }
+    }
 
     /// Called when something changed under the recording that the user has
     /// to be told about: the microphone was unplugged and replaced, the
@@ -155,11 +195,7 @@ public final class AudioCapture: @unchecked Sendable {
         guard !isRunning else { return }
         self.onAudio = onAudio
 
-        let input: any LaneCapturing = switch source {
-        case .microphone: MicrophoneInput(deviceUID: microphoneUID)
-        case .systemAudio: TapInput(withMicrophone: false, microphoneUID: nil)
-        case .both: TapInput(withMicrophone: true, microphoneUID: microphoneUID)
-        }
+        let input = makeInput(source, microphoneUID)
         try input.prepare()
         let rate = input.sampleRate
         guard rate > 0 else { throw CaptureError.noInputDevice }
@@ -172,6 +208,7 @@ public final class AudioCapture: @unchecked Sendable {
                                                 channels: AVAudioChannelCount(lanes.count))
         else { throw CaptureError.unsupportedFormat(rate) }
         self.archiveFormat = archiveFormat
+        self.captureRate = rate
 
         var chains: [CaptureLane: LaneChain] = [:]
         for lane in lanes {
@@ -183,9 +220,14 @@ public final class AudioCapture: @unchecked Sendable {
             }
             chains[lane] = chain
         }
-        let writer = try archiveURL.map {
-            try ArchiveWriter(url: $0, sampleRate: rate, lanes: lanes)
+        let lanes = self.lanes
+        let writer = try archiveURL.map { try makeArchive($0, rate, lanes) }
+        writer?.onFailure = { [weak self] error in
+            self?.onNotice?(.recordingNotSaved(error.localizedDescription))
         }
+        // What the file holds, which is not the device's rate when the device
+        // runs faster than the encoder can.
+        if let writer { self.archiveFormat = writer.fileFormat }
         stateLock.withLock {
             self.input = input
             self.chains = chains
@@ -197,7 +239,7 @@ public final class AudioCapture: @unchecked Sendable {
         do {
             try input.start { [weak self] frames in self?.handle(frames) }
         } catch {
-            let closing = stateLock.withLock { () -> ArchiveWriter? in
+            let closing = stateLock.withLock { () -> (any ArchiveWriting)? in
                 defer {
                     archive = nil
                     self.input = nil
@@ -212,13 +254,31 @@ public final class AudioCapture: @unchecked Sendable {
     }
 
     /// Stops capture and closes the archive. Returns what was written.
+    ///
+    /// - Parameter closeWithin: how long to wait for the archive to close, or nil
+    ///   to wait as long as it takes. A caller on the main actor passes one
+    ///   (`LiveSession`): an encoder that never answered froze Stop, and the
+    ///   quit gate's 30 s timer with it, since both ran on the thread that was
+    ///   waiting. The close is not abandoned when the wait ends -- it carries on in
+    ///   the background and the file is finished when the encoder answers -- but
+    ///   `closed` is false and `frames` is what had been handed over.
+    ///
+    /// `frames` is read after the close, and is what the file holds: every frame
+    /// handed over on a clean close, and less after a disk-low stop or a failed
+    /// write (finding 33).
     @discardableResult
-    public func stop() -> (frames: AVAudioFramePosition, sampleRate: Int) {
+    public func stop(closeWithin timeout: TimeInterval? = nil)
+        -> (frames: AVAudioFramePosition, sampleRate: Int, closed: Bool) {
         guard isRunning else {
-            return (stateLock.withLock { archive?.frameCount ?? 0 }, archiveSampleRate)
+            return (stateLock.withLock { archive?.frameCount ?? 0 }, archiveSampleRate, true)
         }
         stateLock.withLock { input }?.stop()
-        let closing = stateLock.withLock { () -> ArchiveWriter? in
+        // Everything that was accepted is written before the file closes: the
+        // silence of a gap, and the audio that was queued behind it. Dropping
+        // the rest would put every later timestamp in the file ahead of the
+        // clock. This waits for the fill, which is CPU work and not a hang.
+        fillQueue.sync {}
+        let closing = stateLock.withLock { () -> (any ArchiveWriting)? in
             defer {
                 archive = nil
                 input = nil
@@ -227,11 +287,37 @@ public final class AudioCapture: @unchecked Sendable {
             }
             return archive
         }
-        let frames = closing?.frameCount ?? 0
         let rate = archiveSampleRate
-        closing?.finish()
+        var closed = true
+        if let closing {
+            if let timeout {
+                closed = Self.close(closing, within: timeout)
+            } else {
+                closing.finish()
+            }
+        }
+        let frames = closing?.frameCount ?? 0
         isRunning = false
-        return (frames, rate)
+        return (frames, rate, closed)
+    }
+
+    /// `finish()` on a thread of its own, waited for at most `timeout`. True when it
+    /// returned in time. The thread is left to finish by itself when it did not.
+    private static func close(_ archive: any ArchiveWriting, within timeout: TimeInterval) -> Bool {
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            archive.finish()
+            done.signal()
+        }
+        return done.wait(timeout: .now() + timeout) == .success
+    }
+
+    /// Returns once the archive has taken everything handed to it so far. For
+    /// tests that run hours of audio faster than real time and would otherwise
+    /// outrun the encoder, which real time never does.
+    func settle() {
+        fillQueue.sync {}
+        stateLock.withLock { archive }?.settle()
     }
 
     // MARK: - The chain
@@ -247,8 +333,59 @@ public final class AudioCapture: @unchecked Sendable {
         let paused = _isPaused
         let gain = _gain
         let roomMode = _roomMode
+        // A gap is still being written: this audio goes after it, and so it waits on
+        // the same queue. Counted in the same breath as it is read.
+        let behindAFill = queuedWork > 0
+        if behindAFill, onAudio != nil, !chains.isEmpty, !paused { queuedWork += 1 }
         stateLock.unlock()
         guard let onAudio, !chains.isEmpty, !paused else { return }
+
+        if behindAFill {
+            // The buffers have to be copied. `TapInput` reuses one buffer per lane for
+            // every callback, because everything downstream used to be done with it
+            // when the callback returned; a callback that waits behind a fill is not,
+            // and the next one would write over it (QA, FINDINGS 35). Only a callback
+            // that arrives during a gap pays for the copy.
+            let pending = Pending(frames: frames.mapValues { $0.deepCopy() }, chains: chains,
+                                  onAudio: onAudio, archive: archive, muted: muted, gain: gain,
+                                  roomMode: roomMode)
+            fillQueue.async { [self] in
+                run(pending)
+                stateLock.withLock { queuedWork -= 1 }
+            }
+        } else {
+            run(Pending(frames: frames, chains: chains, onAudio: onAudio, archive: archive,
+                        muted: muted, gain: gain, roomMode: roomMode))
+        }
+    }
+
+    /// What one callback needs, so that it can be handed to the fill queue. The
+    /// buffers and the chains are not `Sendable`; each belongs to exactly one
+    /// callback, and `processLock` keeps the chains to one thread at a time.
+    private struct Pending: @unchecked Sendable {
+        let frames: [CaptureLane: AVAudioPCMBuffer]
+        let chains: [CaptureLane: LaneChain]
+        let onAudio: @Sendable (CapturedAudio) -> Void
+        let archive: (any ArchiveWriting)?
+        let muted: Bool
+        let gain: Float
+        let roomMode: Bool
+    }
+
+    private func run(_ work: Pending) {
+        processLock.lock()
+        defer { processLock.unlock() }
+        process(work.frames, chains: work.chains, onAudio: work.onAudio, archive: work.archive,
+                muted: work.muted, gain: work.gain, roomMode: work.roomMode)
+    }
+
+    /// One callback's audio through gain, the meter, the archive and the
+    /// 16 kHz conversion. Called with `processLock` held.
+    private func process(_ frames: [CaptureLane: AVAudioPCMBuffer],
+                         chains: [CaptureLane: LaneChain],
+                         onAudio: @Sendable (CapturedAudio) -> Void,
+                         archive: (any ArchiveWriting)?,
+                         muted: Bool, gain: Float, roomMode: Bool) {
 
         var peaks: [CaptureLane: Float] = [:]
         var pcm: [CaptureLane: Data] = [:]
@@ -310,6 +447,21 @@ public final class AudioCapture: @unchecked Sendable {
                               lanes: pcm, peaks: peaks))
     }
 
+    /// The longest stretch of silence written as one buffer.
+    ///
+    /// A gap can be as long as the Mac was asleep: the first buffer after a
+    /// wake reports everything since the last one. As a single buffer that is
+    /// the length of the sleep in float samples, per lane -- measured, one hour
+    /// at 48 kHz raised the footprint by 770 MB, produced one 115 MB chunk for
+    /// the live path, and held the capture thread for 19 s while it did. A
+    /// second at a time costs the same silence in the same total time, and a
+    /// bounded amount of memory.
+    private static let gapSliceSeconds = 1.0
+
+    /// The shortest gap worth a line to the user. A device change normally
+    /// costs a fraction of a second, which nobody can hear or read back.
+    private static let reportedGapSeconds = 1.0
+
     /// Silence for a gap in a lane, so later timestamps stay where they were.
     ///
     /// The output device changing mid-recording tears the tap down and builds
@@ -317,6 +469,13 @@ public final class AudioCapture: @unchecked Sendable {
     /// frames would pull every subsequent word earlier by the length of the
     /// gap; writing them as silence keeps the recording on wall-clock and
     /// leaves an audible, visible hole where the truth is.
+    ///
+    /// **Written on a queue, not on the thread that reported it.** Ten minutes of
+    /// silence is 600 slices through the archive and the converter, and with an
+    /// archive open it held the capture thread for 3.1 s with one lane and 9.7 s
+    /// with two in a debug build (finding 33). The call returns at once; the audio
+    /// that arrives while the silence is being written is queued behind it
+    /// (`handle`), and `stop()` waits for all of it.
     private func fillGap(_ frames: Int) {
         stateLock.lock()
         let chains = self.chains
@@ -328,27 +487,69 @@ public final class AudioCapture: @unchecked Sendable {
         // recorded in that time anyway.
         guard let onAudio, frames > 0, !paused else { return }
 
-        var buffers: [CaptureLane: AVAudioPCMBuffer] = [:]
-        for lane in lanes {
-            guard let chain = chains[lane],
-                  let buffer = AVAudioPCMBuffer(pcmFormat: chain.monoFormat,
-                                                frameCapacity: AVAudioFrameCount(frames))
-            else { continue }
-            buffer.frameLength = AVAudioFrameCount(frames)
-            if let channel = buffer.floatChannelData?[0] {
-                for index in 0..<frames { channel[index] = 0 }
-            }
-            buffers[lane] = buffer
+        // Said, not only filled: the recording is on the wall clock again, but
+        // it holds silence where audio was, and a same-device recovery after a
+        // sleep raises no other notice.
+        let rate = captureRate > 0 ? captureRate : 48_000
+        let seconds = Double(frames) / rate
+        if seconds >= Self.reportedGapSeconds {
+            onNotice?(.audioGap(seconds: Int(seconds.rounded())))
         }
-        archive?.write(buffers)
 
-        var pcm: [CaptureLane: Data] = [:]
-        for (lane, buffer) in buffers {
-            if let narrow = chains[lane]?.toInference(buffer) { pcm[lane] = narrow }
+        let job = Fill(frames: frames, rate: rate, lanes: lanes, chains: chains,
+                       onAudio: onAudio, archive: archive)
+        stateLock.withLock { queuedWork += 1 }
+        fillQueue.async { [self] in
+            write(job)
+            stateLock.withLock { queuedWork -= 1 }
         }
-        guard !pcm.isEmpty else { return }
-        onAudio(CapturedAudio(pcm: Self.mix(pcm, order: lanes), peak: 0,
-                              lanes: pcm, peaks: [:]))
+    }
+
+    private struct Fill: @unchecked Sendable {
+        let frames: Int
+        let rate: Double
+        let lanes: [CaptureLane]
+        let chains: [CaptureLane: LaneChain]
+        let onAudio: @Sendable (CapturedAudio) -> Void
+        let archive: (any ArchiveWriting)?
+    }
+
+    /// The silence, a second at a time, taking `processLock` for each slice so that
+    /// audio on the audio thread is never kept waiting for more than one.
+    private func write(_ fill: Fill) {
+        let slice = max(1, Int(fill.rate * Self.gapSliceSeconds))
+        var remaining = fill.frames
+        while remaining > 0 {
+            let count = min(remaining, slice)
+            remaining -= count
+
+            processLock.lock()
+            var buffers: [CaptureLane: AVAudioPCMBuffer] = [:]
+            for lane in fill.lanes {
+                guard let chain = fill.chains[lane],
+                      let buffer = AVAudioPCMBuffer(pcmFormat: chain.monoFormat,
+                                                    frameCapacity: AVAudioFrameCount(count))
+                else { continue }
+                buffer.frameLength = AVAudioFrameCount(count)
+                if let channel = buffer.floatChannelData?[0] {
+                    for index in 0..<count { channel[index] = 0 }
+                }
+                buffers[lane] = buffer
+            }
+            fill.archive?.write(buffers)
+
+            var pcm: [CaptureLane: Data] = [:]
+            for (lane, buffer) in buffers {
+                if let narrow = fill.chains[lane]?.toInference(buffer) { pcm[lane] = narrow }
+            }
+            // Handed on under the lock too, as `process` does, so that the archive
+            // and the working copy see one order even if a buffer arrives beside it.
+            if !pcm.isEmpty {
+                fill.onAudio(CapturedAudio(pcm: Self.mix(pcm, order: fill.lanes), peak: 0,
+                                           lanes: pcm, peaks: [:]))
+            }
+            processLock.unlock()
+        }
     }
 
     /// Sums the lanes for the single-transcript path.
@@ -472,5 +673,21 @@ extension AVAudioConverter {
 
     private final class Flag: @unchecked Sendable {
         var value = false
+    }
+}
+
+extension AVAudioPCMBuffer {
+    /// A buffer of its own holding the same samples. Nil-safe: a buffer whose copy cannot be
+    /// allocated comes back as itself, which is what it was before.
+    func deepCopy() -> AVAudioPCMBuffer {
+        guard let copy = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCapacity) else { return self }
+        copy.frameLength = frameLength
+        let channels = Int(format.channelCount)
+        if let source = floatChannelData, let target = copy.floatChannelData {
+            for channel in 0..<channels { target[channel].update(from: source[channel], count: Int(frameLength)) }
+        } else if let source = int16ChannelData, let target = copy.int16ChannelData {
+            for channel in 0..<channels { target[channel].update(from: source[channel], count: Int(frameLength)) }
+        }
+        return copy
     }
 }

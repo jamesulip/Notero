@@ -59,6 +59,13 @@ public enum AudioCache {
     public static func build(from source: URL, to destination: URL,
                              channel: Int? = nil,
                              progress: (@Sendable (Double) -> Void)? = nil) async throws -> Int {
+        try await build(from: source, to: destination, channel: channel,
+                        progress: progress, disk: .system)
+    }
+
+    static func build(from source: URL, to destination: URL, channel: Int?,
+                      progress: (@Sendable (Double) -> Void)?,
+                      disk: DiskSpace) async throws -> Int {
         let asset = AVURLAsset(url: source)
         guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
             throw EngineError.audioUnreadable("no audio track in \(source.lastPathComponent)")
@@ -91,7 +98,7 @@ public enum AudioCache {
         }
         reader.add(output)
 
-        let writer = try WavWriter(url: destination)
+        let writer = try WavWriter(url: destination, disk: disk)
         defer { writer.close() }
 
         // Reported in whole percent, not per buffer. A 3h51m file yields 27,091
@@ -103,7 +110,9 @@ public enum AudioCache {
             throw EngineError.audioUnreadable(reader.error?.localizedDescription ?? "reader failed")
         }
 
-        while reader.status == .reading {
+        // A writer that stopped -- a full disk -- ends the decode: the copy
+        // would otherwise come back short and look complete.
+        while reader.status == .reading, writer.failure == nil {
             guard let sample = output.copyNextSampleBuffer() else { break }
             if let block = CMSampleBufferGetDataBuffer(sample) {
                 var length = 0
@@ -129,6 +138,10 @@ public enum AudioCache {
             CMSampleBufferInvalidate(sample)
         }
 
+        if let failure = writer.failure {
+            reader.cancelReading()
+            throw EngineError.cannotSaveAudio(failure.localizedDescription)
+        }
         if reader.status == .failed {
             throw EngineError.audioUnreadable(reader.error?.localizedDescription ?? "decode failed")
         }
@@ -156,6 +169,15 @@ public enum AudioCache {
 ///
 /// The RIFF header is rewritten on close, so a session killed mid-recording
 /// leaves a file that can be repaired rather than one that is simply lost.
+///
+/// A write that fails -- a full disk, a volume that went away -- stops the
+/// writer instead of crashing the app. The legacy `FileHandle.write(_:)` raises
+/// an Objective-C exception on any error, which Swift cannot catch: measured,
+/// filling a disk under it terminated the process with
+/// `NSFileHandleOperationException: No space left on device` (FINDINGS §14).
+/// Everything written before the failure stays a clean, readable prefix, and
+/// nothing after it is attempted, because a write that resumed once space came
+/// back would put the rest of the audio at the wrong time.
 public final class WavWriter: @unchecked Sendable {
     private let handle: FileHandle
     private let lock = NSLock()
@@ -164,8 +186,12 @@ public final class WavWriter: @unchecked Sendable {
     /// back-pressure instead of queueing an entire imported file in memory.
     private let liveWriteQueue = DispatchQueue(label: "transcriber.live-pcm",
                                                qos: .utility)
+    private let disk: DiskSpace
     private var byteCount = 0
+    private var bytesSinceDiskCheck = 0
     private var closed = false
+    private var _failure: (any Error)?
+    private var _onFailure: (@Sendable (any Error) -> Void)?
     public let url: URL
 
     /// Why the working copy could not be opened.
@@ -194,19 +220,17 @@ public final class WavWriter: @unchecked Sendable {
         }
     }
 
-    private static func freeBytes(near url: URL) -> Int64? {
-        try? url.deletingLastPathComponent()
-            .resourceValues(forKeys: [.volumeAvailableCapacityKey])
-            .volumeAvailableCapacity
-            .map(Int64.init)
+    public convenience init(url: URL) throws {
+        try self.init(url: url, disk: .system)
     }
 
-    public init(url: URL) throws {
+    init(url: URL, disk: DiskSpace) throws {
         self.url = url
+        self.disk = disk
         let directory = url.deletingLastPathComponent()
 
         func fail(_ reason: String) -> CannotWrite {
-            CannotWrite(url: url, reason: reason, availableBytes: Self.freeBytes(near: url))
+            CannotWrite(url: url, reason: reason, availableBytes: disk.available(url))
         }
 
         do {
@@ -215,6 +239,11 @@ public final class WavWriter: @unchecked Sendable {
         } catch {
             throw fail("The folder could not be created: \(error.localizedDescription)")
         }
+        // Refused here rather than sealed a few seconds into the recording:
+        // below the reserve there is nothing worth starting.
+        if disk.shortfall(at: url) != nil {
+            throw fail("The disk is almost full. Free some space, then try again.")
+        }
         guard FileManager.default.createFile(atPath: url.path,
                                              contents: Self.header(dataBytes: 0)) else {
             throw fail("The file could not be created. The folder may be read-only, "
@@ -222,20 +251,46 @@ public final class WavWriter: @unchecked Sendable {
         }
         do {
             handle = try FileHandle(forWritingTo: url)
+            try handle.seekToEnd()
         } catch {
             throw fail(error.localizedDescription)
         }
-        handle.seekToEndOfFile()
     }
 
     public var durationMs: Int { Audio.bytesToMs(lock.withLock { byteCount }) }
 
+    /// Why writing stopped, if it has. Set once; nothing is written after it.
+    public var failure: (any Error)? { lock.withLock { _failure } }
+
+    /// Called once, from whichever thread was writing, when writing stops
+    /// early. The recording carries on -- the live transcript does not need
+    /// this file -- so this is how the user gets told.
+    public var onFailure: (@Sendable (any Error) -> Void)? {
+        get { lock.withLock { _onFailure } }
+        set { lock.withLock { _onFailure = newValue } }
+    }
+
     public func write(_ pcm: Data) {
-        lock.withLock {
-            guard !closed else { return }
-            handle.write(pcm)
-            byteCount += pcm.count
+        let failed: (error: any Error, report: (@Sendable (any Error) -> Void)?)? = lock.withLock {
+            guard !closed, _failure == nil, !pcm.isEmpty else { return nil }
+            bytesSinceDiskCheck += pcm.count
+            if Audio.bytesToMs(bytesSinceDiskCheck) >= DiskSpace.checkIntervalMs {
+                bytesSinceDiskCheck = 0
+                if let free = disk.shortfall(at: url) {
+                    _failure = DiskSpace.Low(availableBytes: free)
+                    return (_failure!, _onFailure)
+                }
+            }
+            do {
+                try handle.write(contentsOf: pcm)
+                byteCount += pcm.count
+                return nil
+            } catch {
+                _failure = error
+                return (error, _onFailure)
+            }
         }
+        if let failed { failed.report?(failed.error) }
     }
 
     /// Enqueues a small live-capture buffer for ordered background writing.
@@ -251,20 +306,36 @@ public final class WavWriter: @unchecked Sendable {
             lock.withLock {
                 guard !closed else { return }
                 closed = true
-                handle.seek(toFileOffset: 0)
-                handle.write(Self.header(dataBytes: byteCount))
+                // Overwrites the 44 bytes already there, so it needs no new
+                // space -- but on a copy-on-write volume even that can fail.
+                // `MappedPCM` reads a header that still says zero as "all of
+                // the file", so a failure here costs nothing that matters.
+                try? handle.seek(toOffset: 0)
+                try? handle.write(contentsOf: Self.header(dataBytes: byteCount))
                 try? handle.close()
             }
         }
     }
 
+    /// The 44-byte header for `dataBytes` of audio.
+    ///
+    /// A RIFF size is 32 bits, so a file past 4 GiB -- 37 hours at 16 kHz,
+    /// which a Mac left recording over a weekend reaches -- cannot say how long
+    /// it is. `UInt32(36 + dataBytes)` is a trap there, and it was in `close()`:
+    /// the app terminated at Stop with the audio written and the header
+    /// unfinished. Such a file is marked the way a stream is, with every size
+    /// all ones, which `MappedPCM` reads as "everything after the header".
     static func header(dataBytes: Int) -> Data {
         let channels: UInt16 = 1, bits: UInt16 = 16
         let rate = UInt32(Audio.sampleRate)
         let blockAlign = channels * bits / 8
+        let limit = Int(UInt32.max) - 36
+        let known = dataBytes <= limit
+        let riffSize = known ? UInt32(36 + dataBytes) : UInt32.max
+        let dataSize = known ? UInt32(dataBytes) : UInt32.max
 
         var data = Data("RIFF".utf8)
-        data.append(littleEndian: UInt32(36 + dataBytes))
+        data.append(littleEndian: riffSize)
         data.append(Data("WAVEfmt ".utf8))
         data.append(littleEndian: UInt32(16))
         data.append(littleEndian: UInt16(1))         // PCM
@@ -274,7 +345,7 @@ public final class WavWriter: @unchecked Sendable {
         data.append(littleEndian: blockAlign)
         data.append(littleEndian: bits)
         data.append(Data("data".utf8))
-        data.append(littleEndian: UInt32(dataBytes))
+        data.append(littleEndian: dataSize)
         return data
     }
 }
@@ -309,7 +380,9 @@ public struct MappedPCM: @unchecked Sendable {
                 // mid-recording never got its header rewritten and still claims
                 // zero bytes, while the audio is all sitting right there -- and
                 // recovering it is the entire reason the header is written last.
-                let declared = (size == 0 || size > remaining) ? remaining : size
+                // All ones is the size of a file too long for 32 bits.
+                let declared = (size == 0 || size == Int(UInt32.max) || size > remaining)
+                    ? remaining : size
                 found = (cursor + 8, declared)
                 break
             }

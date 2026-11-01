@@ -30,10 +30,12 @@ final class LiveDecoderTests: XCTestCase {
     }
 
     private func config(hop: Int = 1_500, preRoll: Int = 1_500, context: Int = 15_000,
-                        adaptive: Bool = false, minHop: Int = 1_000) -> SessionConfig {
+                        adaptive: Bool = false, minHop: Int = 1_000,
+                        headTolerance: Int = 0) -> SessionConfig {
         SessionConfig(contextMs: context, hopMs: hop, silenceBoundaryMs: 700, agreement: 2,
                       language: "tl", prompt: nil, useNeuralVAD: false, preRollMs: preRoll,
-                      adaptiveHop: adaptive, minHopMs: minHop)
+                      adaptiveHop: adaptive, minHopMs: minHop,
+                      headTolerance: headTolerance, headMinRun: 3)
     }
 
     private func make(words: [SpokenWord], speech: [Range<Int>],
@@ -124,6 +126,50 @@ final class LiveDecoderTests: XCTestCase {
         // "so yung" committed at 4.5 s with end 2 800; the 6 s hop starts 1 s before.
         XCTAssertEqual(calls.last?.startMs, 1_800)
         XCTAssertEqual(decoder.committedEndMs, 4_200)
+    }
+
+    // MARK: - A detector that throws
+
+    func testABrokenVoiceDetectorIsCountedAndTheSessionCarriesOn() async throws {
+        // `try?` used to drop the batch without a trace: a detector that threw
+        // on every batch ended looking like a quiet room.
+        let asr = OracleRecognizer(words: quotation)
+        let vad = ThrowingVAD()
+        let decoder = LiveDecoder(config: config(), recognizer: asr, vad: vad)
+        var clock = 0
+        await feed(decoder, &clock, to: 8_000)
+
+        let pushes = await vad.pushes
+        XCTAssertGreaterThan(pushes, 0)
+        XCTAssertEqual(decoder.stats.vadFailures, pushes, "every failed batch is counted")
+        let calls = await asr.calls
+        XCTAssertFalse(calls.isEmpty, "hops still decode without the detector")
+    }
+
+    func testOnlyTheBatchesThatFailedAreCounted() async throws {
+        let asr = OracleRecognizer(words: quotation)
+        let vad = ThrowingVAD(failOn: [2, 5])
+        let decoder = LiveDecoder(config: config(), recognizer: asr, vad: vad)
+        var clock = 0
+        await feed(decoder, &clock, to: 8_000)
+
+        let pushes = await vad.pushes
+        XCTAssertGreaterThanOrEqual(pushes, 5)
+        XCTAssertEqual(decoder.stats.vadFailures, 2)
+    }
+
+    // MARK: - The live path keeps Whisper's own ladder
+
+    func testTheLivePathNeverTakesTheLadderApart() async throws {
+        // `.greedyOnly` is for a caller that retries on other audio. A live hop
+        // has no such retry and re-decodes the same audio a hop later, so it
+        // keeps WhisperKit's whole temperature ladder (FINDINGS 2).
+        let (decoder, asr, _, _) = make(words: quotation, speech: [2_200..<5_500])
+        var clock = 0
+        await feed(decoder, &clock, to: 8_000)
+        let calls = await asr.calls
+        XCTAssertFalse(calls.isEmpty)
+        XCTAssertTrue(calls.allSatisfy { $0.sampling == .standard && $0.attempt == 0 })
     }
 
     // MARK: - Finalization on the VAD's clock
@@ -325,6 +371,28 @@ final class LiveDecoderTests: XCTestCase {
         XCTAssertEqual(calls4.count, 1, "the dropped hop never decoded")
     }
 
+    func testAHeadThatChangesOnEveryPassHoldsBackTheRestUnlessTheHeadIsTolerated() async throws {
+        // The first word is heard differently on every pass; everything after it is stable.
+        let words = (0..<15).map { word("w\($0)", 2_000 + $0 * 400, 2_000 + $0 * 400 + 300) }
+        func run(tolerance: Int) async -> (committedBefore7_6s: String, skips: Int) {
+            let (decoder, asr, _, out) = make(words: words, speech: [2_000..<8_000],
+                                              config: config(headTolerance: tolerance))
+            await asr.setMutation { text, call, _ in text == "w0" ? "w0_\(call)" : text }
+            var clock = 0
+            // Passes at 1.5, 3.0, 4.5, 6.0 and 7.5 s; the speech has not ended.
+            await feed(decoder, &clock, to: 7_600)
+            return (out.committed.joinedText, decoder.stats.headSkips)
+        }
+        let strict = await run(tolerance: 0)
+        XCTAssertEqual(strict.committedBefore7_6s, "", "one unstable first word blocks every word behind it")
+        XCTAssertEqual(strict.skips, 0)
+
+        let tolerant = await run(tolerance: 2)
+        XCTAssertTrue(tolerant.committedBefore7_6s.hasPrefix("w0_"), tolerant.committedBefore7_6s)
+        XCTAssertTrue(tolerant.committedBefore7_6s.contains("w1 w2 w3"), tolerant.committedBefore7_6s)
+        XCTAssertGreaterThanOrEqual(tolerant.skips, 1)
+    }
+
     func testAStallForcesCommitsWhenTheWindowHasToSlide() async throws {
         // Every pass names every word differently, so nothing ever agrees.
         let words = (0..<40).map { word("w\($0)", $0 * 500, $0 * 500 + 400) }
@@ -369,6 +437,53 @@ final class LiveDecoderTests: XCTestCase {
         await feed(decoder, &clock, to: 3_100)
         let calls7 = await asr.calls
         XCTAssertEqual(calls7.map(\.endMs), [1_500, 3_000])
+    }
+
+    // MARK: - Trace
+
+    func testTheTraceAccountsForEveryDecodeDroppedHopAndCommit() async throws {
+        let words = (0..<24).map { word("w\($0)", 400 + $0 * 500, 400 + $0 * 500 + 400) }
+        let (decoder, asr, _, out) = make(words: words, speech: [400..<12_400])
+        var spans: [DecodeSpan] = []
+        var dropped = 0
+        var committedWords = 0
+        var reasons = Set<CommitReason>()
+        var vadBatches = 0
+        decoder.trace = { event in
+            switch event {
+            case .decode(let span): spans.append(span)
+            case .dropped: dropped += 1
+            case .commit(let c): committedWords += c.words; reasons.insert(c.reason)
+            case .vad: vadBatches += 1
+            default: break
+            }
+        }
+        // One slow decode, so a hop tick is dropped on the way.
+        await asr.setInferMs(40)
+        await asr.hold()
+        var clock = 0
+        await feed(decoder, &clock, to: 3_400, settle: .vadOnly)
+        try await Task.sleep(for: .milliseconds(120))
+        await asr.release()
+        await decoder.drain()
+        await feed(decoder, &clock, to: 14_000)
+        await decoder.finish()
+
+        XCTAssertTrue(spans.contains { $0.totalMs >= 100 }, "the held decode shows its wait: \(spans.map(\.totalMs))")
+        XCTAssertGreaterThan(decoder.stats.droppedHops, 0, "the script must drop a hop to prove the trace sees it")
+        XCTAssertEqual(dropped, decoder.stats.droppedHops)
+        XCTAssertEqual(spans.count, decoder.stats.hops, "one span per decode that returned")
+        XCTAssertEqual(committedWords, out.committed.count, "every committed word is in some commit event")
+        XCTAssertTrue(reasons.contains(.agreed))
+        XCTAssertGreaterThan(vadBatches, 20)
+        for span in spans {
+            // The phases nest: the model call is inside the decode, the decode inside its total.
+            XCTAssertLessThanOrEqual(span.convertMs + span.recognizerMs + span.postMs,
+                                     span.totalMs + 1, "\(span)")
+            XCTAssertGreaterThanOrEqual(span.windowMs, 0)
+            XCTAssertGreaterThanOrEqual(span.completedWallMs, span.requestedWallMs)
+            XCTAssertFalse(span.failed)
+        }
     }
 
     // MARK: - Things nobody said

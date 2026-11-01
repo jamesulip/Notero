@@ -50,6 +50,10 @@ public final class LiveDecoder {
     public var onCommitted: (([Token]) -> Void)?
     /// The provisional tail after every decode. Empty once a boundary closes.
     public var onPartial: ((String) -> Void)?
+    /// Diagnostics: where each decode's time went, which hops were dropped and
+    /// why, how stale the voice detector's view was. Nil (the default) costs a
+    /// handful of clock reads per decode and nothing else. See `LiveTraceEvent`.
+    public var trace: (@MainActor (LiveTraceEvent) -> Void)?
 
     // Voice activity.
     /// Kept as compact PCM while it waits for a VAD batch. Expanding every
@@ -74,6 +78,11 @@ public final class LiveDecoder {
     private var finishing = false
     private var lastInferMs = 0
     private var lastDecodeEndMs = 0
+    // Tracing. One decode runs at a time, so one span in progress is enough.
+    private let clockEpoch = ContinuousClock.now
+    private var activeSpan: DecodeSpan?
+    private var activeDecodeKind: DecodeKind = .hop
+
     /// A boundary closed; the VAD's per-utterance speech tally is stale until
     /// the next push clears it. Ordered with the pushes rather than fired off
     /// as a detached task so a reading can never be misattributed.
@@ -99,8 +108,19 @@ public final class LiveDecoder {
         self.recognizer = recognizer
         self.vad = vad
         self.ring = RingBuffer(contextMs: config.contextMs, preRollMs: config.preRollMs)
-        self.commit = LocalAgreement(agreement: config.agreement)
+        self.commit = LocalAgreement(agreement: config.agreement,
+                                     headTolerance: config.headTolerance,
+                                     headMinRun: config.headMinRun)
     }
+
+    /// Milliseconds on the trace clock: monotonic, from this decoder's creation.
+    private func wallMs() -> Double {
+        let d = clockEpoch.duration(to: .now)
+        return Double(d.components.seconds) * 1000 + Double(d.components.attoseconds) / 1e15
+    }
+
+    /// The trace clock's current reading, so a consumer can align it with its own.
+    public var traceNowMs: Double { wallMs() }
 
     /// Audio received so far. The transcript's clock.
     public var currentMs: Int { ring.totalMs }
@@ -130,11 +150,14 @@ public final class LiveDecoder {
             vadPending = Data()
             vadFedSamples += batch.count / Audio.bytesPerSample
             let fedThroughMs = Audio.samplesToMs(vadFedSamples)
+            let handoffMs = wallMs()
             vadTask = Task {
                 let samples = await Task.detached(priority: .userInitiated) {
                     PCM.floats(from: batch)
                 }.value
-                await pumpVAD(samples, fedThroughMs: fedThroughMs)
+                let convertMs = wallMs() - handoffMs
+                await pumpVAD(samples, fedThroughMs: fedThroughMs,
+                              handoffMs: handoffMs, convertMs: convertMs)
                 vadTask = nil
             }
         }
@@ -146,7 +169,13 @@ public final class LiveDecoder {
         // is dropped -- unless a finalization is already waiting for that
         // slot, in which case this hop is superseded, not lost.
         guard decodeTask == nil else {
-            if !pendingFinal { stats.droppedHops += 1 }
+            if !pendingFinal {
+                stats.droppedHops += 1
+                trace?(.dropped(DroppedHop(
+                    wallMs: wallMs(), audioMs: ring.totalMs,
+                    inFlightKind: activeDecodeKind == .hop ? "hop" : "final",
+                    inFlightForMs: wallMs() - (activeSpan?.requestedWallMs ?? wallMs()))))
+            }
             return
         }
         if inSilence {
@@ -157,6 +186,7 @@ public final class LiveDecoder {
                 armFinalization()
             } else {
                 stats.skippedSilent += 1
+                trace?(.skippedSilent(wallMs: wallMs(), audioMs: ring.totalMs))
             }
             return
         }
@@ -176,12 +206,34 @@ public final class LiveDecoder {
         (!clearSpeechPending && lastReading.speechMs > 0) || commit.hasPartial
     }
 
-    private func pumpVAD(_ samples: [Float], fedThroughMs: Int) async {
+    private func pumpVAD(_ samples: [Float], fedThroughMs: Int,
+                         handoffMs: Double, convertMs: Double) async {
         if clearSpeechPending {
             await vad.clearSpeechCounter()
             clearSpeechPending = false
         }
-        guard let reading = try? await vad.push(samples) else { return }
+        let reading: VoiceActivityReading
+        let pushStartedMs = wallMs()
+        do {
+            reading = try await vad.push(samples)
+        } catch {
+            trace?(.vad(VADSpan(handoffWallMs: handoffMs, batchMs: Audio.samplesToMs(samples.count),
+                                audioThroughMs: fedThroughMs, convertMs: convertMs,
+                                pushMs: wallMs() - pushStartedMs, lagMs: wallMs() - handoffMs,
+                                trailingSilenceMs: -1, speechMs: -1, failed: true)))
+            // The batch is already consumed and nobody will push it again, so
+            // the detector never hears this audio. Silence and speech boundaries
+            // inside it are not detected; hops still decode on schedule, which
+            // is why the session carries on. Counted, because a detector that
+            // throws on every batch would otherwise look like a quiet room.
+            stats.vadFailures += 1
+            return
+        }
+        trace?(.vad(VADSpan(handoffWallMs: handoffMs, batchMs: Audio.samplesToMs(samples.count),
+                            audioThroughMs: fedThroughMs, convertMs: convertMs,
+                            pushMs: wallMs() - pushStartedMs, lagMs: wallMs() - handoffMs,
+                            trailingSilenceMs: reading.trailingSilenceMs,
+                            speechMs: reading.speechMs, failed: false)))
         let previous = lastReading
         lastReading = reading
         noteSilence(reading, heardThrough: fedThroughMs)
@@ -244,13 +296,30 @@ public final class LiveDecoder {
         msSinceHop = 0
         let (window, windowStartMs) = ring.window()
         let windowEndMs = ring.totalMs
+        let requestedMs = wallMs()
+        activeDecodeKind = kind
+        activeSpan = DecodeSpan(
+            kind: kind == .hop ? "hop" : "final", requestedWallMs: requestedMs,
+            audioAtRequestMs: windowEndMs, windowStartMs: windowStartMs,
+            windowEndMs: windowEndMs, windowMs: Audio.bytesToMs(window.count),
+            scheduleDelayMs: 0, convertMs: 0, recognizerMs: 0, inferMs: 0, postMs: 0,
+            totalMs: 0, tokens: 0, committed: 0, failed: false)
         decodeTask = Task {
+            activeSpan?.scheduleDelayMs = wallMs() - requestedMs
             let producedNothing = await runDecode(kind, window: window,
                                                  windowStartMs: windowStartMs,
                                                  windowEndMs: windowEndMs)
             decodeTask = nil
+            emitSpan()
             afterDecode(kind, windowEndMs: windowEndMs, producedNothing: producedNothing)
         }
+    }
+
+    private func emitSpan() {
+        guard var span = activeSpan else { return }
+        activeSpan = nil
+        span.totalMs = wallMs() - span.requestedWallMs
+        trace?(.decode(span))
     }
 
     /// Decodes one window. Returns whether the model produced nothing usable,
@@ -271,7 +340,7 @@ public final class LiveDecoder {
             let forced = commit.forceCommit(before: windowStartMs)
             if !forced.isEmpty {
                 stats.forcedCommits += 1
-                deliver(forced)
+                deliver(forced, reason: .forced)
             }
         }
 
@@ -280,23 +349,31 @@ public final class LiveDecoder {
             // A full context window can be hundreds of thousands of samples.
             // `Task {}` inherits MainActor here, so the old conversion blocked
             // animations and input even though the model API itself was async.
+            let convertStartedMs = wallMs()
             let samples = await Task.detached(priority: .userInitiated) {
                 PCM.floats(from: window)
             }.value
+            activeSpan?.convertMs = wallMs() - convertStartedMs
             try Task.checkCancellation()
+            let recognizeStartedMs = wallMs()
             output = try await recognizer.transcribe(ASRRequest(
                 samples: samples,
                 language: config.language,
                 prompt: config.prompt,
                 wordTimestamps: true
             ))
+            activeSpan?.recognizerMs = wallMs() - recognizeStartedMs
+            activeSpan?.inferMs = output.inferMs
+            activeSpan?.tokens = output.tokens.count
         } catch {
+            activeSpan?.failed = true
             stats.failedHops += 1
             stats.lastError = error.localizedDescription
             if kind == .final { concludeBoundary(producedNothing: true) }
             return true
         }
 
+        let postStartedMs = wallMs()
         stats.hops += 1
         stats.totalAudioMs += output.audioMs
         stats.totalInferMs += output.inferMs
@@ -340,13 +417,17 @@ public final class LiveDecoder {
         }
         if !newly.isEmpty {
             ring.trim(to: commit.committedEndMs)
-            deliver(newly)
+            deliver(newly, reason: .agreed)
+            activeSpan?.committed = newly.count
         }
         if kind == .final {
             concludeBoundary(producedNothing: output.tokens.isEmpty)
         }
         stats.duplicatesDropped = commit.duplicatesDropped
+        stats.headSkips = commit.headSkips
+        stats.headSkippedWords = commit.headSkippedWords
         onPartial?(commit.partial)
+        activeSpan?.postMs = wallMs() - postStartedMs
         return output.tokens.isEmpty
     }
 
@@ -358,6 +439,7 @@ public final class LiveDecoder {
             // Someone spoke while the decode ran. A final now would only be
             // abandoned, and would push the next real hop back by its cost.
             stats.finalizationsAbandoned += 1
+            trace?(.abandoned(wallMs: wallMs(), audioMs: ring.totalMs))
             return
         }
         if kind == .hop, windowEndMs >= speechEndMs {
@@ -377,6 +459,7 @@ public final class LiveDecoder {
     private func concludeBoundary(producedNothing: Bool) {
         guard inSilence else {
             stats.finalizationsAbandoned += 1
+            trace?(.abandoned(wallMs: wallMs(), audioMs: ring.totalMs))
             return
         }
         // The tail only the last decode heard. Words it placed after the
@@ -393,15 +476,19 @@ public final class LiveDecoder {
                 stats.unagreedTailCommits += tail.count
             }
             ring.trim(to: commit.committedEndMs)
-            deliver(tail)
+            deliver(tail, reason: .boundaryTail)
         }
         stats.boundaries += 1
+        trace?(.boundary(wallMs: wallMs(), audioMs: ring.totalMs, speechEndMs: speechEndMs))
         speechEndMs = 0
         clearSpeechPending = true
     }
 
-    private func deliver(_ tokens: [Token]) {
+    private func deliver(_ tokens: [Token], reason: CommitReason) {
         guard !tokens.isEmpty else { return }
+        trace?(.commit(CommitSpan(wallMs: wallMs(), audioMs: ring.totalMs, reason: reason,
+                                  words: tokens.count, firstEndMs: tokens.first?.endMs ?? 0,
+                                  lastEndMs: tokens.last?.endMs ?? 0)))
         onCommitted?(tokens)
     }
 
@@ -438,15 +525,23 @@ public final class LiveDecoder {
         let (window, windowStartMs) = ring.window()
         if hasUncommittedSpeech, !window.isEmpty,
            unheardMs >= Audio.samplesToMs(VADEngine.chunkSamples) {
+            let requestedMs = wallMs()
+            activeSpan = DecodeSpan(
+                kind: "finish", requestedWallMs: requestedMs, audioAtRequestMs: ring.totalMs,
+                windowStartMs: windowStartMs, windowEndMs: ring.totalMs,
+                windowMs: Audio.bytesToMs(window.count), scheduleDelayMs: 0, convertMs: 0,
+                recognizerMs: 0, inferMs: 0, postMs: 0, totalMs: 0, tokens: 0, committed: 0,
+                failed: false)
             _ = await runDecode(.hop, window: window, windowStartMs: windowStartMs,
                                 windowEndMs: ring.totalMs)
+            emitSpan()
         }
 
         commit.ceilingMs = ring.totalMs
         let tail = commit.flush()
         if !tail.isEmpty {
             stats.unagreedTailCommits += tail.count
-            deliver(tail)
+            deliver(tail, reason: .finish)
         }
         stats.duplicatesDropped = commit.duplicatesDropped
         onPartial?("")

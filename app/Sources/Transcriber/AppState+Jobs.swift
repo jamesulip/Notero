@@ -20,12 +20,28 @@ extension AppState {
         }
     }
 
+    /// Adds a note to what the row already says about this recording, once.
+    /// In memory for the screen, and on the row so that it survives a relaunch.
+    func appendWarning(_ message: String, for id: UUID) async {
+        let combined = [warnings[id], message].compactMap { $0 }
+        let joined = Array(NSOrderedSet(array: combined)).compactMap { $0 as? String }
+            .joined(separator: " ")
+        warnings[id] = joined
+        try? await writer.setWarning(joined, for: id)
+        // The writer saved on its own context. A row the main context holds is stale until
+        // it is refreshed, and a later save from it writes the old warning and status back
+        // (QA: 266 of 400 cycles reverted the writer's status).
+        syncStore(id)
+    }
+
     private func handle(_ event: JobEvent) async {
         switch event {
         case .queued(let id, _):
             progress[id] = JobProgress(status: .pending, fraction: 0)
+            if let job = requestedJobs[id] { queuedJobs[id] = job }
             openTranscripts[id] = nil
             stageClock[id] = nil
+            ledger.clear(id)
 
         case .stage(let id, let status, let fraction):
             let previous = progress[id]
@@ -39,61 +55,103 @@ extension AppState {
             // tens of thousands of transactions for one long recording, for a
             // number nothing ever reads back.
             if previous?.status != status {
-                try? await writer.updateStatus(status, progress: fraction, for: id)
+                // What the stage is written as depends on what the job could
+                // not save: "completed" is not true of a recording whose
+                // transcript was lost.
+                let outcome = ledger.outcome(of: status, for: id)
+                _ = await ledger.succeeded(.status, for: id) {
+                    try await writer.updateStatus(outcome.status, progress: fraction,
+                                                  error: outcome.errorMessage, for: id)
+                }
+                syncStore(id)
+                if outcome.status != status { progress[id]?.status = outcome.status }
+                if let note = outcome.warning { await appendWarning(note, for: id) }
             }
 
         case .prepared(let id, let durationMs, let waveform):
-            try? await writer.finishTranscription(
-                durationMs: durationMs,
-                waveform: waveform.isEmpty ? nil : waveform,
-                for: id
-            )
+            _ = await ledger.succeeded(.status, for: id) {
+                try await writer.finishTranscription(
+                    durationMs: durationMs,
+                    waveform: waveform.isEmpty ? nil : waveform,
+                    for: id
+                )
+            }
+            syncStore(id)
 
         case .partial(let id, let segments, let coveredMs):
             guard let job = queuedJobs[id] else { break }
             if openTranscripts[id] == nil {
-                openTranscripts[id] = try? await writer.openPartialTranscript(
-                    modelId: job.modelId, language: job.language, for: id
-                )
+                openTranscripts[id] = await ledger.attempt(.partialRows, for: id) {
+                    try await writer.openPartialTranscript(
+                        modelId: job.modelId, language: job.language, for: id
+                    )
+                } ?? nil
             }
             if let transcriptId = openTranscripts[id] {
-                try? await writer.appendPartial(segments, to: transcriptId)
+                _ = await ledger.succeeded(.partialRows, for: id) {
+                    try await writer.appendPartial(segments, to: transcriptId)
+                }
             }
             progress[id]?.coveredMs = coveredMs
+            syncStore(id)
             transcriptTicks[id, default: 0] += 1
 
         case .transcribed(let id, let payload):
             let performanceJSON = (try? JSONEncoder().encode(payload.metrics))
                 .flatMap { String(data: $0, encoding: .utf8) }
-            _ = try? await writer.completeTranscript(
-                openTranscripts[id],
-                segments: payload.segments, roster: payload.roster,
-                modelId: payload.modelId, language: payload.language,
-                processMs: payload.processMs, didDiarize: payload.didDiarize,
-                performanceJSON: performanceJSON,
-                for: id
-            )
+            await ledger.attempt(.transcript, for: id) {
+                try await writer.completeTranscript(
+                    openTranscripts[id],
+                    segments: payload.segments, roster: payload.roster,
+                    modelId: payload.modelId, language: payload.language,
+                    processMs: payload.processMs, didDiarize: payload.didDiarize,
+                    performanceJSON: performanceJSON,
+                    for: id
+                )
+            }
             openTranscripts[id] = nil
-            try? await writer.finishTranscription(
-                durationMs: payload.durationMs,
-                waveform: payload.waveform.isEmpty ? nil : payload.waveform,
-                for: id
-            )
+            _ = await ledger.succeeded(.status, for: id) {
+                try await writer.finishTranscription(
+                    durationMs: payload.durationMs,
+                    waveform: payload.waveform.isEmpty ? nil : payload.waveform,
+                    for: id
+                )
+            }
+            syncStore(id)
             transcriptTicks[id, default: 0] += 1
 
         case .rangeTranscribed(let id, let fromMs, let toMs, let segments, _):
-            _ = try? await writer.replaceSegments(fromMs: fromMs, toMs: toMs, with: segments, for: id)
+            await ledger.attempt(.turn, for: id) {
+                try await writer.replaceSegments(fromMs: fromMs, toMs: toMs, with: segments, for: id)
+            }
+            syncStore(id)
             transcriptTicks[id, default: 0] += 1
 
         case .diarized(let id, let spans, let roster):
-            try? await writer.applySpeakers(spans: spans, roster: roster, for: id)
+            let applied = await ledger.attempt(.speakers, for: id) {
+                try await writer.applySpeakers(spans: spans, roster: roster, for: id)
+            }
+            if applied == false {
+                await appendWarning(
+                    "Speaker identification found no speech to label, so the speaker "
+                    + "labels that were already on this transcript were kept.", for: id)
+            }
+            syncStore(id)
             transcriptTicks[id, default: 0] += 1
 
         case .failed(let id, let message):
             // No alert: a background job failing should not interrupt whatever
             // is on screen. The row's chip, the Needs Attention group and the
             // detail's empty state all carry the message.
-            try? await writer.updateStatus(.failed, error: message, for: id)
+            //
+            // The ledger keeps the reason: the stage event that follows writes
+            // the status again, and it used to write an empty message over this
+            // one, which left a failed row that said nothing.
+            ledger.noteFailure(message, for: id)
+            _ = await ledger.succeeded(.status, for: id) {
+                try await writer.updateStatus(.failed, error: message, for: id)
+            }
+            syncStore(id)
 
         case .warning(let id, let message):
             // The transcript is usable but incomplete. Keyed to the recording
@@ -101,11 +159,7 @@ extension AppState {
             // relaunch. Added to what the row already says rather than put in
             // its place: a microphone that was replaced during the recording
             // is still true after the transcription that followed it.
-            let combined = [warnings[id], message].compactMap { $0 }
-            let joined = Array(NSOrderedSet(array: combined)).compactMap { $0 as? String }
-                .joined(separator: " ")
-            warnings[id] = joined
-            try? await writer.setWarning(joined, for: id)
+            await appendWarning(message, for: id)
 
         case .finished(let id):
             progress[id] = nil

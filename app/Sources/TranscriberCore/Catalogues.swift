@@ -73,8 +73,11 @@ public enum ModelCatalogue {
                                                isDirectory: true)
     }
 
-    /// The decoder is the last file WhisperKit writes, so its presence means
-    /// the download finished rather than merely started.
+    /// The decoder folder's presence is a hint, not proof that the download finished:
+    /// WhisperKit fetches the file names as a `Set`, so the order is random and the
+    /// decoder can be the first thing on disk (QA, FINDINGS 35). The loader does not
+    /// rely on it. A folder that is missing or truncated makes the load throw, and the
+    /// fallback then takes the download path.
     public static func isDownloaded(_ id: String, modelsDirectory: URL) -> Bool {
         let path = directory(for: id, modelsDirectory: modelsDirectory)
             .appendingPathComponent("TextDecoder.mlmodelc")

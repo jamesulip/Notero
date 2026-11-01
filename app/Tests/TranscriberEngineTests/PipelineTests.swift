@@ -12,14 +12,22 @@ import TranscriberCore
 actor FakeRecognizer: SpeechRecognizing {
     typealias Refusal = @Sendable (_ sampleCount: Int, _ attempt: Int) -> Bool
 
+    /// Answers a request instead of the default words. Returns nil to fall
+    /// through to the default. What lets a test play a recognizer that comes
+    /// back with something plausible and wrong.
+    typealias Script = @Sendable (_ request: ASRRequest) -> ASROutput?
+
     private let refuse: Refusal
     private let callHook: @Sendable () async -> Void
-    private(set) var calls: [(samples: Int, attempt: Int)] = []
+    private let script: Script?
+    private(set) var calls: [(samples: Int, attempt: Int, sampling: ASRRequest.Sampling)] = []
 
     init(refuse: @escaping Refusal = { _, _ in false },
-         callHook: @escaping @Sendable () async -> Void = {}) {
+         callHook: @escaping @Sendable () async -> Void = {},
+         script: Script? = nil) {
         self.refuse = refuse
         self.callHook = callHook
+        self.script = script
     }
 
     var loadedModel: String? { "fake" }
@@ -28,7 +36,8 @@ actor FakeRecognizer: SpeechRecognizing {
 
     func transcribe(_ request: ASRRequest) async throws -> ASROutput {
         await callHook()
-        calls.append((request.samples.count, request.decodeAttempt))
+        calls.append((request.samples.count, request.decodeAttempt, request.sampling))
+        if let scripted = script?(request) { return scripted }
         let durationMs = request.samples.count * 1000 / Audio.sampleRate
         guard !refuse(request.samples.count, request.decodeAttempt) else {
             return ASROutput(tokens: [], audioMs: durationMs, inferMs: 1)
@@ -289,9 +298,11 @@ final class PipelineDecodeTests: XCTestCase {
             using: asr, language: "tl", prompt: nil
         )
         let calls = await asr.calls.count - before
-        // 3 attempts at each level, at most 2 levels of halving: bounded, not
-        // an exponential storm of decodes on a file that simply cannot be read.
-        XCTAssertLessThanOrEqual(calls, 3 + 2 * 3 + 4 * 3)
+        // Per window: the greedy decode, its two lead-in retries, and three
+        // sampled attempts. At most 2 levels of halving (1 + 2 + 4 windows):
+        // bounded, not an exponential storm of decodes on a file that simply
+        // cannot be read.
+        XCTAssertLessThanOrEqual(calls, (1 + 2 + 4) * (3 + 3))
     }
 
     func testDecodeAttemptIsPassedThroughSoBackendsCanVaryTheirSampling() async throws {
@@ -301,7 +312,10 @@ final class PipelineDecodeTests: XCTestCase {
             using: asr, language: "tl", prompt: nil
         )
         let attempts = await asr.calls.map(\.attempt)
-        XCTAssertEqual(attempts.prefix(2).map { $0 }, [0, 1])
+        // The refused first attempt is tried greedily, with lead-ins, and as
+        // a sampled retry before the attempt number goes up.
+        XCTAssertEqual(attempts.last, 1)
+        XCTAssertEqual(attempts, attempts.sorted(), "the attempt number only ever goes up")
     }
 
     func testTinyWindowsAreSkippedRatherThanDecoded() async throws {
