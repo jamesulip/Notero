@@ -59,7 +59,11 @@ public struct SessionConfig: Sendable, Equatable, Codable {
         preRollMs: Int = 1_500,
         adaptiveHop: Bool = false,
         minHopMs: Int = 1_000,
-        headTolerance: Int = 0,
+        // Strict LocalAgreement (0) holds everything behind a first word that two passes
+        // hear differently until the 15 s cap forces a commit. Three words of slack and a
+        // run of three cut median commit latency by 35-43% on the clips where that
+        // happened and left WER, duplicates and forced commits no worse (FINDINGS 27).
+        headTolerance: Int = 3,
         headMinRun: Int = 3
     ) {
         self.contextMs = contextMs
