@@ -180,8 +180,9 @@ final class SpeakerClusteringTests: XCTestCase {
         let tuning = SpeakerEngine.Tuning.shipping
         XCTAssertEqual(tuning.mergeGapMs, 250)
         XCTAssertEqual(tuning.minSpanMs, 120)
-        XCTAssertEqual(tuning.firstPassMinSpeechSeconds, 1.0)
-        XCTAssertEqual(tuning.fastFirstPassMinSpeechSeconds, 1.0)
+        XCTAssertEqual(tuning.firstPassMinSpeechSeconds, 0.6, "accurate: a second pass follows")
+        XCTAssertEqual(tuning.fastFirstPassMinSpeechSeconds, 1.0,
+                       "fast: no second pass, and 0.6 added phantom speakers on 4 of 12 fixtures")
         XCTAssertEqual(tuning.sameSpeakerDistance, 0.7)
         XCTAssertEqual(tuning.consolidationDistance, 0.85)
         XCTAssertEqual(tuning.foundingTurnMs, 2_000)
