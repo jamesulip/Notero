@@ -415,6 +415,53 @@ final class LiveDecoderTests: XCTestCase {
         XCTAssertEqual(calls7.map(\.endMs), [1_500, 3_000])
     }
 
+    // MARK: - Trace
+
+    func testTheTraceAccountsForEveryDecodeDroppedHopAndCommit() async throws {
+        let words = (0..<24).map { word("w\($0)", 400 + $0 * 500, 400 + $0 * 500 + 400) }
+        let (decoder, asr, _, out) = make(words: words, speech: [400..<12_400])
+        var spans: [DecodeSpan] = []
+        var dropped = 0
+        var committedWords = 0
+        var reasons = Set<CommitReason>()
+        var vadBatches = 0
+        decoder.trace = { event in
+            switch event {
+            case .decode(let span): spans.append(span)
+            case .dropped: dropped += 1
+            case .commit(let c): committedWords += c.words; reasons.insert(c.reason)
+            case .vad: vadBatches += 1
+            default: break
+            }
+        }
+        // One slow decode, so a hop tick is dropped on the way.
+        await asr.setInferMs(40)
+        await asr.hold()
+        var clock = 0
+        await feed(decoder, &clock, to: 3_400, settle: .vadOnly)
+        try await Task.sleep(for: .milliseconds(120))
+        await asr.release()
+        await decoder.drain()
+        await feed(decoder, &clock, to: 14_000)
+        await decoder.finish()
+
+        XCTAssertTrue(spans.contains { $0.totalMs >= 100 }, "the held decode shows its wait: \(spans.map(\.totalMs))")
+        XCTAssertGreaterThan(decoder.stats.droppedHops, 0, "the script must drop a hop to prove the trace sees it")
+        XCTAssertEqual(dropped, decoder.stats.droppedHops)
+        XCTAssertEqual(spans.count, decoder.stats.hops, "one span per decode that returned")
+        XCTAssertEqual(committedWords, out.committed.count, "every committed word is in some commit event")
+        XCTAssertTrue(reasons.contains(.agreed))
+        XCTAssertGreaterThan(vadBatches, 20)
+        for span in spans {
+            // The phases nest: the model call is inside the decode, the decode inside its total.
+            XCTAssertLessThanOrEqual(span.convertMs + span.recognizerMs + span.postMs,
+                                     span.totalMs + 1, "\(span)")
+            XCTAssertGreaterThanOrEqual(span.windowMs, 0)
+            XCTAssertGreaterThanOrEqual(span.completedWallMs, span.requestedWallMs)
+            XCTAssertFalse(span.failed)
+        }
+    }
+
     // MARK: - Things nobody said
 
     func testWordsDecodedOutOfThePaddingAreNeverCommitted() async throws {
