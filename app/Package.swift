@@ -19,6 +19,7 @@ let package = Package(
         // benchmarking without a window or a microphone.
         .executable(name: "transcribe", targets: ["TranscriberCLI"]),
         .library(name: "TranscriberCore", targets: ["TranscriberCore"]),
+        .executable(name: "diarbench", targets: ["DiarizationBench"]),
     ],
     dependencies: [
         .package(url: "https://github.com/argmaxinc/WhisperKit.git", exact: "1.1.0"),
@@ -59,6 +60,15 @@ let package = Package(
                 // all main-actor work; declaring it once beats annotating every type.
                 .defaultIsolation(MainActor.self),
             ]
+        ),
+        // Speaker-processing-only harness for diarization A/B (eval/der.py scores it).
+        .executableTarget(
+            name: "DiarizationBench",
+            dependencies: [
+                "TranscriberCore", "TranscriberEngine",
+                .product(name: "FluidAudio", package: "FluidAudio"),
+            ],
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .executableTarget(
             name: "TranscriberCLI",
