@@ -89,9 +89,13 @@ public actor TranscriptWriter {
         transcript.didDiarize = didDiarize
         transcript.recording = recording
         modelContext.insert(transcript)
-        insert(segments, into: transcript)
+        // A new diarization numbers the speakers afresh; keep the labels, names and
+        // colours a person has already given to the same voices (SpeakerMatching).
+        let carried = carriedSpeakers(segments: segments, roster: roster, on: recording,
+                                      excluding: [transcript.id])
+        insert(carried.segments, into: transcript)
 
-        syncSpeakers(roster, on: recording)
+        syncSpeakers(carried.roster, on: recording)
         recording.updatedAt = Date()
         RecordingStore.reindexOffMain(recording)
         try modelContext.save()
@@ -178,9 +182,13 @@ public actor TranscriptWriter {
         final.isComplete = true
         modelContext.insert(final)
         final.recording = recording
-        insert(segments, into: final)
+        // See `storeTranscript`: the open revision of this job has no speakers and
+        // `final` is empty, so neither is the earlier run.
+        let carried = carriedSpeakers(segments: segments, roster: roster, on: recording,
+                                      excluding: [openId, final.id])
+        insert(carried.segments, into: final)
 
-        syncSpeakers(roster, on: recording)
+        syncSpeakers(carried.roster, on: recording)
         recording.updatedAt = Date()
         RecordingStore.reindexOffMain(recording)
         try modelContext.save()
