@@ -1,0 +1,68 @@
+# Tokens that eval/langscore.py classes as English on the FLEURS fil_ph references but that are
+# Tagalog words (or Spanish-derived words Tagalog uses as its own, or Tagalog spellings of loans).
+# langscore checks a short Tagalog list first, then the macOS English word list, so Tagalog words
+# that happen to be English words ("pa", "iba", "tubig"... all of them are in /usr/share/dict/words)
+# are counted as English. This is a hand audit of the 374 distinct tokens that class turns up over
+# the 349 distinct sentences of the test split, made by reading the list: one token per line,
+# lower case, judged as Tagalog by the author (a native reader should check it before it is quoted
+# as more than a heuristic). Tokens it leaves as English are English words, English technical terms,
+# and foreign proper names ("greenland", "hydrogen", "trump", "pohutukawa"); that is NOT the same
+# as code-switching, and eval/fleurs_eval.py says so wherever it prints the number.
+agos
+akin
+antas
+baba
+bakal
+bastos
+bola
+bota
+bunga
+di
+ding
+estado
+estados
+europa
+gatas
+goma
+halos
+hati
+iba
+ihi
+iyo
+kang
+labis
+lampas
+langis
+lipas
+lobo
+man
+mani
+marka
+mong
+nag
+numero
+pa
+pang
+parang
+pilm
+piling
+planeta
+planta
+poot
+pook
+presidente
+pulis
+puno
+riles
+ruta
+sandaling
+sina
+tala
+taas
+termino
+tigre
+tubig
+uri
+wakas
+waring
+yate
