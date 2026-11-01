@@ -9,6 +9,21 @@ import Foundation
 /// will.
 public final class LocalAgreement {
     public let agreement: Int
+    /// Strict LocalAgreement compares prefixes, so one word that two passes
+    /// transcribe differently holds back everything after it until the window
+    /// slides and a commit is forced. With a tolerance above zero, two passes
+    /// that disagree on the first word but agree on a run of `headMinRun` words
+    /// starting within `headTolerance` words of each head commit that run, and
+    /// the newest pass's own words in front of it. Only available at
+    /// agreement 2. The committed text is still only ever appended to.
+    /// Measured in FINDINGS 27: with it, median commit latency fell 35-43% on
+    /// the two clips whose agreement stalled, and forced commits went to zero.
+    public let headTolerance: Int
+    public let headMinRun: Int
+    /// How often the tolerance applied, and how many words in front of the
+    /// agreed run it committed without agreement.
+    public private(set) var headSkips = 0
+    public private(set) var headSkippedWords = 0
     public private(set) var committed: [Token] = []
 
     /// Absolute ms of audio received so far. Nothing may be timestamped past it.
@@ -28,9 +43,11 @@ public final class LocalAgreement {
 
     private var history: [[Token]] = []
 
-    public init(agreement: Int = 2) {
+    public init(agreement: Int = 2, headTolerance: Int = 0, headMinRun: Int = 3) {
         precondition(agreement >= 2, "agreement must be at least 2")
         self.agreement = agreement
+        self.headTolerance = agreement == 2 ? max(0, headTolerance) : 0
+        self.headMinRun = max(2, headMinRun)
     }
 
     public var committedEndMs: Int { committed.last?.endMs ?? 0 }
@@ -53,13 +70,44 @@ public final class LocalAgreement {
         guard history.count >= agreement else { return [] }
 
         let prefixLength = agreedPrefixLength(history)
-        guard prefixLength > 0 else { return [] }
+        guard prefixLength > 0 else { return skipHead() }
 
         let newly = monotonic(Array(history[history.count - 1].prefix(prefixLength)))
         committed.append(contentsOf: newly)
         // Drop the committed prefix from every retained hypothesis so the next
         // pass compares only what is still provisional.
         history = history.map { Array($0.dropFirst(prefixLength)) }
+        return newly
+    }
+
+    /// The head-tolerant case: no agreed prefix, but the two latest passes agree
+    /// on a run a few words in. Commits the newest pass's words up to the end of
+    /// that run and drops the older pass's head, which is the part that differed.
+    private func skipHead() -> [Token] {
+        guard headTolerance > 0, history.count == 2 else { return [] }
+        let older = history[0], newer = history[1]
+        let olderKeys = older.map(Self.key), newerKeys = newer.map(Self.key)
+        var best: (olderAt: Int, newerAt: Int, run: Int)?
+        for i in 0...min(headTolerance, max(0, olderKeys.count - 1)) {
+            for j in 0...min(headTolerance, max(0, newerKeys.count - 1)) {
+                var run = 0
+                while i + run < olderKeys.count, j + run < newerKeys.count,
+                      olderKeys[i + run] == newerKeys[j + run], !olderKeys[i + run].isEmpty {
+                    run += 1
+                }
+                guard run >= headMinRun else { continue }
+                if let b = best, (b.olderAt + b.newerAt, -b.run) <= (i + j, -run) { continue }
+                best = (i, j, run)
+            }
+        }
+        guard let found = best else { return [] }
+        let take = found.newerAt + found.run
+        let newly = monotonic(Array(newer.prefix(take)))
+        committed.append(contentsOf: newly)
+        history = [Array(older.dropFirst(found.olderAt + found.run)),
+                   Array(newer.dropFirst(take))]
+        headSkips += 1
+        headSkippedWords += found.newerAt
         return newly
     }
 
@@ -118,6 +166,8 @@ public final class LocalAgreement {
         history.removeAll()
         ceilingMs = nil
         duplicatesDropped = 0
+        headSkips = 0
+        headSkippedWords = 0
     }
 
     // MARK: - Internals
