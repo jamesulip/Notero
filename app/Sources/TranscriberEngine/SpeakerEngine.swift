@@ -21,21 +21,14 @@ public actor SpeakerEngine: SpeakerDiarizing {
     /// the arms; `eval/tuning_verdict.py` holds the rule a change has to meet).
     public struct Tuning: Sendable, Equatable {
         /// FluidAudio's first pass drops a segment shorter than this, and a
-        /// segment shorter than this cannot found a speaker there either.
+        /// segment shorter than this cannot found a speaker there either. A meeting
+        /// turn shorter than a second is almost always a backchannel ("oo",
+        /// "sige") landing inside someone else's sentence, and crediting it to
+        /// a new speaker fragments the transcript.
         ///
         /// This is the minimum for `accurate` mode, where a second pass re-embeds
-        /// every turn and a short turn can join a speaker but never found one
-        /// (`foundingTurnMs`). It was 1.0 s, on the reasoning that a turn under a
-        /// second is a backchannel and crediting it to a new speaker fragments the
-        /// transcript. 0.6 s recovers those turns: on 36 synthetic fixtures, 19
-        /// of them tuning and 17 hold-out, missed speech fell from 6.7% to 3.6%
-        /// and from 4.8% to 2.4%, mean DER fell 2.4 and 2.1 points, no speaker was
-        /// merged or invented, and speaker processing took 5.7% longer. It also
-        /// puts 98 spans of under a second into the output where there were none,
-        /// so a backchannel inside someone's sentence now splits the transcript
-        /// line. 0.4 s collapsed two voices into one (finding 29). Every number is
-        /// from text-to-speech audio. Set it back to 1.0 to undo.
-        public var firstPassMinSpeechSeconds: Float = 0.6
+        /// every turn and a short turn can join a speaker but never found one.
+        public var firstPassMinSpeechSeconds: Float = 1.0
         /// The same minimum for `fast` mode, which has no second pass: whatever
         /// the first pass decides is the answer, and a lower minimum lets its
         /// online clustering found phantom speakers from short segments.
