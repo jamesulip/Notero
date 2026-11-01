@@ -18,12 +18,15 @@ No recording, no transcript and no note goes off your Mac.
 - Whole-file transcription after a recording or an import. Live text during a
   recording is optional, and off by default.
 - Pause and resume a recording. The break is not in the file.
+- A recording that is killed or crashes still leaves a playable file. It is saved in
+  5-second pieces, so the last few seconds can be lost. A power cut can lose more.
 - A menu bar item with Record, Pause and Stop, and two shortcuts that work in
   every application.
 - Two modes. Simple shows the transcript, the notes and two buttons. Advanced
   shows every control.
 - 15 languages and automatic detection. Tagalog and Taglish are the default.
-- Speaker identification, with manual merge and reassignment.
+- Speaker identification, with manual merge and reassignment. A name you give a
+  speaker follows that voice when speakers are identified again.
 - Meeting notes: a summary and five lists, which are key points, decisions,
   action items, questions and follow-ups. Each item keeps the timestamp and the
   transcript line that it came from.
@@ -141,7 +144,8 @@ no analytics and no crash reports.
 
 **The app makes one network request, and no other.** At the first start, it
 gets the model weights from Hugging Face over HTTPS. After that the app works
-with no network at all. It does not update itself, thus it asks no server
+with no network at all. That was checked with the network blocked at the
+operating-system level, using a model that was already on disk. It does not update itself, thus it asks no server
 whether a newer version exists. To move to a newer version, get it from the
 [releases page](https://github.com/jamesulip/notero/releases) yourself.
 
