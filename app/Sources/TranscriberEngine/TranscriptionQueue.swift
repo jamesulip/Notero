@@ -299,9 +299,11 @@ public actor TranscriptionQueue {
             // sit on the success path only: a diarization that is cancelled (by
             // the user, or by a recording that wants the Neural Engine) rethrows
             // before them, and so does a failure in the second lane after the
-            // first lane diarized. Each of those left about 200 MB resident until
-            // the user pressed "Release the Models" in Settings (F13). The release
-            // is cheap and does nothing when nothing is loaded.
+            // first lane diarized. Each of those left the speaker models loaded
+            // until the user pressed "Release the Models" in Settings (F13). That
+            // is about 23 MB of footprint and nothing on the Neural Engine, not
+            // the 200 MB older notes give. The release is cheap and does nothing
+            // when nothing is loaded.
             await engines.releaseDiarizer()
         }
         await engines.endJob()

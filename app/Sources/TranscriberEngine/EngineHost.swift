@@ -4,11 +4,13 @@ import WhisperKit
 
 /// Owns the three model-backed engines and decides who gets memory.
 ///
-/// On a 16 GB machine the models are the budget: large-v3-turbo is ~1.6 GB
-/// resident, the diarizer pair another ~200 MB, and macOS starts compressing
-/// well before the ceiling. So there is exactly one of each, they are shared
-/// between the live path and the background queue, and the diarizer is released
-/// the moment a job stops needing it.
+/// On a 16 GB machine the models are the budget: large-v3-turbo holds 1580 MB
+/// of Neural Engine memory (outside the process footprint, and wired, so macOS
+/// can neither compress nor swap it), and macOS starts compressing well before
+/// the ceiling. The diarizer pair is small: 13 MB on disk, nothing on the Neural
+/// Engine, about 23 MB of footprint once loaded. There is exactly one of each,
+/// they are shared between the live path and the background queue, and the
+/// diarizer is released the moment a job stops needing it.
 public actor EngineHost {
 
     public let modelsDirectory: URL
@@ -32,8 +34,7 @@ public actor EngineHost {
 
     /// The same host over engines that are handed in. A seam for tests: the
     /// queue's release of the diarizer on every way out of a job could only be
-    /// checked against the real 200 MB models, and a test cannot depend on
-    /// weights. The public initializer passes the real engines, so nothing
+    /// checked against the real models, and a test cannot depend on weights. The public initializer passes the real engines, so nothing
     /// outside a test sees a difference.
     init(modelsDirectory: URL, asr: any SpeechRecognizing, vad: VADEngine,
          diarizer: any SpeakerDiarizing) {
@@ -127,7 +128,8 @@ public actor EngineHost {
     }
 
     /// Called at the end of every job. The diarizer is only needed in bursts,
-    /// and holding its two models between recordings is 200 MB of nothing.
+    /// and holding its two models between recordings is memory for nothing (a
+    /// small amount: 23 MB of footprint measured, none on the Neural Engine).
     public func releaseDiarizer() async {
         await diarizer.unload()
     }

@@ -4,8 +4,10 @@ import TranscriberCore
 
 /// What the queue leaves resident when a job ends, whichever way it ends.
 ///
-/// The speaker models are about 200 MB on the Neural Engine, and `EngineHost`
-/// promises to release them the moment no job needs them. The release used to
+/// `EngineHost` promises to release the speaker models the moment no job needs
+/// them. They are small (about 23 MB of footprint once loaded, nothing on the
+/// Neural Engine), so what these tests protect is the promise, not a large amount
+/// of memory. The release used to
 /// sit on the success path only (F13): a diarization that was cancelled, by the
 /// user or by a recording, rethrew before it, and so did a failure in the second
 /// lane after the first lane had diarized. The models then stayed until someone
@@ -177,7 +179,7 @@ final class QueueResidencyTests: XCTestCase {
         try await eventually("the job to finish") { rig.log.all.contains("finished") }
 
         let loaded = await rig.diarizer.loaded
-        XCTAssertFalse(loaded, "a cancelled diarization left ~200 MB resident (F13)")
+        XCTAssertFalse(loaded, "a cancelled diarization left the speaker models loaded (F13)")
     }
 
     func testACancelledDiarizeOnlyJobReleasesTheSpeakerModels() async throws {
@@ -191,7 +193,7 @@ final class QueueResidencyTests: XCTestCase {
         try await eventually("the job to finish") { rig.log.all.contains("finished") }
 
         let loaded = await rig.diarizer.loaded
-        XCTAssertFalse(loaded, "a cancelled speaker-only job left ~200 MB resident")
+        XCTAssertFalse(loaded, "a cancelled speaker-only job left the speaker models loaded")
     }
 
     func testALaneThatFailsAfterAnotherLaneDiarizedReleasesTheSpeakerModels() async throws {
@@ -221,7 +223,7 @@ final class QueueResidencyTests: XCTestCase {
         try await eventually("diarization to start") { await rig.diarizer.entered == 1 }
 
         // The call returns when the job has stopped. The recording is about to
-        // load its own model, so the job's 200 MB has to be gone by then.
+        // load its own model, so what the job loaded has to be gone by then.
         await rig.queue.setLiveActive(true)
 
         let loaded = await rig.diarizer.loaded
