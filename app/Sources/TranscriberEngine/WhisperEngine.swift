@@ -104,9 +104,10 @@ public actor WhisperEngine: SpeechRecognizing {
         inFlight = LoadInFlight(model: model)
         // The model being replaced is released BEFORE the new one loads. Holding
         // it until the switch succeeded meant both were resident at the peak:
-        // 2458 MB of Neural Engine memory for Balanced to Fast, against 1580 MB
-        // for either alone, and about 4.8 GB for Balanced to Best, which on a
-        // 16 GB Mac is wired memory that cannot be compressed or swapped. Nothing
+        // 2458 MB of Neural Engine memory for Balanced to Fast (1580 MB for
+        // Balanced alone), and 4581 MB for Balanced to Best (3000 MB for Best
+        // alone). On a 16 GB Mac that is wired memory, which the system can
+        // neither compress nor swap. Nothing
         // is given up: `pipeline` is nil while the new model loads either way, so
         // no decode could have used the old one. A failed switch loads the old
         // model again, from the compile cache.
