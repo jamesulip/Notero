@@ -71,6 +71,7 @@ func parse() -> Options {
                 guard parts.count == 2 else { fail("--tune wants key=value pairs") }
                 switch (parts[0], Double(parts[1])) {
                 case ("firstPassMinSpeechSeconds", let v?): options.tuning.firstPassMinSpeechSeconds = Float(v)
+                case ("fastFirstPassMinSpeechSeconds", let v?): options.tuning.fastFirstPassMinSpeechSeconds = Float(v)
                 case ("mergeGapMs", let v?): options.tuning.mergeGapMs = Int(v)
                 case ("minSpanMs", let v?): options.tuning.minSpanMs = Int(v)
                 case ("finalMergeGapMs", let v?): options.tuning.finalMergeGapMs = Int(v)
@@ -314,6 +315,7 @@ let result = Out(
     footprintAtEndBytes: end.current,
     tuning: [
         "firstPassMinSpeechSeconds": Double(options.tuning.firstPassMinSpeechSeconds),
+        "fastFirstPassMinSpeechSeconds": Double(options.tuning.fastFirstPassMinSpeechSeconds),
         "mergeGapMs": Double(options.tuning.mergeGapMs),
         "minSpanMs": Double(options.tuning.minSpanMs),
         "finalMergeGapMs": Double(options.tuning.finalMergeGapMs),

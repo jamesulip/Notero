@@ -25,7 +25,14 @@ public actor SpeakerEngine: SpeakerDiarizing {
         /// turn shorter than a second is almost always a backchannel ("oo",
         /// "sige") landing inside someone else's sentence, and crediting it to
         /// a new speaker fragments the transcript.
+        ///
+        /// This is the minimum for `accurate` mode, where a second pass re-embeds
+        /// every turn and a short turn can join a speaker but never found one.
         public var firstPassMinSpeechSeconds: Float = 1.0
+        /// The same minimum for `fast` mode, which has no second pass: whatever
+        /// the first pass decides is the answer, and a lower minimum lets its
+        /// online clustering found phantom speakers from short segments.
+        public var fastFirstPassMinSpeechSeconds: Float = 1.0
         /// Same-label spans closer than this are one span. Chunking splits a
         /// turn at a window edge; this joins it again.
         public var mergeGapMs: Int = 250
@@ -54,11 +61,20 @@ public actor SpeakerEngine: SpeakerDiarizing {
         public var foundingTurnMs: Int = 2_000
         public static let shipping = Tuning()
         public init() {}
+
+        /// FluidAudio fixes this when its manager is built, so each mode has its own.
+        func firstPassMinSpeechSeconds(for mode: DiarizationMode) -> Float {
+            mode == .accurate ? firstPassMinSpeechSeconds : fastFirstPassMinSpeechSeconds
+        }
     }
 
     private let modelsDirectory: URL
     private let tuning: Tuning
-    private var manager: DiarizerManager?
+    /// What `prepare` loaded. Kept so a manager can be built for each mode:
+    /// FluidAudio's first-pass minimum is a `let` of the manager, so two modes
+    /// that want two minimums need two managers over the same models.
+    private var models: DiarizerModels?
+    private var managers: [DiarizationMode: DiarizerManager] = [:]
 
     /// How much audio to hand the diarizer at a time.
     ///
@@ -80,23 +96,16 @@ public actor SpeakerEngine: SpeakerDiarizing {
         self.tuning = tuning
     }
 
-    public var isAvailable: Bool { manager?.isAvailable ?? false }
+    public var isAvailable: Bool { models != nil }
 
     public func prepare(progress: ProgressReport?) async throws {
-        guard manager == nil else { return }
+        guard models == nil else { return }
         progress?("Loading speaker models…", nil)
         do {
             let models = try await DiarizerModels.downloadIfNeeded(
                 to: modelsDirectory.appendingPathComponent("Diarizer", isDirectory: true)
             )
-            var config = DiarizerConfig.default
-            config.minSpeechDuration = tuning.firstPassMinSpeechSeconds
-            // FluidAudio 0.15.6 declares `minSilenceGap` and never reads it
-            // (the only mentions are the declaration and its CLI flags), so
-            // setting it here changed nothing. Left at its default.
-            let manager = DiarizerManager(config: config)
-            manager.initialize(models: consume models)
-            self.manager = manager
+            self.models = models
             progress?("Speaker models ready", 1)
         } catch {
             throw EngineError.backendUnavailable(
@@ -105,8 +114,25 @@ public actor SpeakerEngine: SpeakerDiarizing {
     }
 
     public func unload() {
-        manager?.cleanup()
-        manager = nil
+        for manager in managers.values { manager.cleanup() }
+        managers = [:]
+        models = nil
+    }
+
+    /// The manager for a mode, built on first use and kept until `unload` so its
+    /// speaker database carries across the windows of one recording.
+    private func manager(for mode: DiarizationMode) throws -> DiarizerManager {
+        if let existing = managers[mode] { return existing }
+        guard let models else { throw EngineError.modelNotLoaded }
+        var config = DiarizerConfig.default
+        config.minSpeechDuration = tuning.firstPassMinSpeechSeconds(for: mode)
+        // FluidAudio 0.15.6 declares `minSilenceGap` and never reads it (the only
+        // mentions are the declaration and its CLI flags), so setting it changed
+        // nothing. Left at its default.
+        let manager = DiarizerManager(config: config)
+        manager.initialize(models: models)
+        managers[mode] = manager
+        return manager
     }
 
     public func diarize(_ source: any PCMSource,
@@ -114,9 +140,10 @@ public actor SpeakerEngine: SpeakerDiarizing {
                         mode: DiarizationMode = .accurate,
                         expectedSpeakers: Int? = nil,
                         progress: (@Sendable (Double) -> Void)?) async throws -> [SpeakerSpan] {
-        guard let manager else { throw EngineError.modelNotLoaded }
+        guard models != nil else { throw EngineError.modelNotLoaded }
         guard source.sampleCount > Audio.sampleRate else { return [] }
         guard mode.performsDiarization else { return [] }
+        let manager = try manager(for: mode)
 
         var spans: [SpeakerSpan] = []
         let windows = Self.processingWindows(

@@ -176,14 +176,24 @@ final class SpeakerClusteringTests: XCTestCase {
         XCTAssertEqual(SpeakerEngine.join(spans, gapMs: 0).map { [$0.startMs, $0.endMs] }, [[0, 5_000]])
     }
 
-    func testShippingTuningJoinsAndDropsExactlyAsTheEngineAlwaysDid() {
+    func testShippingTuningRecordsEveryNumberTheEngineRunsOn() {
         let tuning = SpeakerEngine.Tuning.shipping
         XCTAssertEqual(tuning.mergeGapMs, 250)
         XCTAssertEqual(tuning.minSpanMs, 120)
         XCTAssertEqual(tuning.firstPassMinSpeechSeconds, 1.0)
+        XCTAssertEqual(tuning.fastFirstPassMinSpeechSeconds, 1.0)
         XCTAssertEqual(tuning.sameSpeakerDistance, 0.7)
         XCTAssertEqual(tuning.consolidationDistance, 0.85)
         XCTAssertEqual(tuning.foundingTurnMs, 2_000)
         XCTAssertEqual(tuning.finalMergeGapMs, 0, "off: the engine did not join after clustering")
+    }
+
+    func testEachModeReadsItsOwnFirstPassMinimum() {
+        var tuning = SpeakerEngine.Tuning.shipping
+        tuning.firstPassMinSpeechSeconds = 0.6
+        tuning.fastFirstPassMinSpeechSeconds = 0.9
+        XCTAssertEqual(tuning.firstPassMinSpeechSeconds(for: .accurate), 0.6)
+        XCTAssertEqual(tuning.firstPassMinSpeechSeconds(for: .fast), 0.9,
+                       "fast has no second pass and must not inherit accurate's minimum")
     }
 }
