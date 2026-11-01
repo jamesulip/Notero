@@ -321,6 +321,39 @@ error and with 1 for an output error or a refused comparison.
    [Corrections exported from the app](#corrections-exported-from-the-app)
    apply without change.
 
+## Tier comparison, 2026-11-02
+
+`eval/tier_benchmark.py` compares the Fast, Balanced and Best tiers on one corpus, under one
+plan. The plan is written before the first decode, and it contains the decision gate.
+[eval/TIER-RESULTS.md](../eval/TIER-RESULTS.md) gives the conditions, the data, the results and the
+error analysis.
+
+**Decision: keep Balanced.** No tier met the gate on either corpus.
+
+| Corpus | Fast | Balanced | Best |
+| --- | ---: | ---: | ---: |
+| FLEURS `fil_ph`, read Tagalog, 349 sentences, WER | 12.16% | 11.66% | 11.35% |
+| Liva AI `en-tl`, conversational Taglish, 40 min, WER (two decodes) | 70.5% / 69.0% | 68.3% / 69.6% | 64.8% / 65.6% |
+| Median whole-file RTF (FLEURS / Liva) | 0.086 / 0.258 | 0.067 / 0.153 | 0.247 / 0.606 |
+| Neural Engine residency of the model | 878 MB | 1,580 MB | 3,000 MB |
+
+The gate requires all of these:
+
+- at least 10% relative WER improvement over Balanced;
+- a 95% interval of the difference below zero;
+- a tier that can run live;
+- a median whole-file RTF of 0.6 or less;
+- a model residency of 3,500 MB or less;
+- no more failed decodes than Balanced;
+- a difference that holds in a second decode when the decodes are not repeatable.
+
+Read the conditions before you use these numbers:
+
+- **One Mac.** Every number is from the Mac mini M2 Pro, 16 GB.
+- **Read speech.** FLEURS is read speech.
+- **Not a meeting.** The Liva sample is a gaming voice chat of one group of friends. It is not a meeting, and no transcript of it was identical between two decodes.
+- **Meetings are unmeasured.** Real meeting accuracy is unmeasured, because no public conversational Taglish corpus of a useful size has a licence that allows this use.
+
 ## 2026-11-01 baseline: f022c6e on the Mac mini M2 Pro
 
 The first set of numbers from the hardware that the app targets, and the first
@@ -1276,9 +1309,8 @@ smaller footprint as smaller models.
    hardest case to reproduce without private data.
 5. **Two scorers report different WER for the same transcript.** Check which
    one a number came from before you compare it to another number.
-6. **Each accuracy number is the Balanced tier.** No measurement compares one
-   model against another model. Therefore this file cannot tell you if the
-   Best tier or the Fast tier gives a better or a worse transcript.
+6. **Most accuracy numbers here are the Balanced tier.** The
+   [tier comparison](#tier-comparison-2026-11-02) is the only measurement of all three tiers.
    [MODELS.md](MODELS.md) lists which tier promises this project measured,
    and which ones it infers.
 7. **One run is not a measurement.** The same build gives a different

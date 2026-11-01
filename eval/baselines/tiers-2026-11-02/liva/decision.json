@@ -1,0 +1,352 @@
+{
+  "binarySha256": "0eb68b4cac0e994757d9b1562fee12d3c449e743dc7d1e9be9737b24bd1beda8",
+  "commit": "5f34fbcffa1a756b2dcdc9cf1fc20ecb53970c78",
+  "corpusId": "liva-en-tl-overlapping-51b5d0b",
+  "decision": "keep balanced",
+  "gate": {
+    "baseline": "balanced",
+    "difference_interval_must_exclude_zero": true,
+    "max_failed_decodes_over_baseline": 0,
+    "max_median_whole_file_rtf": 0.6,
+    "max_model_residency_mb": 3500,
+    "min_relative_wer_improvement": 0.1,
+    "notes": "A tier replaces the baseline as the default only if every condition holds on the corpus of this plan. live_capable is ModelTier.suitableForLive: the default tier also drives live transcription. max_median_whole_file_rtf is the canKeepUpLive proxy of BenchmarkRun. max_model_residency_mb keeps the model inside a 16 GB Mac's budget next to the speaker models and the app. A result on read speech can at most support a change pending real-Taglish validation; it cannot settle it.",
+    "require_live_capable": true
+  },
+  "tiers": {
+    "balanced": {
+      "cer": 0.5383101895644935,
+      "characters": {
+        "deletions": 9474,
+        "errors": 14227,
+        "hits": 13426,
+        "hypothesisLength": 18179,
+        "insertions": 1224,
+        "referenceLength": 26429,
+        "substitutions": 3529
+      },
+      "deletionBurstWords": 1467,
+      "failedDecodes": [],
+      "hypothesisWords": 3788,
+      "items": 4,
+      "itemsInManifest": 4,
+      "itemsScored": 4,
+      "itemsWithDroppedWindows": 0,
+      "loadMs": {
+        "max": 2399,
+        "median": 1926.0,
+        "min": 1556,
+        "n": 4,
+        "p90": 2399
+      },
+      "modelId": "openai_whisper-large-v3-v20240930_turbo",
+      "modelResidencyMB": {
+        "max": 1580,
+        "median": 1580.0,
+        "min": 1580,
+        "n": 4,
+        "p90": 1580
+      },
+      "processPeakFootprintMB": {
+        "max": 180,
+        "median": 178.5,
+        "min": 176,
+        "n": 4,
+        "p90": 180
+      },
+      "repeatAgreement": {
+        "different": 4,
+        "identical": 0,
+        "missing": 0
+      },
+      "residencyOnEveryItem": true,
+      "revision": "0f63a7800b00dd0226abd051b906c246e1907482",
+      "wer": 0.6834025645656493,
+      "werInterval": {
+        "level": 0.95,
+        "lower": 0.6626289256357918,
+        "upper": 0.704684733668137
+      },
+      "wholeFileRTF": {
+        "max": 0.17530862551437587,
+        "median": 0.1529735882893138,
+        "min": 0.10526184210307017,
+        "n": 4,
+        "p90": 0.17530862551437587
+      },
+      "words": {
+        "deletions": 1848,
+        "errors": 3784,
+        "hits": 1846,
+        "hypothesisLength": 3782,
+        "insertions": 93,
+        "referenceLength": 5537,
+        "substitutions": 1843
+      }
+    },
+    "best": {
+      "cer": 0.5060728744939271,
+      "characters": {
+        "deletions": 8626,
+        "errors": 13375,
+        "hits": 14576,
+        "hypothesisLength": 19325,
+        "insertions": 1522,
+        "referenceLength": 26429,
+        "substitutions": 3227
+      },
+      "deletionBurstWords": 1360,
+      "failedDecodes": [],
+      "hypothesisWords": 3925,
+      "items": 4,
+      "itemsInManifest": 4,
+      "itemsScored": 4,
+      "itemsWithDroppedWindows": 0,
+      "loadMs": {
+        "max": 3987,
+        "median": 2966.5,
+        "min": 1733,
+        "n": 4,
+        "p90": 3987
+      },
+      "modelId": "openai_whisper-large-v3_turbo",
+      "modelResidencyMB": {
+        "max": 3000,
+        "median": 3000.0,
+        "min": 3000,
+        "n": 4,
+        "p90": 3000
+      },
+      "processPeakFootprintMB": {
+        "max": 273,
+        "median": 268.5,
+        "min": 262,
+        "n": 4,
+        "p90": 273
+      },
+      "repeatAgreement": {
+        "different": 4,
+        "identical": 0,
+        "missing": 0
+      },
+      "residencyOnEveryItem": true,
+      "revision": "0f63a7800b00dd0226abd051b906c246e1907482",
+      "wer": 0.6480043344771537,
+      "werInterval": {
+        "level": 0.95,
+        "lower": 0.6251938502385482,
+        "upper": 0.6721708348309053
+      },
+      "wholeFileRTF": {
+        "max": 0.679632799387999,
+        "median": 0.6055635092725155,
+        "min": 0.5658742764571274,
+        "n": 4,
+        "p90": 0.679632799387999
+      },
+      "words": {
+        "deletions": 1739,
+        "errors": 3588,
+        "hits": 2063,
+        "hypothesisLength": 3912,
+        "insertions": 114,
+        "referenceLength": 5537,
+        "substitutions": 1735
+      }
+    },
+    "fast": {
+      "cer": 0.5667637822089372,
+      "characters": {
+        "deletions": 10254,
+        "errors": 14979,
+        "hits": 12534,
+        "hypothesisLength": 17259,
+        "insertions": 1084,
+        "referenceLength": 26429,
+        "substitutions": 3641
+      },
+      "deletionBurstWords": 1654,
+      "failedDecodes": [],
+      "hypothesisWords": 3592,
+      "items": 4,
+      "itemsInManifest": 4,
+      "itemsScored": 4,
+      "itemsWithDroppedWindows": 0,
+      "loadMs": {
+        "max": 2198,
+        "median": 2049.0,
+        "min": 1886,
+        "n": 4,
+        "p90": 2198
+      },
+      "modelId": "openai_whisper-large-v3-v20240930_626MB",
+      "modelResidencyMB": {
+        "max": 878,
+        "median": 878.0,
+        "min": 878,
+        "n": 4,
+        "p90": 878
+      },
+      "processPeakFootprintMB": {
+        "max": 160,
+        "median": 157.0,
+        "min": 156,
+        "n": 4,
+        "p90": 160
+      },
+      "repeatAgreement": {
+        "different": 4,
+        "identical": 0,
+        "missing": 0
+      },
+      "residencyOnEveryItem": true,
+      "revision": "0f63a7800b00dd0226abd051b906c246e1907482",
+      "wer": 0.7048943471193787,
+      "werInterval": {
+        "level": 0.95,
+        "lower": 0.6843486182934713,
+        "upper": 0.7248935861755157
+      },
+      "wholeFileRTF": {
+        "max": 0.30876384793974654,
+        "median": 0.25807459679099465,
+        "min": 0.23646039410065683,
+        "n": 4,
+        "p90": 0.30876384793974654
+      },
+      "words": {
+        "deletions": 2000,
+        "errors": 3903,
+        "hits": 1684,
+        "hypothesisLength": 3587,
+        "insertions": 50,
+        "referenceLength": 5537,
+        "substitutions": 1853
+      }
+    }
+  },
+  "verdicts": {
+    "best": {
+      "checks": {
+        "allItemsScored": {
+          "need": "every item, both tiers",
+          "pass": true,
+          "value": "4/4"
+        },
+        "differenceIntervalBelowZero": {
+          "need": "upper < 0",
+          "pass": true,
+          "value": {
+            "level": 0.95,
+            "lower": -0.054860940511918,
+            "upper": -0.013574621308058843
+          }
+        },
+        "failedDecodes": {
+          "need": "<= baseline + 0",
+          "pass": true,
+          "value": 0
+        },
+        "liveCapable": {
+          "need": "true",
+          "pass": false,
+          "value": false
+        },
+        "medianWholeFileRTF": {
+          "need": "<= 0.6",
+          "pass": false,
+          "value": 0.6055635092725155
+        },
+        "modelResidencyMB": {
+          "need": "<= 3500",
+          "pass": true,
+          "value": 3000.0
+        },
+        "relativeWerImprovement": {
+          "need": ">= 0.1",
+          "pass": false,
+          "value": 0.05179704016913319
+        },
+        "residencyMeasuredOnEveryItem": {
+          "need": "true",
+          "pass": true,
+          "value": true
+        },
+        "stableAcrossDecodes": {
+          "need": ">= 0.1 in the second pass too",
+          "pass": false,
+          "value": "second-pass relative improvement 0.0571"
+        }
+      },
+      "difference": -0.035398230088495575,
+      "differenceInterval": {
+        "level": 0.95,
+        "lower": -0.054860940511918,
+        "upper": -0.013574621308058843
+      },
+      "meetsGate": false,
+      "shareCandidateLower": 0.999
+    },
+    "fast": {
+      "checks": {
+        "allItemsScored": {
+          "need": "every item, both tiers",
+          "pass": true,
+          "value": "4/4"
+        },
+        "differenceIntervalBelowZero": {
+          "need": "upper < 0",
+          "pass": false,
+          "value": {
+            "level": 0.95,
+            "lower": 0.006356384924159721,
+            "upper": 0.0360132632107564
+          }
+        },
+        "failedDecodes": {
+          "need": "<= baseline + 0",
+          "pass": true,
+          "value": 0
+        },
+        "liveCapable": {
+          "need": "true",
+          "pass": true,
+          "value": true
+        },
+        "medianWholeFileRTF": {
+          "need": "<= 0.6",
+          "pass": true,
+          "value": 0.25807459679099465
+        },
+        "modelResidencyMB": {
+          "need": "<= 3500",
+          "pass": true,
+          "value": 878.0
+        },
+        "relativeWerImprovement": {
+          "need": ">= 0.1",
+          "pass": false,
+          "value": -0.03144820295983086
+        },
+        "residencyMeasuredOnEveryItem": {
+          "need": "true",
+          "pass": true,
+          "value": true
+        },
+        "stableAcrossDecodes": {
+          "need": ">= 0.1 in the second pass too",
+          "pass": false,
+          "value": "second-pass relative improvement 0.0086"
+        }
+      },
+      "difference": 0.021491782553729456,
+      "differenceInterval": {
+        "level": 0.95,
+        "lower": 0.006356384924159721,
+        "upper": 0.0360132632107564
+      },
+      "meetsGate": false,
+      "shareCandidateLower": 0.001
+    }
+  }
+}

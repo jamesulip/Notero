@@ -28,6 +28,20 @@
   `modelRevision`, and older saved benchmarks still load.
 - **No benchmark result comes with this change.** The framework was tested on synthetic text only.
 
+### Tier comparison
+
+- **`eval/tier_benchmark.py` compares the three tiers on one corpus** with identical decodes,
+  interleaved under the bench lock, scored by `transcribe --score`, and a decision gate fixed in
+  the plan before the first decode. It builds corpora from FLEURS `fil_ph` and from the Liva AI
+  `en-tl` sample (CC-BY-4.0), each checked against its published hashes.
+- **The default stays Balanced.** On 349 sentences of read Tagalog the tiers are within about
+  half a point (Balanced 11.66% WER). On 40 minutes of conversational Taglish, Best is about
+  4 points better in two decodes, which is under the 10% that the gate needs, and Best cannot run
+  live. Fast was slower than Balanced on the M2 Pro and slightly less accurate.
+  [eval/TIER-RESULTS.md](eval/TIER-RESULTS.md) gives the method and the limits.
+- Real meeting accuracy is still unmeasured. FilSwitch, the best public Taglish test set,
+  states no licence and was not used.
+
 ## 1.2.0 — 2026-11-01
 
 ### Speed, memory and stability (second cycle)

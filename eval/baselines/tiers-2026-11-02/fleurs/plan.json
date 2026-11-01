@@ -1,0 +1,5616 @@
+{
+  "binary": {
+    "path": "/Users/server/Documents/GitHub/Notero/app/.build/arm64-apple-macosx/release/transcribe",
+    "sha256": "0eb68b4cac0e994757d9b1562fee12d3c449e743dc7d1e9be9737b24bd1beda8"
+  },
+  "commit": "5f34fbcffa1a756b2dcdc9cf1fc20ecb53970c78",
+  "createdUtc": "2026-11-01T18:14:18Z",
+  "decodeFlags": [
+    "--language",
+    "tl",
+    "--no-diarize"
+  ],
+  "evalConfig": "/Users/server/Documents/GitHub/Notero/eval/evaluation-config.v1.json",
+  "evalConfigSha256": "5993215e331383790b4fd1d8a1024ce70555ac84ac638c05625f8522cfef2c90",
+  "gate": {
+    "baseline": "balanced",
+    "difference_interval_must_exclude_zero": true,
+    "max_failed_decodes_over_baseline": 0,
+    "max_median_whole_file_rtf": 0.6,
+    "max_model_residency_mb": 3500,
+    "min_relative_wer_improvement": 0.1,
+    "notes": "A tier replaces the baseline as the default only if every condition holds on the corpus of this plan. live_capable is ModelTier.suitableForLive: the default tier also drives live transcription. max_median_whole_file_rtf is the canKeepUpLive proxy of BenchmarkRun. max_model_residency_mb keeps the model inside a 16 GB Mac's budget next to the speaker models and the app. A result on read speech can at most support a change pending real-Taglish validation; it cannot settle it.",
+    "require_live_capable": true
+  },
+  "machine": [
+    "Mac14,12",
+    "Apple M2 Pro",
+    "17179869184"
+  ],
+  "manifest": {
+    "corpusId": "fleurs-fil_ph-test-onepersentence-seed7",
+    "items": 349,
+    "path": "/private/tmp/notero-data/tiers/fleurs/manifest.json",
+    "sha256": "50765003e1bf07bc86be84f740df1dda2c7a28c4a6c5c0d22d42c857d5e92e66"
+  },
+  "modelsDirectory": "/Users/server/Library/Application Support/Transcriber/Models",
+  "repeatItems": [
+    "fleurs-1660",
+    "fleurs-1661",
+    "fleurs-1662",
+    "fleurs-1663",
+    "fleurs-1664",
+    "fleurs-1665",
+    "fleurs-1666",
+    "fleurs-1667",
+    "fleurs-1668",
+    "fleurs-1669",
+    "fleurs-1670",
+    "fleurs-1671",
+    "fleurs-1672",
+    "fleurs-1673",
+    "fleurs-1674",
+    "fleurs-1675",
+    "fleurs-1676",
+    "fleurs-1677",
+    "fleurs-1678",
+    "fleurs-1679"
+  ],
+  "schedule": [
+    {
+      "item": "fleurs-1660",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1660",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1660",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1661",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1661",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1661",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1662",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1662",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1662",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1663",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1663",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1663",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1664",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1664",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1664",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1665",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1665",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1665",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1666",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1666",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1666",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1667",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1667",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1667",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1668",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1668",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1668",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1669",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1669",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1669",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1670",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1670",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1670",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1671",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1671",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1671",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1672",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1672",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1672",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1673",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1673",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1673",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1674",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1674",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1674",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1675",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1675",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1675",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1676",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1676",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1676",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1677",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1677",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1677",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1678",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1678",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1678",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1679",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1679",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1679",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1680",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1680",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1680",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1681",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1681",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1681",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1682",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1682",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1682",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1683",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1683",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1683",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1684",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1684",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1684",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1685",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1685",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1685",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1686",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1686",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1686",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1687",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1687",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1687",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1688",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1688",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1688",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1689",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1689",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1689",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1690",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1690",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1690",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1691",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1691",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1691",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1692",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1692",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1692",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1693",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1693",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1693",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1694",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1694",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1694",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1695",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1695",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1695",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1696",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1696",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1696",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1697",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1697",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1697",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1698",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1698",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1698",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1699",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1699",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1699",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1700",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1700",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1700",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1701",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1701",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1701",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1702",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1702",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1702",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1703",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1703",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1703",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1704",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1704",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1704",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1705",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1705",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1705",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1706",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1706",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1706",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1707",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1707",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1707",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1708",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1708",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1708",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1709",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1709",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1709",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1710",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1710",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1710",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1711",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1711",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1711",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1712",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1712",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1712",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1713",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1713",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1713",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1714",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1714",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1714",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1715",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1715",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1715",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1716",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1716",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1716",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1717",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1717",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1717",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1718",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1718",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1718",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1719",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1719",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1719",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1720",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1720",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1720",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1721",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1721",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1721",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1722",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1722",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1722",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1723",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1723",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1723",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1724",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1724",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1724",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1725",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1725",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1725",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1726",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1726",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1726",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1727",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1727",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1727",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1728",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1728",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1728",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1729",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1729",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1729",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1730",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1730",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1730",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1731",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1731",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1731",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1732",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1732",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1732",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1733",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1733",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1733",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1734",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1734",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1734",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1735",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1735",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1735",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1736",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1736",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1736",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1737",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1737",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1737",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1738",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1738",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1738",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1739",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1739",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1739",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1740",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1740",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1740",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1741",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1741",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1741",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1742",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1742",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1742",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1743",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1743",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1743",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1744",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1744",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1744",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1745",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1745",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1745",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1746",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1746",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1746",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1747",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1747",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1747",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1748",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1748",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1748",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1749",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1749",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1749",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1750",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1750",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1750",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1751",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1751",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1751",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1752",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1752",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1752",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1753",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1753",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1753",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1754",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1754",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1754",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1755",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1755",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1755",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1756",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1756",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1756",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1757",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1757",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1757",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1758",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1758",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1758",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1759",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1759",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1759",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1760",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1760",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1760",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1761",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1761",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1761",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1762",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1762",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1762",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1763",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1763",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1763",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1764",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1764",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1764",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1765",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1765",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1765",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1766",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1766",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1766",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1767",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1767",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1767",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1768",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1768",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1768",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1769",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1769",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1769",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1770",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1770",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1770",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1771",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1771",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1771",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1772",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1772",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1772",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1773",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1773",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1773",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1774",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1774",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1774",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1775",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1775",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1775",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1776",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1776",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1776",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1777",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1777",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1777",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1778",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1778",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1778",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1779",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1779",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1779",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1780",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1780",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1780",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1781",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1781",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1781",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1782",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1782",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1782",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1783",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1783",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1783",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1784",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1784",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1784",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1785",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1785",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1785",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1786",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1786",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1786",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1787",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1787",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1787",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1788",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1788",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1788",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1789",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1789",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1789",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1790",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1790",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1790",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1791",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1791",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1791",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1792",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1792",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1792",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1793",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1793",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1793",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1794",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1794",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1794",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1795",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1795",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1795",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1796",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1796",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1796",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1797",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1797",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1797",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1798",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1798",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1798",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1799",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1799",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1799",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1800",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1800",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1800",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1801",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1801",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1801",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1802",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1802",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1802",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1803",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1803",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1803",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1804",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1804",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1804",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1805",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1805",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1805",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1806",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1806",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1806",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1807",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1807",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1807",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1808",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1808",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1808",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1809",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1809",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1809",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1810",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1810",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1810",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1811",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1811",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1811",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1812",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1812",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1812",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1813",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1813",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1813",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1814",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1814",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1814",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1815",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1815",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1815",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1816",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1816",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1816",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1817",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1817",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1817",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1818",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1818",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1818",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1819",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1819",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1819",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1820",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1820",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1820",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1821",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1821",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1821",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1822",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1822",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1822",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1824",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1824",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1824",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1825",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1825",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1825",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1826",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1826",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1826",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1827",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1827",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1827",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1828",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1828",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1828",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1829",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1829",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1829",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1830",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1830",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1830",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1831",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1831",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1831",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1832",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1832",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1832",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1833",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1833",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1833",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1834",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1834",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1834",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1835",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1835",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1835",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1836",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1836",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1836",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1837",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1837",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1837",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1838",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1838",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1838",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1839",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1839",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1839",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1840",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1840",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1840",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1841",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1841",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1841",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1842",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1842",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1842",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1843",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1843",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1843",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1844",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1844",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1844",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1845",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1845",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1845",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1846",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1846",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1846",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1847",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1847",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1847",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1848",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1848",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1848",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1849",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1849",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1849",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1850",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1850",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1850",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1851",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1851",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1851",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1852",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1852",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1852",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1853",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1853",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1853",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1854",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1854",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1854",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1855",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1855",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1855",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1856",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1856",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1856",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1857",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1857",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1857",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1858",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1858",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1858",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1859",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1859",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1859",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1860",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1860",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1860",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1861",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1861",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1861",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1862",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1862",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1862",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1863",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1863",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1863",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1864",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1864",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1864",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1865",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1865",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1865",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1866",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1866",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1866",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1867",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1867",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1867",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1868",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1868",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1868",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1869",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1869",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1869",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1870",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1870",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1870",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1871",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1871",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1871",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1872",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1872",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1872",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1873",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1873",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1873",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1874",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1874",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1874",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1875",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1875",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1875",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1876",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1876",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1876",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1877",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1877",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1877",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1878",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1878",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1878",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1879",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1879",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1879",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1880",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1880",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1880",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1881",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1881",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1881",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1882",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1882",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1882",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1883",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1883",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1883",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1884",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1884",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1884",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1885",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1885",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1885",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1886",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1886",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1886",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1887",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1887",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1887",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1888",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1888",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1888",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1889",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1889",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1889",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1890",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1890",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1890",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1891",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1891",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1891",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1892",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1892",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1892",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1893",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1893",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1893",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1894",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1894",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1894",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1895",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1895",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1895",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1896",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1896",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1896",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1897",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1897",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1897",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1898",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1898",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1898",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1899",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1899",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1899",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1900",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1900",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1900",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1901",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1901",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1901",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1902",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1902",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1902",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1903",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1903",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1903",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1904",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1904",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1904",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1905",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1905",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1905",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1906",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1906",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1906",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1907",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1907",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1907",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1908",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1908",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1908",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1909",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1909",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1909",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1910",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1910",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1910",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1911",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1911",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1911",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1912",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1912",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1912",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1913",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1913",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1913",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1914",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1914",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1914",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1915",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1915",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1915",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1916",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1916",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1916",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1917",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1917",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1917",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1918",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1918",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1918",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1919",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1919",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1919",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1920",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1920",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1920",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1921",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1921",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1921",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1922",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1922",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1922",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1923",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1923",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1923",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1924",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1924",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1924",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1925",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1925",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1925",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1926",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1926",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1926",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1927",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1927",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1927",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1928",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1928",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1928",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1929",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1929",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1929",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1930",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1930",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1930",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1931",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1931",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1931",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1932",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1932",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1932",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1933",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1933",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1933",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1934",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1934",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1934",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1935",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1935",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1935",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1936",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1936",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1936",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1937",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1937",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1937",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1938",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1938",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1938",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1939",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1939",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1939",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1940",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1940",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1940",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1941",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1941",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1941",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1942",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1942",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1942",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1943",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1943",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1943",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1944",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1944",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1944",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1945",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1945",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1945",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1946",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1946",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1946",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1947",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1947",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1947",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1948",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1948",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1948",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1949",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1949",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1949",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1950",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1950",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1950",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1951",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1951",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1951",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1952",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1952",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1952",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1953",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1953",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1953",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1954",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1954",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1954",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1955",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1955",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1955",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1956",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1956",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1956",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1957",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1957",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1957",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1958",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1958",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1958",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1959",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1959",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1959",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1960",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1960",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1960",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1961",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1961",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1961",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1962",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1962",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1962",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1963",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1963",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1963",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1964",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1964",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1964",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1965",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1965",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1965",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1966",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1966",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1966",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1967",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1967",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1967",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1968",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1968",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1968",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1969",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1969",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1969",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1970",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1970",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1970",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1971",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1971",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1971",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1972",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1972",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1972",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1973",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1973",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1973",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1974",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1974",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1974",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1975",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1975",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1975",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1976",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1976",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1976",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1977",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1977",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1977",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1978",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1978",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1978",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1979",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1979",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1979",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1980",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1980",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1980",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1981",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1981",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1981",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1982",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1982",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1982",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1983",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1983",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1983",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1984",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1984",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1984",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1985",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1985",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1985",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1986",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1986",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1986",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1987",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1987",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1987",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1988",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1988",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1988",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1989",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1989",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1989",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1990",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1990",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1990",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1991",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1991",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1991",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1992",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1992",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1992",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1993",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1993",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1993",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1994",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1994",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1994",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1995",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1995",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1995",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1996",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1996",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1996",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1997",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1997",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1997",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1998",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1998",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1998",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1999",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1999",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1999",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-2000",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-2000",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-2000",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-2001",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-2001",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-2001",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-2002",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-2002",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-2002",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-2003",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-2003",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-2003",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-2004",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-2004",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-2004",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-2005",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-2005",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-2005",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-2006",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-2006",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-2006",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-2007",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-2007",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-2007",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-2008",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-2008",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-2008",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-2009",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-2009",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-2009",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1660",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1660",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1660",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1661",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1661",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1661",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1662",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1662",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1662",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1663",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1663",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1663",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1664",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1664",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1664",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1665",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1665",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1665",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1666",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1666",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1666",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1667",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1667",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1667",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1668",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1668",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1668",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1669",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1669",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1669",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1670",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1670",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1670",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1671",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1671",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1671",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1672",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1672",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1672",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1673",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1673",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1673",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1674",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1674",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1674",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1675",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1675",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1675",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1676",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1676",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1676",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1677",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1677",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1677",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1678",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1678",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1678",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "fleurs-1679",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "fleurs-1679",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "fleurs-1679",
+      "repeat": 1,
+      "tier": "best"
+    }
+  ],
+  "schema": 1,
+  "seed": 20261102,
+  "tiers": {
+    "balanced": {
+      "liveCapable": true,
+      "modelId": "openai_whisper-large-v3-v20240930_turbo",
+      "revision": "0f63a7800b00dd0226abd051b906c246e1907482"
+    },
+    "best": {
+      "liveCapable": false,
+      "modelId": "openai_whisper-large-v3_turbo",
+      "revision": "0f63a7800b00dd0226abd051b906c246e1907482"
+    },
+    "fast": {
+      "liveCapable": true,
+      "modelId": "openai_whisper-large-v3-v20240930_626MB",
+      "revision": "0f63a7800b00dd0226abd051b906c246e1907482"
+    }
+  },
+  "what": "tier comparison plan; written before any decode"
+}

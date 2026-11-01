@@ -13,7 +13,7 @@ speed and not a model name.
 
 | Tier | Model | Behaviour |
 | --- | --- | --- |
-| **Fast** | `openai_whisper-large-v3-v20240930_626MB` | The quantized turbo model. The lowest latency and the smallest memory footprint. On read Tagalog it gave up no measurable accuracy and was not faster on the Mac mini M2 Pro. Taglish is unmeasured. |
+| **Fast** | `openai_whisper-large-v3-v20240930_626MB` | The quantized turbo model, with the smallest Neural Engine residency (878 MB). On the Mac mini M2 Pro it was **slower** than Balanced and slightly less accurate on read Tagalog. [TIER-RESULTS.md](../eval/TIER-RESULTS.md) gives the measurements. |
 | **Balanced** | `openai_whisper-large-v3-v20240930_turbo` | **The default.** The full large-v3 encoder with a 4-layer decoder. This is what keeps live transcription at real-time speed. |
 | **Best** | `openai_whisper-large-v3_turbo` | The full large-v3, and the largest model here. The decode cost is approximately 4 times the cost for each window, measured on read Tagalog. Use it to transcribe a finished recording again, and not for the live path. **On read Tagalog it was not more accurate than Balanced** and it failed on one long utterance in every repeat. Read [Measured and inferred](#measured-and-inferred). |
 
@@ -50,18 +50,23 @@ CoreML compile that [BENCHMARKS.md](BENCHMARKS.md) records.
 
 ## Measured and inferred
 
-**Each accuracy number in this repository comes from the Balanced tier.** No
-measurement compares one model against another model.
+**The 2026-11-02 tier comparison measured all three tiers** on two corpora: 349 sentences of
+read Tagalog (FLEURS `fil_ph`) and a 40-minute sample of conversational Taglish (Liva AI
+`en-tl`). [eval/TIER-RESULTS.md](../eval/TIER-RESULTS.md) has the numbers and the method. The
+decision was to keep Balanced as the default. The rows below give the result, then the
+older, smaller measurements.
 
 | Claim | Status |
 | --- | --- |
 | Balanced keeps live transcription at real-time speed | Measured. [BENCHMARKS.md](BENCHMARKS.md) gives the numbers. |
 | Balanced is the model behind the offline Tagalog word error rate | Measured. Finding 1 in [FINDINGS.md](FINDINGS.md) records it. |
-| Best gives a better transcript than Balanced | **Measured on read Tagalog, and not supported.** On 29 utterances of the FLEURS Filipino test set, Best scored 10.0% WER against 9.75% for Balanced, at about 4 times the decode time. On one 35 s utterance Best failed in 8 of 8 repeats (WER 30–86%) while Balanced scored 9.5%. This is read speech, and not Taglish or a meeting. [FINDINGS.md](FINDINGS.md) entry 25. |
-| Fast gives up some accuracy against Balanced | **Measured on read Tagalog: no loss found.** 9.3% against 9.7% over 30 utterances (confidence interval −1.4 to +0.4 points). Fast was not faster on the Mac mini M2 Pro (RTF 0.081 against 0.065). Not measured on Taglish. |
+| Best gives a better transcript than Balanced | **2026-11-02: on read Tagalog, not supported** (11.35% against 11.66% WER, interval of the difference −0.97 to +0.34 points, 349 sentences). **On conversational Taglish, better by about 4 points** (64.8% against 68.3%, and 65.6% against 69.6% in a second decode), which is 5–6% relative, at 0.61 of real time against 0.15. One 40-minute voice chat of one group, not a meeting. Earlier: **Measured on read Tagalog, and not supported.** On 29 utterances of the FLEURS Filipino test set, Best scored 10.0% WER against 9.75% for Balanced, at about 4 times the decode time. On one 35 s utterance Best failed in 8 of 8 repeats (WER 30–86%) while Balanced scored 9.5%. This is read speech, and not Taglish or a meeting. [FINDINGS.md](FINDINGS.md) entry 25. |
+| Fast gives up some accuracy against Balanced | **2026-11-02: a small loss on read Tagalog** (12.16% against 11.66%, interval −0.01 to +1.00 points; 75 sentences worse and 45 better, sign test p = 0.008). On conversational Taglish no stable difference (+2.2 points in one decode, −0.6 in the second). Fast was slower than Balanced (median RTF 0.086 against 0.067). Earlier: **Measured on read Tagalog: no loss found.** 9.3% against 9.7% over 30 utterances (confidence interval −1.4 to +0.4 points). Fast was not faster on the Mac mini M2 Pro (RTF 0.081 against 0.065). Not measured on Taglish. |
 | The full large-v3 costs approximately 5 times the decode | Measured at about 4 times on read Tagalog (RTF 0.254 against 0.065), with a Neural Engine residency of 3,000 MB against 1,580 MB for Balanced. |
 
-**Do not treat the Best tier as a known-better transcript.** The tier names a
+**Do not treat the Best tier as a known-better meeting transcript.** It was better on
+one sample of conversational Taglish, by less than the 10% that a change of default needs, and
+it cannot run live. The tier names a
 position on the speed ladder, and not a measured result. To make it a measured
 result, compare it against the Balanced tier on a real recording with a correct
 reference transcript. The two clips that [BENCHMARKS.md](BENCHMARKS.md)
