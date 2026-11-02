@@ -1,0 +1,440 @@
+{
+  "schema": 1,
+  "session": 2,
+  "name": "independent session on held-out real clips: the promoted variant and head-tolerant agreement",
+  "created": "2026-11-02T22:10:31+08:00",
+  "commit": "f7a24db4168d80160026d8f88cfc79608b786bd5",
+  "dirty": false,
+  "hardware": {
+    "model": "Mac14,12",
+    "chip": "Apple M2 Pro",
+    "cores": 10,
+    "memoryGB": 16,
+    "os": "26.6.2"
+  },
+  "binary": {
+    "path": "/tmp/notero-p2/bin/transcribe",
+    "sha256": "93f6b23deb9e7a522fe2f91a2dcc5a364c513fe9858f4b9dfa38d6dd02661f27",
+    "builtFrom": "/Users/server/.t3/worktrees/Notero/t3-db100cb8/app/.build/arm64-apple-macosx/release/transcribe"
+  },
+  "tier": "balanced",
+  "wrap": [
+    "/tmp/notero-team/bench-lock.sh",
+    "sandbox-exec",
+    "-p",
+    "(version 1)(allow default)(deny network*)"
+  ],
+  "base": [
+    "--no-diarize",
+    "--live",
+    "--realtime",
+    "--live-trace"
+  ],
+  "seed": 20261102,
+  "rounds": 3,
+  "arms": {
+    "C0": {
+      "flags": [],
+      "variable": "control",
+      "what": "production: context 15 s, hop 1.5 s, pre-roll 1.5 s, boundary 700 ms, LocalAgreement-2"
+    },
+    "C1": {
+      "flags": [],
+      "variable": "control",
+      "what": "the control again: the A/A replicate"
+    },
+    "ADA": {
+      "flags": [
+        "--adaptive-hop"
+      ],
+      "variable": "hop scheduling",
+      "what": "the hop tracks the last decode (1.5x, between 1.0 and 1.5 s)"
+    },
+    "HT": {
+      "flags": [
+        "--head-tolerance",
+        "3",
+        "--head-min-run",
+        "3"
+      ],
+      "variable": "agreement",
+      "what": "head-tolerant agreement: tolerance 3 words, run of 3 (FINDINGS 27)"
+    }
+  },
+  "controls": [
+    "C0",
+    "C1"
+  ],
+  "variants": [
+    "ADA",
+    "HT"
+  ],
+  "clips": [
+    {
+      "id": "fleurs-lf2",
+      "corpus": "fleurs",
+      "kind": "read Tagalog, constructed long-form",
+      "language": "tl",
+      "wav": "/tmp/notero-p2/clips/fleurs-lf2.wav",
+      "wavSha256": "79e963a49972a0007e920b4d950900d01b7627c27c02772c45fc6cde63144995",
+      "durationMs": 179137,
+      "refText": "/tmp/notero-p2/refs/fleurs-lf2.txt",
+      "refWords": 256,
+      "refSpans": "/tmp/notero-p2/refs/fleurs-lf2.spans.json",
+      "refSpansSha256": "cb6b09119f5d071793387108c070c40b5dd5bd0663a02ed937dc80c707c2d5d3",
+      "source": {
+        "dataset": "FLEURS fil_ph test",
+        "licence": "CC BY 4.0",
+        "sentences": [
+          1782,
+          1783,
+          1784,
+          1785,
+          1786,
+          1787,
+          1788
+        ],
+        "cutAtS": 179.14
+      }
+    },
+    {
+      "id": "liva-b",
+      "corpus": "liva",
+      "kind": "conversational Taglish, 4-5 friends in a voice chat",
+      "language": "tl",
+      "wav": "/tmp/notero-p2/clips/liva-b.wav",
+      "wavSha256": "9b31ebed74649f3d2b61c5580f67c9aab5c311187c134dbad393c78515cc9c4d",
+      "durationMs": 180000,
+      "refText": "/tmp/notero-p2/refs/liva-b.txt",
+      "refWords": 539,
+      "refSpans": "/tmp/notero-p2/refs/liva-b.spans.json",
+      "refSpansSha256": "8cf530eb2a5e65db00a1b1cf09e0091676b6d24a2254b2d2c09a05b20de8bb89",
+      "source": {
+        "dataset": "Liva AI en-tl (code-switching-asr, rev 51b5d0b)",
+        "licence": "CC BY 4.0",
+        "file": "liva-en-tl-C_001_016",
+        "startMs": 150000,
+        "windowMs": 180000,
+        "utterances": 128
+      }
+    },
+    {
+      "id": "ami-b",
+      "corpus": "ami",
+      "kind": "English meeting, headset mix (speech activity reference only)",
+      "language": "en",
+      "wav": "/tmp/notero-p2/clips/ami-b.wav",
+      "wavSha256": "ba7dde86a461cf02753efd33847ee93780d5976a9114def640a71ed1ffdb41d3",
+      "durationMs": 180000,
+      "refText": null,
+      "refWords": null,
+      "refSpans": "/tmp/notero-p2/refs/ami-b.spans.json",
+      "refSpansSha256": "a6a849039587492b42fd1df82dc6ab0a6510cc0401a4896f038b978bed667323",
+      "source": {
+        "dataset": "AMI Meeting Corpus, test set, Mix-Headset",
+        "licence": "CC BY 4.0",
+        "meeting": "ami-EN2002b",
+        "startMs": 210000,
+        "windowMs": 180000
+      }
+    }
+  ],
+  "order": [
+    {
+      "round": 1,
+      "clip": "ami-b",
+      "arm": "HT",
+      "position": 1
+    },
+    {
+      "round": 1,
+      "clip": "ami-b",
+      "arm": "C0",
+      "position": 2
+    },
+    {
+      "round": 1,
+      "clip": "ami-b",
+      "arm": "ADA",
+      "position": 3
+    },
+    {
+      "round": 1,
+      "clip": "ami-b",
+      "arm": "C1",
+      "position": 4
+    },
+    {
+      "round": 1,
+      "clip": "liva-b",
+      "arm": "ADA",
+      "position": 1
+    },
+    {
+      "round": 1,
+      "clip": "liva-b",
+      "arm": "HT",
+      "position": 2
+    },
+    {
+      "round": 1,
+      "clip": "liva-b",
+      "arm": "C0",
+      "position": 3
+    },
+    {
+      "round": 1,
+      "clip": "liva-b",
+      "arm": "C1",
+      "position": 4
+    },
+    {
+      "round": 1,
+      "clip": "fleurs-lf2",
+      "arm": "HT",
+      "position": 1
+    },
+    {
+      "round": 1,
+      "clip": "fleurs-lf2",
+      "arm": "C0",
+      "position": 2
+    },
+    {
+      "round": 1,
+      "clip": "fleurs-lf2",
+      "arm": "C1",
+      "position": 3
+    },
+    {
+      "round": 1,
+      "clip": "fleurs-lf2",
+      "arm": "ADA",
+      "position": 4
+    },
+    {
+      "round": 2,
+      "clip": "fleurs-lf2",
+      "arm": "C1",
+      "position": 1
+    },
+    {
+      "round": 2,
+      "clip": "fleurs-lf2",
+      "arm": "C0",
+      "position": 2
+    },
+    {
+      "round": 2,
+      "clip": "fleurs-lf2",
+      "arm": "ADA",
+      "position": 3
+    },
+    {
+      "round": 2,
+      "clip": "fleurs-lf2",
+      "arm": "HT",
+      "position": 4
+    },
+    {
+      "round": 2,
+      "clip": "liva-b",
+      "arm": "C1",
+      "position": 1
+    },
+    {
+      "round": 2,
+      "clip": "liva-b",
+      "arm": "C0",
+      "position": 2
+    },
+    {
+      "round": 2,
+      "clip": "liva-b",
+      "arm": "HT",
+      "position": 3
+    },
+    {
+      "round": 2,
+      "clip": "liva-b",
+      "arm": "ADA",
+      "position": 4
+    },
+    {
+      "round": 2,
+      "clip": "ami-b",
+      "arm": "C1",
+      "position": 1
+    },
+    {
+      "round": 2,
+      "clip": "ami-b",
+      "arm": "HT",
+      "position": 2
+    },
+    {
+      "round": 2,
+      "clip": "ami-b",
+      "arm": "C0",
+      "position": 3
+    },
+    {
+      "round": 2,
+      "clip": "ami-b",
+      "arm": "ADA",
+      "position": 4
+    },
+    {
+      "round": 3,
+      "clip": "ami-b",
+      "arm": "ADA",
+      "position": 1
+    },
+    {
+      "round": 3,
+      "clip": "ami-b",
+      "arm": "C0",
+      "position": 2
+    },
+    {
+      "round": 3,
+      "clip": "ami-b",
+      "arm": "C1",
+      "position": 3
+    },
+    {
+      "round": 3,
+      "clip": "ami-b",
+      "arm": "HT",
+      "position": 4
+    },
+    {
+      "round": 3,
+      "clip": "liva-b",
+      "arm": "ADA",
+      "position": 1
+    },
+    {
+      "round": 3,
+      "clip": "liva-b",
+      "arm": "HT",
+      "position": 2
+    },
+    {
+      "round": 3,
+      "clip": "liva-b",
+      "arm": "C1",
+      "position": 3
+    },
+    {
+      "round": 3,
+      "clip": "liva-b",
+      "arm": "C0",
+      "position": 4
+    },
+    {
+      "round": 3,
+      "clip": "fleurs-lf2",
+      "arm": "C0",
+      "position": 1
+    },
+    {
+      "round": 3,
+      "clip": "fleurs-lf2",
+      "arm": "ADA",
+      "position": 2
+    },
+    {
+      "round": 3,
+      "clip": "fleurs-lf2",
+      "arm": "HT",
+      "position": 3
+    },
+    {
+      "round": 3,
+      "clip": "fleurs-lf2",
+      "arm": "C1",
+      "position": 4
+    }
+  ],
+  "gate": {
+    "latency": {
+      "metric": "the geometric mean, over the blocks of a session, of (the variant run's median wall commit latency / the mean of the two control runs' medians in the same block); the reduction is 1 minus that. A block is one clip in one round. Not a pooled median of words: pooled over clips that differ by 5x it sits in the gap of a bimodal mixture and moves by seconds on a few words.",
+      "minRelativeReduction": 0.2,
+      "support": "one-sided randomization test of that statistic, p < 0.05: in a block any of the three runs (C0, C1, the variant) is as likely to be the variant under 'no effect'",
+      "supportAlpha": 0.05,
+      "randomizationResamples": 10000,
+      "interval": "t-interval on the per-block log ratio of median latencies (blocks are the unit); reported, and its one-sided lower bound must also be above 0",
+      "tailGuard": {
+        "minReduction": -0.05,
+        "what": "the p90 and the p95 commit latency must not be more than 5% worse, by the same statistic"
+      },
+      "perClipGuard": {
+        "minReduction": -0.1,
+        "what": "no clip may get more than 10% slower (its reduction, as a geometric mean over its rounds)"
+      },
+      "referenceAnchor": {
+        "minReduction": 0.1,
+        "what": "the same statistic on the time from the end of each reference segment (a speaker turn, an utterance, a read sentence) to the commit of the last word inside it must fall by at least 10%: a variant that only shifts the model's own word timestamps cannot pass"
+      }
+    },
+    "wer": {
+      "clips": "clips with a word reference",
+      "supportedRegressionAlpha": 0.05,
+      "test": "paired randomization over blocks (variant minus the mean of the two controls, one-sided), Holm-adjusted over the four safety metrics",
+      "maxMeanIncreasePt": 0.5,
+      "maxClipMeanIncreasePt": 3.0
+    },
+    "missingSpeech": {
+      "alpha": 0.05,
+      "maxDeletionRateIncreasePt": 0.5,
+      "maxMissingShareIncreasePt": 0.5,
+      "maxOmittedSegmentsIncreasePt": 0.5,
+      "what": "deletion rate (word-reference clips); share of reference speech time with no word within 1 s; share of reference segments of 1 s or more (one speaker's turn, one utterance) with no word overlapping them, 300 ms either side. The last two on every clip, AMI included."
+    },
+    "hallucinations": {
+      "rule": "the variant's total of critical hallucinations (invented filler phrases, loops of 4 repeats or more, runs of 6 or more inserted words on clean references, and a 4-word phrase committed again within 30 words, each net of the reference's own) must not exceed the mean of the two controls' totals; the same for ghost words (words more than 1 s from any reference speech)"
+    },
+    "immutability": {
+      "maxViolations": 0,
+      "scope": "every run of every arm of the session, and the monitor's word count must equal the words committed"
+    },
+    "droppedHops": {
+      "maxRelativeIncrease": 0.2,
+      "orAbsolutePp": 1.0
+    },
+    "failures": {
+      "maxFailedRuns": 0,
+      "maxFailedDecodesIncrease": 0
+    },
+    "aa": {
+      "maxAbsEffect": 0.1,
+      "twoSidedRandomizationPMustBeAtLeast": 0.05
+    },
+    "contention": {
+      "otherCoresP90Above": 2.0,
+      "minBlocksForSensitivity": 4,
+      "what": "a run is shared when the other jobs on the Mac used more than 2 cores at the 90th percentile of the samples taken during it; its whole block is then shared. Every gate is evaluated on all blocks AND, when 4 or more blocks are not shared, on those alone; both must pass."
+    },
+    "reproducibility": "every rule above holds in session 1 AND in session 2, which runs later, in its own invocation, on the clips of session 1 and the held-out clips",
+    "promotion": {
+      "minSession1Reduction": 0.15,
+      "requiresImmutability": true
+    },
+    "default": "unchanged unless every gate passes; the feature flag stays off otherwise"
+  },
+  "statistics": {
+    "seed": 20261102,
+    "randomizationResamples": 10000,
+    "unit": "the block (one clip in one round); words are never resampled",
+    "controlForVariants": "the mean (or the pool, for latency) of C0 and C1 in the same block",
+    "aa": "C0 against C1, the same statistics, two-sided",
+    "whyNotABootstrap": "a bootstrap over 3 to 4 rounds per clip was simulated before the first run: its 95% intervals covered a true null 80% of the time. The randomization test has exact size; the t-interval covered 91-92%.",
+    "whyNotAPooledMedian": "the pilot (not evidence) showed C0 at 3.9 s and C1 at 6.9 s pooled over a 3 s clip and a 17 s clip: a bimodal pool has a median in the gap"
+  },
+  "notes": [
+    "Session 1 is committed (results, analysis, report). By the promotion rule in plan 1 only ADA (a median reduction of 17.1%, at least 15%, no invariant break) goes on. HT (0.6% on the median; 27% and 24% on p90 and p95) does not clear it. It is added here by the investigator, not by the rule, to answer the open question of FINDINGS 27 on clips it has never seen. It cannot change the decision: it failed the latency gate in session 1, and the decision needs every gate in both sessions.",
+    "Plan 1 said session 2 would use all six clips. To save a third of the machine time, and because the held-out clips are the independent evidence, session 2 uses only the three clips session 1 did not use: fleurs-lf2, liva-b, ami-b. The gate, the statistics and the arms' flags are those of session 1 (decide checks it).",
+    "The binary is the one of session 1 (same sha256)."
+  ]
+}
