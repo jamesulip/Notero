@@ -346,3 +346,21 @@ def test_rescore_reads_other_references_by_meeting_name(tmp_path):
     result = json.loads((out / "rescore-alt.json").read_text())
     assert result["pooled"]["a"][0]["der"] == 0
     assert result["references"][0]["item"] == "ami-M1"
+
+
+def test_a_repeated_file_without_reference_speech_fails_closed_without_crashing():
+    rows = rows_for(0.05)
+    for r in rows:
+        if r["arm"] == "cand" and r["item"] == "syn-1":
+            r["primary"]["der"] = None
+    result = de.decide(plan_for(ITEMS), {"rows": rows, "failedRuns": []}, IDENT)
+    check = result["candidates"]["cand"]["checks"]["repeatStable"]
+    assert not check["pass"] and check["unscorable"] == ["syn-1"]
+
+
+def test_decide_refuses_scores_from_another_plan(tmp_path):
+    out = tmp_path / "run"
+    out.mkdir()
+    (out / "plan.json").write_text(json.dumps(plan_for(ITEMS)))
+    (out / "scores.json").write_text(json.dumps({"planSha256": "0" * 64, "rows": [], "failedRuns": []}))
+    assert de.main(["decide", "--plan", str(out / "plan.json")]) == 2

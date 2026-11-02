@@ -12,7 +12,7 @@
 | timestampsValid | yes | `{"files": []}` |
 | peakFootprint | yes | `{"maxMB": 94.3}` |
 | realTimeFactor | yes | `{"median": 0.00281}` |
-| repeatStable | yes | `{"maxSpread": 0.0, "pairs": 37}` |
+| repeatStable | yes | `{"maxSpread": 0.0, "pairs": 37, "unscorable": []}` |
 | allRunsScored | yes | `{"failed": [], "missing": []}` |
 | speakerNamesCarry | yes | `{"baselineWrongPct": 27.87, "candidateWrongPct": 7.17, "runs": 64}` |
 
@@ -26,7 +26,7 @@
 | timestampsValid | yes | `{"files": []}` |
 | peakFootprint | yes | `{"maxMB": 79.2}` |
 | realTimeFactor | yes | `{"median": 0.00355}` |
-| repeatStable | yes | `{"maxSpread": 0.0, "pairs": 37}` |
+| repeatStable | yes | `{"maxSpread": 0.0, "pairs": 37, "unscorable": []}` |
 | allRunsScored | yes | `{"failed": [], "missing": []}` |
 | speakerNamesCarry | yes | `{"baselineWrongPct": 27.87, "candidateWrongPct": 7.93, "runs": 64}` |
 

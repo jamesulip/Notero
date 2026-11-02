@@ -1127,12 +1127,15 @@ suspects and does not confirm; this matches the lead's own n = 6 offline A/B.
 | `synthetic-taglish` | `eval/audio/synthetic-taglish.wav`, 57 s, in the maintainer's checkout. `eval/audio/` is git-ignored, so a fresh clone has no audio. `eval/make-synthetic.sh` rebuilds it. | `eval/synthetic-taglish.txt`, tracked | 123 words by whitespace, **128 after `score.py` splits hyphens** ("i-send" is two words). Synthetic, Indonesian voice, starts at full amplitude. |
 | `meeting01` | **absent** | **absent** (`eval/refs/` holds only `.gitkeep`) | `eval/manifest.json` references it, so `compare_language.py` prints "skipping clips with no audio or reference on disk: meeting01" and scores one clip. The 25 s excerpt behind the older tables is not on this Mac. |
 | the paused clip (87 s) | **absent** | derived from the synthetic text | `eval/make_paused.py` rebuilds it. Not generated here. |
-| multi-speaker fixtures | not in this branch | RTTM, exact boundaries | The diarization work owns `eval/make_multispeaker.py`. Synthetic text-to-speech voices. |
+| multi-speaker fixtures | `eval/make_multispeaker.py` rebuilds them (`--set tuning`, `holdout`, `speakers`) | RTTM, exact boundaries | Synthetic text-to-speech voices, 2 to 6 speakers. |
+| AMI test set, Liva AI en-tl sample | fetched into `/tmp`, not in git | RTTM (AMI manual and forced-alignment references; Liva speaker-labelled transcripts) | Public, CC BY 4.0. Used for the [diarization comparison](#diarization-comparison-2026-11-02). |
 
-There is **no real Taglish recording with a clean reference, and no real
-diarization ground truth, on any machine that this project has measured on.**
-Every accuracy figure in this file is a comparison on a synthetic clip. None is a
-claim about real Taglish.
+There is **no real Taglish meeting recording with a clean reference on any machine
+that this project has measured on.** The public sets used since then are read
+Tagalog (FLEURS), a Taglish voice chat (Liva AI) and English meetings (AMI). See
+[`eval/TIER-RESULTS.md`](../eval/TIER-RESULTS.md) and [DIARIZATION.md](DIARIZATION.md).
+The figures above the dated sections are comparisons on a synthetic clip, not claims
+about real Taglish.
 
 ## What real data is needed
 
@@ -1237,7 +1240,9 @@ in its own worktree, and this repository's benchmark files do not duplicate it:
 `make_multispeaker.py` have been merged here, and `eval/regress.py` uses them: its DER series
 runs the whole `transcribe` path on the synthetic multi-speaker clips and scores the raw spans
 with `der.py`; see [the regression command](#regression-comparison-in-one-command-evalregresspy).
-`diarbench` and `run_diarization_ab.py` are still not in this branch.)
+`diarbench` and `run_diarization_ab.py` have been merged since then, and
+`eval/diarization_eval.py` with `eval/diarization_metrics.py` implements this protocol for
+whole corpora: see [the comparison of 2026-11-02](#diarization-comparison-2026-11-02).)
 
 **The metric.** Diarization error rate is
 
@@ -1292,6 +1297,28 @@ the process's peak physical footprint, which **does not include the Neural Engin
 memory of the speaker models**. Quote the footprint and the Neural Engine figure
 together (`transcribe`'s `memory` stages or `eval/residency.py`), and never read a
 smaller footprint as smaller models.
+
+## Diarization comparison, 2026-11-02
+
+The shipping speaker backend (pyannote with WeSpeaker, FluidAudio 0.15.6) against an experimental
+NVIDIA Nemotron 3 backend (FluidAudio 0.18.0, `experimental/nemotron3/`) on the Mac mini M2 Pro.
+[DIARIZATION.md](DIARIZATION.md) has the method, every table and the limits. In short (measured,
+pass 1, collar 0.25 s, overlap scored):
+
+| Corpus | pyannote DER | Nemotron 3 DER | Confusion, pyannote / Nemotron 3 | Merged speakers, pyannote / Nemotron 3 |
+| --- | ---: | ---: | --- | --- |
+| AMI test, 16 meetings, manual references | 23.70% | 24.13% | 9.45% / 0.40% | 19 / 2 |
+| Liva AI en-tl, Taglish voice chat, 4 files | 58.13% | 16.07% | 32.12% / 1.73% | 16 / 2 |
+
+- **Decision: the default does not change.** The gate needed 15% on each real corpus, and AMI
+  gave none. Nemotron 3 also merged one synthetic voice pair that pyannote kept apart.
+- **The AMI result depends on the reference.** Against the forced-alignment AMI references, the
+  same outputs score 24.86% and 3.49%.
+- Both backends gave identical output in both passes on all 37 files.
+- **Memory:** the shipping speaker pass's process footprint grew to 1.68 GB on a 50-minute
+  meeting, about 27 MB per minute of audio.
+
+Evidence: [`eval/baselines/diarization-2026-11-02/`](../eval/baselines/diarization-2026-11-02/).
 
 ## Limitations
 

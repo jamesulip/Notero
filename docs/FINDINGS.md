@@ -1364,6 +1364,48 @@ Not fixed, recorded:
   chunking the app uses. Head-tolerant agreement is confirmed off: a differential test against the first
   cycle's agreement gave identical output over 4,000 random scripts.
 
+## 36. On real conversation the shipping diarizer confuses speakers, and Nemotron 3 does not; the default stays (2026-11-02)
+
+**The first real annotated audio.** This is the first diarization measurement in this project on
+real annotated audio: the AMI test set (16 English meetings, CC BY 4.0) and the Liva AI en-tl
+sample (4 × 10 minutes of conversational Taglish, CC BY 4.0). The shipping `SpeakerEngine` was
+compared with an experimental NVIDIA Nemotron 3 backend (FluidAudio 0.18.0, in its own package),
+on the Mac mini M2 Pro, under a gate written before the first run.
+
+**Most of the shipping backend's real error is confusion and merges.**
+
+- On Liva, DER was 58.1%, with 32.1% confusion, and two or more people were merged on all four
+  files.
+- On AMI, confusion was 9.5%, and 11 of 16 meetings had a merge.
+- Overlapped speech (18–21% of the reference) was detected in 0–14% of its frames.
+- Nemotron 3 had 1.7% and 0.4% confusion and detected 46–63% of the overlapped frames.
+- On Liva its DER was 16.1%.
+
+**AMI did not move: 23.7% against 24.1%.**
+
+- Nemotron 3 marks speech word by word, and the manual AMI references run across the pauses, so
+  it was charged 23.3% missed speech.
+- Against the forced-alignment AMI references, the same outputs score 24.9% and 3.5% (collar 0:
+  45.4% and 9.4%; FluidAudio publishes 9.47%).
+- The gate used the manual references, as written, and needed 15% on each real corpus.
+- Nemotron 3 also merged one synthetic pair of similar voices that pyannote kept apart.
+- **The default does not change.**
+
+**Also found.**
+
+- **Names after Transcribe Again with identification off.** Running Transcribe Again with speaker
+  identification off made the next identification lose every typed name. It is fixed:
+  `TranscriptWriter.labelledRows`. The independent review then found that a merge left its old
+  label on older revisions, where a new speaker could take it. A merge now rewrites every
+  revision.
+- **Ties between two speakers.** A tie between two speakers over a line went to a random one
+  (`Dictionary` order). It is fixed: the lower label wins.
+- **Memory.** The shipping speaker pass's peak footprint grows by about 27 MB per minute of
+  audio, to 1.68 GB on a 50-minute meeting. Not explained and not fixed.
+
+[DIARIZATION.md](DIARIZATION.md) has the tables and what a switch still needs. The data is
+English meetings and a Taglish voice chat. No Taglish meeting was measured.
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a

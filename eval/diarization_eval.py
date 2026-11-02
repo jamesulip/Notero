@@ -379,7 +379,8 @@ def cmd_score(args) -> int:
                 print(f"{arm['label']:<12} {item['id']:<28} r{run} "
                       f"DER {row['primary']['der'] * 100 if row['primary']['der'] is not None else float('nan'):6.2f}%",
                       flush=True)
-    scores = {"plan": str(args.plan.resolve()), "missing": missing,
+    scores = {"plan": str(args.plan.resolve()), "planSha256": sha256(args.plan.resolve()),
+              "missing": missing,
               "failedRuns": failed_runs(out), "rows": rows}
     (out / "scores.json").write_text(json.dumps(scores, indent=1, sort_keys=True) + "\n")
     (out / "report.md").write_text(render_report(plan, scores))
@@ -491,7 +492,9 @@ def render_report(plan: dict, scores: dict) -> str:
         if not pairs:
             continue
         same = sum(1 for x, y in pairs if x["fingerprint"] == y["fingerprint"])
-        spread = max(abs(x["primary"]["der"] - y["primary"]["der"]) for x, y in pairs)
+        spread = max((abs(x["primary"]["der"] - y["primary"]["der"]) for x, y in pairs
+                      if x["primary"]["der"] is not None and y["primary"]["der"] is not None),
+                     default=0.0)
         L.append(f"| {a} | {len(pairs)} | {same} | {spread * 100:.2f} pt |")
 
     L += ["", "## Per file (run 1)", "",
@@ -698,7 +701,8 @@ def cmd_identity(args) -> int:
                 print(f"{arm['label']:<12} {item['id']:<28} {tag:<12} carry wrong "
                       f"{result['carry']['wrong']:5.1f}%  label wrong {result['label']['wrong']:5.1f}%",
                       flush=True)
-    (out / "identity.json").write_text(json.dumps({"rows": rows, "failures": failures},
+    (out / "identity.json").write_text(json.dumps({"rows": rows, "failures": failures,
+                                                   "planSha256": sha256(args.plan.resolve())},
                                                   indent=1, sort_keys=True) + "\n")
     print(f"wrote {out / 'identity.json'}")
     return 1 if failures else 0
@@ -762,9 +766,14 @@ def decide(plan: dict, scores: dict, identity_rows: list[dict] | None = None) ->
         checks["realTimeFactor"] = {"pass": med is not None and med <= gate["maxMedianRealTimeFactor"],
                                     "median": med}
         pairs = repeat_pairs(rows, cand)
-        spread = max((abs(x["primary"]["der"] - y["primary"]["der"]) for x, y in pairs), default=None)
-        checks["repeatStable"] = {"pass": bool(pairs) and spread <= gate["maxRepeatDerSpread"],
-                                  "pairs": len(pairs), "maxSpread": spread}
+        unscorable = [x["item"] for x, y in pairs
+                      if x["primary"]["der"] is None or y["primary"]["der"] is None]
+        spread = max((abs(x["primary"]["der"] - y["primary"]["der"]) for x, y in pairs
+                      if x["item"] not in unscorable), default=None)
+        checks["repeatStable"] = {
+            "pass": bool(pairs) and not unscorable and spread is not None
+                    and spread <= gate["maxRepeatDerSpread"],
+            "pairs": len(pairs), "maxSpread": spread, "unscorable": unscorable}
         missing = sorted(f"{a}/{i}.r{k}" for a, i, k in expected - present if a in (base, cand))
         failed = [f"{e['arm']}/{e['item']}.r{e['run']}" for e in scores["failedRuns"]
                   if e["arm"] in (base, cand)]
@@ -797,12 +806,18 @@ def cmd_decide(args) -> int:
     if not scores_path.exists():
         print("error: run `score` first", file=sys.stderr)
         return 2
+    plan_hash = sha256(args.plan.resolve())
+    scores = json.loads(scores_path.read_text())
+    if scores.get("planSha256") != plan_hash:
+        print("error: scores.json was not made from this plan; run `score` again", file=sys.stderr)
+        return 2
     identity_path = out / "identity.json"
     identity_rows = None
     if identity_path.exists():
         data = json.loads(identity_path.read_text())
-        identity_rows = None if data["failures"] else data["rows"]
-    result = decide(plan, json.loads(scores_path.read_text()), identity_rows)
+        if data.get("planSha256") == plan_hash and not data["failures"]:
+            identity_rows = data["rows"]
+    result = decide(plan, scores, identity_rows)
     (out / "decision.json").write_text(json.dumps(result, indent=1, sort_keys=True) + "\n")
     lines = [f"# Decision", "", f"**{result['recommendation']}**", ""]
     for cand, r in result["candidates"].items():

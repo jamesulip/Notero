@@ -37,7 +37,8 @@
     "repeatStable": {
      "maxSpread": 0.0,
      "pairs": 37,
-     "pass": true
+     "pass": true,
+     "unscorable": []
     },
     "speakerNamesCarry": {
      "baselineWrongPct": 27.87,
@@ -88,7 +89,8 @@
     "repeatStable": {
      "maxSpread": 0.0,
      "pairs": 37,
-     "pass": true
+     "pass": true,
+     "unscorable": []
     },
     "speakerNamesCarry": {
      "baselineWrongPct": 27.87,

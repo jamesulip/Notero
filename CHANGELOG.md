@@ -42,6 +42,42 @@
 - Real meeting accuracy is still unmeasured. FilSwitch, the best public Taglish test set,
   states no licence and was not used.
 
+### Speaker diarization
+
+- **`eval/diarization_eval.py` compares speaker backends on the same annotated audio.** It
+  prepares the AMI test set, the Liva AI Taglish sample and synthetic fixtures. It fixes the gate
+  in a plan before any run, runs every backend under the bench lock with the network denied, and
+  scores the results.
+  - `eval/diarization_metrics.py` gives DER with an explicit collar and overlap rule, the parts in
+    and out of overlap, overlap detection, merged and fragmented speakers, the speaker count and
+    timestamp validity.
+  - Other steps re-run on changed audio to count names carried to the wrong person, sample Neural
+    Engine memory from outside, and score against a second reference set.
+  - `make_multispeaker.py --set speakers` builds fixtures with two to six voices.
+- **An experimental Nemotron 3 backend, off.** It is a separate package,
+  `experimental/nemotron3/`, on FluidAudio 0.18.0. `Nemotron3SpeakerEngine` conforms to the app's
+  `SpeakerDiarizing` and never downloads. The app's FluidAudio pin and its default backend do not
+  change.
+- **The comparison keeps the current backend.**
+  - Nemotron 3 cut DER on the Taglish sample from 58.1% to 16.1%, and speaker confusion on AMI
+    from 9.5% to 0.4%.
+  - It did not lower AMI DER against the manual references (23.7% against 24.1%), and it merged
+    one synthetic voice pair. The gate needed 15% on each real corpus.
+  - See [DIARIZATION.md](docs/DIARIZATION.md).
+- **Fixed: speaker names were lost after Transcribe Again with speaker identification off.** The
+  next identification compared against the unlabelled revision, matched nothing and put every
+  voice under a new default name. It now uses the newest revision that has labels.
+  - A merge now rewrites every revision, and a new speaker is numbered after every label any
+    revision still carries. Without this, a new speaker could take the merged-away label and
+    inherit the merged lines.
+  - 11 store regression tests cover rename, merge, reassign, Identify Again, Transcribe Again and
+    restart.
+- **Fixed: a line under two speakers at once went to a random one of them.**
+  `SegmentMerger.dominantSpeaker` took the winner of a tie from `Dictionary` order. A tie now goes
+  to the lower label.
+- **Measured, not fixed:** the shipping speaker pass's peak footprint grows by about 27 MB per
+  minute of audio (1.68 GB on a 50-minute meeting).
+
 ## 1.2.0 — 2026-11-01
 
 ### Speed, memory and stability (second cycle)

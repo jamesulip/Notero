@@ -402,4 +402,35 @@ final class SpeakerIdentityRegressionTests: XCTestCase {
         XCTAssertEqual(try timeline(id), expectedTimeline(6))
         try assertIntact(id)
     }
+
+    /// Found by the independent review. A merge left the merged-away label on the
+    /// older revision that carries names; a new speaker then took that label, and
+    /// the next Identify Again gave the new person's name to the merged lines.
+    func testANewSpeakerNeverInheritsTheLinesOfALabelMergedAway() async throws {
+        // Revision 1: S3 is a split of Maria's voice (lines 2 and 5).
+        let (id, _) = try await seed(["S1", "S2", "S3", "S1", "S2", "S3"])
+        try rename("S1", to: "Maria", in: id)
+        try rename("S2", to: "Juan", in: id)
+        var writer = try restart()
+        let plain: [String?] = Array(repeating: nil, count: 6)
+        try await writer.storeTranscript(segments: lines(plain, text: "plain"), roster: [],
+                                         modelId: "large", language: "en", processMs: 1,
+                                         didDiarize: false, for: id)
+        try RecordingStore.merge(try speaker("S3", of: id), into: try speaker("S1", of: id),
+                                 in: container.mainContext)
+        let merged = try recording(id, in: container.mainContext)
+        let leftover = (merged.transcripts ?? []).flatMap { $0.orderedSegments }
+            .filter { $0.speakerId == "S3" }
+        XCTAssertTrue(leftover.isEmpty, "a revision still carries the merged-away label")
+        try RecordingStore.addSpeaker(named: "Ana", to: merged, in: container.mainContext)
+
+        writer = try restart()
+        try await identifyAgain(writer, id, ["S1", "S2", "S3", "S1", "S2", "S3"])
+        let named = try namesOnLines(id)
+        XCTAssertFalse(named.contains("Ana"), "Ana got lines she never spoke: \(named)")
+        XCTAssertEqual(named[1], "Juan")
+        XCTAssertEqual(named[4], "Juan")
+        XCTAssertEqual(try timeline(id), expectedTimeline(6))
+        try assertIntact(id)
+    }
 }

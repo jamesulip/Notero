@@ -63,10 +63,15 @@ catalogue and the storage layout.
 cd app && swift test
 ```
 
-There are 669 tests: 632 XCTest tests and 37 swift-testing tests. **They need
+There are 685 tests: 648 XCTest tests and 37 swift-testing tests. **They need
 no model weights, no microphone and no network.** This property is deliberate,
 and you must keep it. The four-layer split in
 [ARCHITECTURE.md](ARCHITECTURE.md) is what makes it possible.
+
+The experimental Nemotron 3 package is not part of `app/` and `swift test` there
+does not build it. Test it on its own: `cd experimental/nemotron3 && swift test`
+(7 tests, no model weights). It resolves FluidAudio 0.18.0, so its first build
+downloads that package.
 
 | Test target | What it covers |
 | --- | --- |
