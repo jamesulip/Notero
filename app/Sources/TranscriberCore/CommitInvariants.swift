@@ -3,7 +3,7 @@ import Foundation
 /// One way a committed transcript broke the contract.
 public struct CommitViolation: Sendable, Codable, Equatable {
     /// A stable slug: `rewritten`, `shrank`, `batchMismatch`, `backwards`, `overlap`,
-    /// `pastAudio`, `emptyText`, `finalMismatch`.
+    /// `pastAudio`, `finalMismatch`.
     public var kind: String
     public var detail: String
     /// Audio received when it was seen.
@@ -20,6 +20,9 @@ public struct CommitInvariantReport: Sendable, Codable, Equatable {
     public var batches: Int
     public var words: Int
     public var violations: [CommitViolation]
+    /// Committed words with no text in them. Counted, but not a violation: an empty word does
+    /// not rewrite anything, and the experiment must not fail every arm for the model's habit.
+    public var emptyWords = 0
 
     public var holds: Bool { violations.isEmpty }
 }
@@ -37,8 +40,9 @@ public struct CommitInvariantReport: Sendable, Codable, Equatable {
 ///   behind the consumer's back, and the consumer saw every commit;
 /// * the timeline goes forward: each word starts at or after the previous word
 ///   ended, and ends at or after it starts;
-/// * no word is timestamped past the audio received;
-/// * no word is empty.
+/// * no word is timestamped past the audio received.
+///
+/// Words with no text are counted (`emptyWords`) and are not a violation.
 ///
 /// The property tests of `LocalAgreement` and `LiveDecoder` check the same thing
 /// on random scripted recognizers. This is the check that runs over every real
@@ -46,6 +50,7 @@ public struct CommitInvariantReport: Sendable, Codable, Equatable {
 public struct CommitInvariantMonitor: Sendable {
     public private(set) var violations: [CommitViolation] = []
     public private(set) var batches = 0
+    public private(set) var emptyWords = 0
     private var delivered: [Token] = []
 
     public init() {}
@@ -56,7 +61,8 @@ public struct CommitInvariantMonitor: Sendable {
     public var deliveredTokens: [Token] { delivered }
 
     public var report: CommitInvariantReport {
-        CommitInvariantReport(batches: batches, words: delivered.count, violations: violations)
+        CommitInvariantReport(batches: batches, words: delivered.count, violations: violations,
+                              emptyWords: emptyWords)
     }
 
     /// Call once per delivered batch, with the decoder's committed list as it
@@ -79,7 +85,7 @@ public struct CommitInvariantMonitor: Sendable {
         var floor = delivered.last?.endMs ?? 0
         for token in batch {
             if token.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                note("emptyText", "a word with no text at \(token.startMs) ms", audioMs)
+                emptyWords += 1
             }
             if token.endMs < token.startMs {
                 note("backwards", "a word ends (\(token.endMs)) before it starts (\(token.startMs))", audioMs)

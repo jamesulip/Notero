@@ -70,9 +70,9 @@ ARMS: dict[str, dict] = {
     "VAD": {"flags": ["--silence-boundary", "500"], "variable": "VAD finalization",
             "what": "an utterance closes after 500 ms of silence instead of 700 ms"},
     "PRE": {"flags": ["--pre-roll", "3000"], "variable": "context anchoring",
-            "what": "3 s of committed audio kept in front of the active region instead of 1.5 s"},
-    "HOP": {"flags": ["--hop", "1250"], "variable": "hop scheduling",
-            "what": "a decode every 1.25 s instead of 1.5 s"},
+            "what": "3 s of committed audio kept in front of the active region instead of 1.5 s (the ring holds context + pre-roll, so the active region is still capped at 15 s)"},
+    "HOP": {"flags": ["--hop", "1300"], "variable": "hop scheduling",
+            "what": "a decode every 1.3 s instead of 1.5 s (the replay hands over 100 ms chunks, so a hop is a whole number of chunks)"},
     "ADA": {"flags": ["--adaptive-hop"], "variable": "hop scheduling",
             "what": "the hop tracks the last decode (1.5x, between 1.0 and 1.5 s)"},
     "CTX": {"flags": ["--context", "12000"], "variable": "forced commits",
@@ -89,11 +89,14 @@ DEFAULT_GATE = {
         "supportAlpha": 0.05,
         "randomizationResamples": 10000,
         "interval": "t-interval on the per-block log ratio of median latencies (blocks are the unit); reported, and its one-sided lower bound must also be above 0",
+        "tailGuard": {"minReduction": -0.05, "what": "the p90 and the p95 commit latency must not be more than 5% worse, by the same statistic"},
+        "perClipGuard": {"minReduction": -0.10, "what": "no clip may get more than 10% slower (its reduction, as a geometric mean over its rounds)"},
+        "referenceAnchor": {"minReduction": 0.10, "what": "the same statistic on the time from the end of each reference segment (a speaker turn, an utterance, a read sentence) to the commit of the last word inside it must fall by at least 10%: a variant that only shifts the model's own word timestamps cannot pass"},
     },
     "wer": {
         "clips": "clips with a word reference",
         "supportedRegressionAlpha": 0.05,
-        "test": "paired sign-flip on the block differences, one-sided, against the mean of the two controls",
+        "test": "paired randomization over blocks (variant minus the mean of the two controls, one-sided), Holm-adjusted over the four safety metrics",
         "maxMeanIncreasePt": 0.5,
         "maxClipMeanIncreasePt": 3.0,
     },
@@ -101,12 +104,16 @@ DEFAULT_GATE = {
         "alpha": 0.05,
         "maxDeletionRateIncreasePt": 0.5,
         "maxMissingShareIncreasePt": 0.5,
+        "maxOmittedSegmentsIncreasePt": 0.5,
+        "what": "deletion rate (word-reference clips); share of reference speech time with no word within 1 s; share of reference segments of 1 s or more (one speaker's turn, one utterance) with no word overlapping them, 300 ms either side. The last two on every clip, AMI included.",
     },
-    "hallucinations": {"rule": "the variant's total of fillers, loops and invented spans must not exceed the mean of the two controls' totals"},
-    "immutability": {"maxViolations": 0, "scope": "every run of every arm"},
+    "hallucinations": {"rule": "the variant's total of critical hallucinations (invented filler phrases, loops of 4 repeats or more, runs of 6 or more inserted words on clean references, and a 4-word phrase committed again within 30 words, each net of the reference's own) must not exceed the mean of the two controls' totals; the same for ghost words (words more than 1 s from any reference speech)"},
+    "immutability": {"maxViolations": 0, "scope": "every run of every arm of the session, and the monitor's word count must equal the words committed"},
     "droppedHops": {"maxRelativeIncrease": 0.20, "orAbsolutePp": 1.0},
     "failures": {"maxFailedRuns": 0, "maxFailedDecodesIncrease": 0},
     "aa": {"maxAbsEffect": 0.10, "twoSidedRandomizationPMustBeAtLeast": 0.05},
+    "contention": {"otherCoresP90Above": 2.0, "minBlocksForSensitivity": 4,
+                   "what": "a run is shared when the other jobs on the Mac used more than 2 cores at the 90th percentile of the samples taken during it; its whole block is then shared. Every gate is evaluated on all blocks AND, when 4 or more blocks are not shared, on those alone; both must pass."},
     "reproducibility": "every rule above holds in session 1 AND in session 2, which runs later, in its own invocation, on the clips of session 1 and the held-out clips",
     "promotion": {"minSession1Reduction": 0.15, "requiresImmutability": True},
     "default": "unchanged unless every gate passes; the feature flag stays off otherwise",
@@ -161,8 +168,14 @@ def pcm_from(path: Path, *, start_s: float | None = None, duration_s: float | No
 
 
 def write_wav(path: Path, pcm: bytes) -> None:
+    """Write 16 kHz mono s16 WAV, unless the file already holds exactly these samples: a plan
+    may be reading the clip, and re-preparing must not touch it."""
     import wave
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        with wave.open(str(path), "rb") as existing:
+            if existing.readframes(existing.getnframes()) == pcm:
+                return
     with wave.open(str(path), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -179,13 +192,15 @@ def rng_for(*parts) -> random.Random:
 # --------------------------------------------------------------------------
 
 def parse_rttm(path: Path) -> list[tuple[int, int]]:
+    """Every speaker segment of an RTTM file in ms, in order, NOT merged: a turn that is dropped
+    beside one that is kept must be seen. Merge before asking where speech is."""
     spans = []
     for line in path.read_text().splitlines():
         fields = line.split()
         if len(fields) >= 5 and fields[0] == "SPEAKER":
             start, duration = float(fields[3]), float(fields[4])
             spans.append((round(start * 1000), round((start + duration) * 1000)))
-    return ll.merge_spans(spans)
+    return sorted(spans)
 
 
 def densest_window(weights: list[tuple[int, int]], total_ms: int, window_ms: int, *,
@@ -261,7 +276,7 @@ def cmd_prepare(args) -> int:
         total_ms = int(float(run_text(["ffprobe", "-v", "error", "-show_entries", "format=duration",
                                        "-of", "csv=p=0", str(wav_src)]) or 0) * 1000)
         window_ms = window_s * 1000
-        weights = [(u["startMs"], u["endMs"]) for u in utterances]
+        weights = ll.merge_spans((u["startMs"], u["endMs"]) for u in utterances)
         start_ms = densest_window(weights, total_ms, window_ms, earliest_ms=60_000)
         picked = [u for u in utterances if start_ms <= (u["startMs"] + u["endMs"]) // 2 < start_ms + window_ms]
         wav = clips_dir / f"{label}.wav"
@@ -288,7 +303,7 @@ def cmd_prepare(args) -> int:
         item = pool[0]
         spans = parse_rttm(args.ami / item["ref"])
         window_ms = window_s * 1000
-        start_ms = densest_window(spans, int(item["durationS"] * 1000), window_ms, earliest_ms=120_000)
+        start_ms = densest_window(ll.merge_spans(spans), int(item["durationS"] * 1000), window_ms, earliest_ms=120_000)
         wav = clips_dir / f"{label}.wav"
         write_wav(wav, pcm_from(args.ami / item["audio"], start_s=start_ms / 1000, duration_s=window_s))
         inside = [(max(0, s - start_ms), min(window_ms, e - start_ms)) for s, e in spans
@@ -436,7 +451,7 @@ class LoadSampler(threading.Thread):
     whole machine is. What the replay used is known from its own CPU time; the rest is the
     other jobs on this Mac, which the lock does not stop."""
 
-    def __init__(self, proc_pid: int, interval_s: float = 30.0):
+    def __init__(self, proc_pid: int, interval_s: float = 60.0):
         super().__init__(daemon=True)
         self.pid = proc_pid
         self.interval = interval_s
@@ -471,6 +486,9 @@ def execute(plan: dict, entry: dict, runs_dir: Path, timeout_s: float) -> dict:
     rid = run_id(entry)
     report_path = runs_dir / f"{rid}.report.json"
     stderr_path = runs_dir / f"{rid}.stderr.txt"
+    attempt = entry.get("attempt", 1)
+    if attempt > 1:
+        stderr_path = runs_dir / f"{rid}.attempt{attempt}.stderr.txt"
     cmd = [*plan["wrap"], plan["binary"]["path"], "--audio", clip["wav"], "--language", clip["language"],
            "--tier", plan["tier"], *plan["base"], *plan["arms"][entry["arm"]]["flags"], "--json", str(report_path)]
     record: dict = {"id": rid, **entry, "cmd": cmd, "planSha256": plan["planSha256"],
@@ -526,7 +544,8 @@ def cmd_run(args) -> int:
         attempts = 0
         while True:
             attempts += 1
-            record = execute(plan, entry, runs_dir, timeout_s=clip["durationMs"] / 1000 * 3 + args.lock_budget_s)
+            record = execute(plan, {**entry, "attempt": attempts}, runs_dir,
+                             timeout_s=clip["durationMs"] / 1000 * 3 + args.lock_budget_s)
             record["attempt"] = attempts
             (runs_dir / f"{run_id(entry)}.run.json").write_text(json.dumps(record, indent=2))
             print(f"[{index}/{len(todo)}] {run_id(entry)} {'ok' if record['ok'] else 'FAILED ' + record.get('error', '')}"
@@ -607,57 +626,61 @@ def blocks_of(plan: dict, results: dict) -> tuple[dict, list[dict]]:
     return complete, excluded
 
 
-def control_values(block: dict, key: str):
-    vals = [block[c]["metrics"][key] for c in CONTROLS]
-    return None if any(v is None for v in vals) else sum(vals) / len(vals)
+def run_contention(run: dict, cores: int) -> float | None:
+    """The 90th percentile of the cores that OTHER jobs used while this replay ran: the
+    whole machine's busy share, in cores, minus what the replay itself used on average."""
+    samples = run.get("machineBusyPercent") or []
+    if not run.get("ok") or not samples:
+        return None
+    own = run["metrics"]["cpu_s_per_audio_min"] / 60
+    return ll.quantile([max(0.0, s / 100 * cores - own) for s in samples], 0.9)
 
 
-def paired_deltas(blocks: dict, variant: str, key: str, *, clips: set[str] | None = None,
-                  scale: float = 1.0) -> list[float]:
-    deltas = []
-    for (clip, _), block in blocks.items():
-        if clips is not None and clip not in clips:
-            continue
-        v = block[variant]["metrics"][key]
-        c = control_values(block, key)
-        if v is not None and c is not None:
-            deltas.append((v - c) * scale)
-    return deltas
+def contended_blocks(blocks: dict, cores: int, limit: float) -> set:
+    bad = set()
+    for key, block in blocks.items():
+        for run in block.values():
+            c = run_contention(run, cores)
+            if c is not None and c > limit:
+                bad.add(key)
+    return bad
 
 
 def block_words(blocks: dict, arms: list[str], clip_ids: set[str] | None = None,
                 key: str = "latency_wall_ms") -> list[list[list[int]]]:
     """For each complete block, the word latencies of each named arm's run, in the order given."""
-    out = []
-    for (clip, _), block in sorted(blocks.items()):
-        if clip_ids is None or clip in clip_ids:
-            out.append([block[a]["metrics"][key] for a in arms])
-    return out
+    return [[block[a]["metrics"][key] for a in arms]
+            for (clip, _), block in sorted(blocks.items()) if clip_ids is None or clip in clip_ids]
 
 
-def per_clip_effects(blocks: dict, variant: str, clip_ids: list[str]) -> dict:
+def block_values(blocks: dict, arms: list[str], key: str, clip_ids: set[str] | None = None) -> list[list]:
+    return [[block[a]["metrics"][key] for a in arms]
+            for (clip, _), block in sorted(blocks.items()) if clip_ids is None or clip in clip_ids]
+
+
+def per_clip_effects(blocks: dict, arms3: list[str], clip_ids: list[str], key: str = "latency_wall_ms") -> dict:
+    """The reduction of each clip's median commit latency, as the geometric mean over its rounds."""
     out = {}
     for clip in clip_ids:
-        rows = [[b["C0"]["metrics"]["latency_wall_ms"], b["C1"]["metrics"]["latency_wall_ms"],
-                 b[variant]["metrics"]["latency_wall_ms"]] for (c, _), b in sorted(blocks.items()) if c == clip]
+        rows = block_words(blocks, arms3, {clip}, key)
         if not rows:
             continue
         medians = [ll.run_quantiles(r, 0.5) for r in rows]
         logs = [x for x in (ll.log_ratio(m, 2) for m in medians) if x is not None]
-        out[clip] = {"median_control_ms": statistics.fmean(v for m in medians for v in m[:2]),
-                     "median_variant_ms": statistics.fmean(m[2] for m in medians),
+        have = [m for m in medians if all(v is not None for v in m)]
+        out[clip] = {"median_control_ms": mean([v for m in have for v in m[:2]]),
+                     "median_variant_ms": mean([m[2] for m in have]),
                      "effect": ll.reduction(logs), "rounds": len(rows),
                      "per_round": [1 - math.exp(x) for x in logs]}
     return out
 
 
-def per_clip_effects_aa(blocks: dict, clip_ids: list[str]) -> dict:
+def aa_per_clip(blocks: dict, clip_ids: list[str]) -> dict:
     out = {}
     for clip in clip_ids:
-        rows = [[b["C0"]["metrics"]["latency_wall_ms"], b["C1"]["metrics"]["latency_wall_ms"]]
-                for (c, _), b in sorted(blocks.items()) if c == clip]
+        rows = block_words(blocks, ["C0", "C1"], {clip})
+        logs = [x for x in (ll.log_ratio(ll.run_quantiles(r, 0.5), 1) for r in rows) if x is not None]
         if rows:
-            logs = [x for x in (ll.log_ratio(ll.run_quantiles(r, 0.5), 1) for r in rows) if x is not None]
             out[clip] = {"effect": ll.reduction(logs), "rounds": len(rows)}
     return out
 
@@ -666,40 +689,177 @@ def pooled(blocks: dict, arm: str, key: str, clips: set[str] | None = None):
     return [x for (clip, _), b in blocks.items() if clips is None or clip in clips for x in b[arm]["metrics"][key]]
 
 
+def evaluate_variant(plan: dict, blocks: dict, v: str, session_facts: dict) -> dict:
+    """Every measurement and gate for one variant over the given blocks. `session_facts` holds
+    what is a property of the whole session (failed runs, invariant checks over every arm)."""
+    g = plan["gate"]
+    seed = plan["seed"]
+    n_resamples = g["latency"]["randomizationResamples"]
+    clip_ids = [c["id"] for c in plan["clips"]]
+    corpus_of = {c["id"]: c["corpus"] for c in plan["clips"]}
+    text_clips = {c["id"] for c in plan["clips"] if c["refWords"]}
+    arms3 = ["C0", "C1", v]
+
+    # Latency.
+    words = block_words(blocks, arms3)
+    test = ll.randomization_test(words, 2, quantiles=(0.5, 0.9, 0.95), resamples=n_resamples, seed=seed)
+    interval = {q: ll.block_reduction_interval(words, 2, q) for q in (0.5, 0.9, 0.95)}
+    latency = {name: {"reduction": test[q]["reduction"], "p": test[q]["p"], "interval": interval[q]}
+               for name, q in (("median", 0.5), ("p90", 0.9), ("p95", 0.95))}
+    audio_words = block_words(blocks, arms3, key="latency_audio_ms")
+    audio_test = ll.randomization_test(audio_words, 2, resamples=max(1000, n_resamples // 5), seed=seed)[0.5]
+    segments = block_words(blocks, arms3, key="segment_latency_ms")
+    seg_test = ll.randomization_test(segments, 2, resamples=max(1000, n_resamples // 5), seed=seed)[0.5]
+    per_clip = per_clip_effects(blocks, arms3, clip_ids)
+    per_corpus = {}
+    for corpus in sorted(set(corpus_of.values())):
+        ids = {c for c in clip_ids if corpus_of[c] == corpus}
+        sub = block_words(blocks, arms3, ids)
+        if sub:
+            t = ll.randomization_test(sub, 2, resamples=max(1000, n_resamples // 5), seed=seed)[0.5]
+            per_corpus[corpus] = {"reduction": t["reduction"], "p": t["p"], "blocks": len(sub),
+                                  "interval": ll.block_reduction_interval(sub, 2, 0.5)}
+
+    # Paired safety metrics: variant minus the mean of the controls, by block.
+    def paired(key, clips=None, scale=100.0):
+        rows = block_values(blocks, arms3, key, clips)
+        t = ll.randomization_mean_delta(rows, 2, alternative="greater", resamples=n_resamples, seed=seed)
+        deltas = [(r[2] - (r[0] + r[1]) / 2) * scale for r in rows if all(x is not None for x in r)]
+        return {"mean_delta": None if t["mean_delta"] is None else t["mean_delta"] * scale, "p": t["p"],
+                "blocks": t["blocks"], "interval": ll.t_mean_ci(deltas)}
+
+    wer, deletion = paired("wer", text_clips), paired("deletion_rate", text_clips)
+    missing, omitted = paired("missing_speech_share"), paired("omitted_segment_share")
+    wer_by_clip = {c: paired("wer", {c}) for c in sorted(text_clips)}
+    p_adj = ll.holm([wer["p"], deletion["p"], missing["p"], omitted["p"]])
+
+    def total(arm, key):
+        return sum((b[arm]["metrics"][key] or 0) for b in blocks.values())
+
+    def control_mean(key):
+        return (total("C0", key) + total("C1", key)) / 2
+
+    attempts_c = total("C0", "attempts") + total("C1", "attempts")
+    rate_c = (total("C0", "dropped_hops") + total("C1", "dropped_hops")) / attempts_c if attempts_c else 0.0
+    rate_v = total(v, "dropped_hops") / total(v, "attempts") if total(v, "attempts") else 0.0
+
+    med, p90, p95 = latency["median"], latency["p90"], latency["p95"]
+    lower = (med["interval"] or {}).get("lower95_one_sided")
+    lg = g["latency"]
+    clip_worst = min((x["effect"] for x in per_clip.values() if x["effect"] is not None), default=None)
+    gates = {
+        "latency": {
+            "median_reduction": med["reduction"], "p": med["p"], "lower95_one_sided": lower,
+            "p90_reduction": p90["reduction"], "p95_reduction": p95["reduction"],
+            "worst_clip_reduction": clip_worst, "segment_anchor_reduction": seg_test["reduction"],
+            "pass": bool(med["reduction"] is not None and med["reduction"] >= lg["minRelativeReduction"]
+                         and med["p"] is not None and med["p"] < lg["supportAlpha"]
+                         and lower is not None and lower > 0
+                         and p90["reduction"] is not None and p90["reduction"] >= lg["tailGuard"]["minReduction"]
+                         and p95["reduction"] is not None and p95["reduction"] >= lg["tailGuard"]["minReduction"]
+                         and clip_worst is not None and clip_worst >= lg["perClipGuard"]["minReduction"]
+                         and seg_test["reduction"] is not None
+                         and seg_test["reduction"] >= lg["referenceAnchor"]["minReduction"])},
+        "wer": {
+            "mean_delta_pt": wer["mean_delta"], "p": wer["p"], "holm_p": p_adj[0],
+            "clip_mean_delta_pt": {c: x["mean_delta"] for c, x in wer_by_clip.items()},
+            "pass": bool(wer["mean_delta"] is not None
+                         and wer["mean_delta"] <= g["wer"]["maxMeanIncreasePt"]
+                         and (p_adj[0] if p_adj[0] is not None else 0) >= g["wer"]["supportedRegressionAlpha"]
+                         and all(x["mean_delta"] is None or x["mean_delta"] <= g["wer"]["maxClipMeanIncreasePt"]
+                                 for x in wer_by_clip.values()))},
+        "missingSpeech": {
+            "deletion_rate_delta_pt": deletion["mean_delta"], "deletion_holm_p": p_adj[1],
+            "missing_share_delta_pt": missing["mean_delta"], "missing_holm_p": p_adj[2],
+            "omitted_segments_delta_pt": omitted["mean_delta"], "omitted_holm_p": p_adj[3],
+            "pass": bool(deletion["mean_delta"] is not None and missing["mean_delta"] is not None
+                         and omitted["mean_delta"] is not None
+                         and deletion["mean_delta"] <= g["missingSpeech"]["maxDeletionRateIncreasePt"]
+                         and missing["mean_delta"] <= g["missingSpeech"]["maxMissingShareIncreasePt"]
+                         and omitted["mean_delta"] <= g["missingSpeech"]["maxOmittedSegmentsIncreasePt"]
+                         and all((p if p is not None else 0) >= g["missingSpeech"]["alpha"] for p in p_adj[1:]))},
+        "hallucinations": {
+            "critical_variant": total(v, "hallucinations_critical"),
+            "critical_control_mean": control_mean("hallucinations_critical"),
+            "ghost_words_variant": total(v, "ghost_words"), "ghost_words_control_mean": control_mean("ghost_words"),
+            "pass": bool(total(v, "hallucinations_critical") <= control_mean("hallucinations_critical")
+                         and total(v, "ghost_words") <= control_mean("ghost_words"))},
+        "immutability": {
+            "violations_all_arms": session_facts["violations_all_arms"],
+            "runs_with_unmatched_words": session_facts["unmatched_runs"],
+            "pass": bool(session_facts["violations_all_arms"] <= g["immutability"]["maxViolations"]
+                         and not session_facts["unmatched_runs"])},
+        "droppedHops": {
+            "variant_rate": rate_v, "control_rate": rate_c,
+            "pass": bool(rate_v <= max(rate_c * (1 + g["droppedHops"]["maxRelativeIncrease"]),
+                                       rate_c + g["droppedHops"]["orAbsolutePp"] / 100))},
+        "failures": {
+            "failed_runs": session_facts["failed_runs"],
+            "failed_hops_variant": total(v, "failed_hops"), "failed_hops_control_mean": control_mean("failed_hops"),
+            "pass": bool(session_facts["failed_runs"] <= g["failures"]["maxFailedRuns"]
+                         and total(v, "failed_hops") <= control_mean("failed_hops") + g["failures"]["maxFailedDecodesIncrease"])},
+    }
+    gates["all_pass"] = all(x["pass"] for x in gates.values())
+
+    secondary = {
+        "forced_commits": paired("forced_commits", scale=1.0), "empty_hypotheses": paired("empty_hypotheses", scale=1.0),
+        "dropped_hops": paired("dropped_hops", scale=1.0), "repeat_excess": paired("repeat_excess", text_clips, 1.0),
+        "ghost_words": paired("ghost_words", scale=1.0), "cpu_s_per_audio_min": paired("cpu_s_per_audio_min", scale=1.0),
+        "infer_rtf": paired("infer_rtf", scale=1.0), "decodes_per_min": paired("decodes_per_min", scale=1.0),
+        "mean_window_ms": paired("mean_window_ms", scale=1.0),
+        "finalization_latency_median_ms": {
+            "variant": (ll.latency_summary(pooled(blocks, v, "finalization_latency_ms")) or {}).get("median"),
+            "controls": (ll.latency_summary(pooled(blocks, "C0", "finalization_latency_ms")
+                                            + pooled(blocks, "C1", "finalization_latency_ms")) or {}).get("median")}}
+    return {"blocks": len(blocks), "latency": latency, "latency_audio_median": {
+                "reduction": audio_test["reduction"], "p": audio_test["p"]},
+            "segment_anchor": {"reduction": seg_test["reduction"], "p": seg_test["p"]},
+            "per_clip": per_clip, "per_corpus": per_corpus,
+            "clips_faster": sum(1 for x in per_clip.values() if (x["effect"] or 0) > 0), "clips": len(per_clip),
+            "wer": wer, "deletion": deletion, "missing": missing, "omitted": omitted,
+            "secondary": secondary, "gates": gates}
+
+
 def analyze_session(plan: dict, results: dict) -> dict:
     gate = plan["gate"]
     blocks, excluded = blocks_of(plan, results)
     clip_ids = [c["id"] for c in plan["clips"]]
     text_clips = {c["id"] for c in plan["clips"] if c["refWords"]}
     corpus_of = {c["id"]: c["corpus"] for c in plan["clips"]}
-    resamples = gate["latency"]["randomizationResamples"]
     seed = plan["seed"]
+    n_resamples = gate["latency"]["randomizationResamples"]
 
-    runs = [r for r in results["runs"]]
+    runs = results["runs"]
     failed = [r["id"] for r in runs if not r["ok"]]
-    violations = {r["arm"]: 0 for r in runs}
-    for r in runs:
-        if r["ok"]:
-            violations[r["arm"]] += r["metrics"]["invariant_violations"]
-    mismatched = [r["id"] for r in runs if r["ok"] and not r["metrics"]["tokens_match_commits"]]
+    ok_runs = [r for r in runs if r["ok"]]
+    facts = {"failed_runs": len(failed),
+             "violations_all_arms": sum(r["metrics"]["invariant_violations"] for r in ok_runs),
+             "unmatched_runs": [r["id"] for r in ok_runs
+                                if not (r["metrics"]["tokens_match_commits"] and r["metrics"]["invariant_words_match"])]}
+    violations = {}
+    for r in ok_runs:
+        violations[r["arm"]] = violations.get(r["arm"], 0) + r["metrics"]["invariant_violations"]
 
-    # Machine state during the replays.
-    busy = [x for r in runs if r["ok"] for x in (r.get("machineBusyPercent") or [])]
+    # Machine state during the replays, and which blocks were shared with other jobs.
     cores = plan["hardware"].get("cores") or 1
-    own_cores = [r["metrics"]["cpu_s_per_audio_min"] / 60 for r in runs if r["ok"]]
+    cg = gate["contention"]
+    bad_blocks = contended_blocks(blocks, cores, cg["otherCoresP90Above"])
+    busy = [x for r in ok_runs for x in (r.get("machineBusyPercent") or [])]
+    own = [r["metrics"]["cpu_s_per_audio_min"] / 60 for r in ok_runs]
+    waits = [r["lockWaitSeconds"] for r in ok_runs if r.get("lockWaitSeconds") is not None]
+    loads = [r["loadavgAtLaunch"] for r in ok_runs if r.get("loadavgAtLaunch") is not None]
     load = {"machine_busy_cores_median": (ll.quantile(busy, 0.5) / 100 * cores) if busy else None,
             "machine_busy_cores_p90": (ll.quantile(busy, 0.9) / 100 * cores) if busy else None,
-            "replay_own_cores_median": ll.quantile(own_cores, 0.5) if own_cores else None,
-            "samples": len(busy), "cores": cores,
-            "lock_wait_seconds_median": ll.quantile([r["lockWaitSeconds"] for r in runs
-                                                     if r["ok"] and r.get("lockWaitSeconds") is not None] or [0], 0.5),
-            "loadavg_at_launch_median": ll.quantile([r["loadavgAtLaunch"] for r in runs
-                                                     if r["ok"] and r.get("loadavgAtLaunch") is not None] or [0], 0.5)}
+            "replay_own_cores_median": ll.quantile(own, 0.5) if own else None, "samples": len(busy), "cores": cores,
+            "lock_wait_seconds_median": ll.quantile(waits, 0.5) if waits else None,
+            "loadavg_at_launch_median": ll.quantile(loads, 0.5) if loads else None,
+            "contended_blocks": sorted(f"{c}/r{r}" for c, r in bad_blocks),
+            "run_other_cores_p90": {r["id"]: run_contention(r, cores) for r in ok_runs}}
 
     analysis: dict = {"session": plan["session"], "planSha256": results["planSha256"],
                       "blocks": len(blocks), "blocksPlanned": len(clip_ids) * plan["rounds"],
                       "excluded": excluded, "failedRuns": failed, "load": load,
-                      "tokenCommitMismatch": mismatched, "invariantViolationsByArm": violations}
+                      "tokenCommitMismatch": facts["unmatched_runs"], "invariantViolationsByArm": violations}
 
     # Per-arm descriptives. The headline figures are the mean over runs of each run's own
     # median, p90 and p95: pooled over clips that differ by 5x, the median of all words sits in
@@ -716,9 +876,8 @@ def analyze_session(plan: dict, results: dict) -> dict:
         by_corpus = {}
         for corpus in sorted(set(corpus_of.values())):
             ids = {c for c in clip_ids if corpus_of[c] == corpus}
-            w = pooled(blocks, arm, "latency_wall_ms", ids)
-            by_corpus[corpus] = ll.latency_summary(w)
-        reasons = [x for (_, _), b in blocks.items() for x in b[arm]["metrics"]["reason"]]
+            by_corpus[corpus] = ll.latency_summary(pooled(blocks, arm, "latency_wall_ms", ids))
+        reasons = [x for b in blocks.values() for x in b[arm]["metrics"]["reason"]]
         sums = lambda key: sum((b[arm]["metrics"][key] or 0) for b in blocks.values())  # noqa: E731
         attempts = sums("attempts")
         errs = {r: {"ok": 0, "sub": 0, "ins": 0} for r in ll.REASONS}
@@ -744,11 +903,13 @@ def analyze_session(plan: dict, results: dict) -> dict:
             "finalizations": sums("finalizations"), "finalizations_abandoned": sums("finalizations_abandoned"),
             "unagreed_tail_words": sums("unagreed_tail_words"),
             "hallucinations_critical": sums("hallucinations_critical"),
-            "hallucination_fillers": sums("hallucination_fillers"),
-            "hallucination_loops": sums("hallucination_loops"),
+            "hallucination_fillers": sums("hallucination_fillers"), "hallucination_loops": sums("hallucination_loops"),
             "hallucination_invented_spans": sums("hallucination_invented_spans"),
-            "repeats": sums("repeats"), "ghost_words": sums("ghost_words"),
+            "hallucination_repeated_phrases": sums("hallucination_repeated_phrases"),
+            "repeats": sums("repeats"), "ghost_words": sums("ghost_words"), "empty_words": sums("empty_words"),
             "finalization_latency": ll.latency_summary(pooled(blocks, arm, "finalization_latency_ms")),
+            "segment_latency_median_ms": mean([(b[arm]["metrics"]["segment_latency"] or {}).get("median")
+                                               for b in blocks.values()]),
             "cpu_s_per_audio_min": mean([b[arm]["metrics"]["cpu_s_per_audio_min"] for b in blocks.values()]),
             "infer_rtf": mean([b[arm]["metrics"]["infer_rtf"] for b in blocks.values()]),
             "decodes_per_min": mean([b[arm]["metrics"]["decodes_per_min"] for b in blocks.values()]),
@@ -758,136 +919,50 @@ def analyze_session(plan: dict, results: dict) -> dict:
             "wer_mean": mean([b[arm]["metrics"]["wer"] for (c, _), b in blocks.items() if c in text_clips]),
             "deletion_rate_mean": mean([b[arm]["metrics"]["deletion_rate"] for (c, _), b in blocks.items() if c in text_clips]),
             "missing_share_mean": mean([b[arm]["metrics"]["missing_speech_share"] for b in blocks.values()]),
+            "omitted_segment_share_mean": mean([b[arm]["metrics"]["omitted_segment_share"] for b in blocks.values()]),
             "errors_by_reason": errs,
         }
     analysis["arms"] = desc
 
     # A/A: the control against itself, with the very statistics used for the variants.
-    aa_blocks = block_words(blocks, ["C0", "C1"])
-    aa_test = ll.randomization_test(aa_blocks, 1, quantiles=(0.5, 0.9, 0.95), resamples=resamples, seed=seed,
+    aa_words = block_words(blocks, ["C0", "C1"])
+    aa_test = ll.randomization_test(aa_words, 1, quantiles=(0.5, 0.9, 0.95), resamples=n_resamples, seed=seed,
                                     two_sided=True)
-    aa_interval = {q: ll.block_reduction_interval(aa_blocks, 1, q) for q in (0.5, 0.9, 0.95)}
+    aa_int = {q: ll.block_reduction_interval(aa_words, 1, q) for q in (0.5, 0.9, 0.95)}
     aa_point = aa_test[0.5]["reduction"]
+    aa_wer = [(r[1] - r[0]) * 100 for r in block_values(blocks, ["C0", "C1"], "wer", text_clips) if None not in r]
     analysis["aa"] = {
-        "median": {"reduction": aa_point, "p_two_sided": aa_test[0.5]["p"], "interval": aa_interval[0.5]},
-        "p90": {"reduction": aa_test[0.9]["reduction"], "p_two_sided": aa_test[0.9]["p"], "interval": aa_interval[0.9]},
-        "p95": {"reduction": aa_test[0.95]["reduction"], "p_two_sided": aa_test[0.95]["p"], "interval": aa_interval[0.95]},
-        "per_clip": per_clip_effects_aa(blocks, clip_ids),
+        "median": {"reduction": aa_point, "p_two_sided": aa_test[0.5]["p"], "interval": aa_int[0.5]},
+        "p90": {"reduction": aa_test[0.9]["reduction"], "p_two_sided": aa_test[0.9]["p"], "interval": aa_int[0.9]},
+        "p95": {"reduction": aa_test[0.95]["reduction"], "p_two_sided": aa_test[0.95]["p"], "interval": aa_int[0.95]},
+        "per_clip": aa_per_clip(blocks, clip_ids),
         "valid": bool(aa_point is not None and abs(aa_point) <= gate["aa"]["maxAbsEffect"]
+                      and aa_test[0.5]["p"] is not None
                       and aa_test[0.5]["p"] >= gate["aa"]["twoSidedRandomizationPMustBeAtLeast"]),
-        "wer_delta_pt": ll.bootstrap_mean_ci([(b["C1"]["metrics"]["wer"] - b["C0"]["metrics"]["wer"]) * 100
-                                              for (c, _), b in blocks.items()
-                                              if c in text_clips and b["C1"]["metrics"]["wer"] is not None]),
-        "block_median_ratio": [b["C1"]["metrics"]["latency_wall"]["median"] / b["C0"]["metrics"]["latency_wall"]["median"]
-                               for b in blocks.values()
-                               if b["C0"]["metrics"]["latency_wall"] and b["C1"]["metrics"]["latency_wall"]]}
+        "wer_delta_pt": ll.t_mean_ci(aa_wer),
+        "block_median_ratio": [r[1] / r[0] for r in (ll.run_quantiles(b, 0.5) for b in aa_words) if None not in r and r[0]]}
 
-    # Variants against the pooled controls.
+    # Variants against the pooled controls, on every block and on the uncontended blocks alone.
+    quiet = {k: b for k, b in blocks.items() if k not in bad_blocks}
     variants = {}
     for v in plan["variants"]:
-        arms3 = ["C0", "C1", v]
-        words_blocks = block_words(blocks, arms3)
-        test = ll.randomization_test(words_blocks, 2, quantiles=(0.5, 0.9, 0.95), resamples=resamples, seed=seed)
-        intervals = {q: ll.block_reduction_interval(words_blocks, 2, q) for q in (0.5, 0.9, 0.95)}
-        audio_blocks = block_words(blocks, arms3, key="latency_audio_ms")
-        audio_test = ll.randomization_test(audio_blocks, 2, quantiles=(0.5,), resamples=max(1000, resamples // 5), seed=seed)
-        effects = {name: {"reduction": test[q]["reduction"], "p": test[q]["p"], "interval": intervals[q]}
-                   for name, q in (("median", 0.5), ("p90", 0.9), ("p95", 0.95))}
-        audio_effects = {"reduction": audio_test[0.5]["reduction"], "p": audio_test[0.5]["p"],
-                         "interval": ll.block_reduction_interval(audio_blocks, 2, 0.5)}
-        per_clip = per_clip_effects(blocks, v, clip_ids)
-        by_corpus = {}
-        for corpus in sorted(set(corpus_of.values())):
-            ids = {c for c in clip_ids if corpus_of[c] == corpus}
-            sub = block_words(blocks, arms3, ids)
-            if not sub:
-                continue
-            sub_test = ll.randomization_test(sub, 2, quantiles=(0.5,), resamples=max(1000, resamples // 5), seed=seed)
-            by_corpus[corpus] = {"reduction": sub_test[0.5]["reduction"], "p": sub_test[0.5]["p"],
-                                 "interval": ll.block_reduction_interval(sub, 2, 0.5), "blocks": len(sub)}
-
-        # Safety metrics, paired by block against the mean of the controls.
-        wer_d = [d * 100 for d in paired_deltas(blocks, v, "wer", clips=text_clips)]
-        wer_clip_means = {}
-        for clip in sorted(text_clips):
-            ds = [d * 100 for d in paired_deltas(blocks, v, "wer", clips={clip})]
-            wer_clip_means[clip] = ll.bootstrap_mean_ci(ds)
-        del_d = [d * 100 for d in paired_deltas(blocks, v, "deletion_rate", clips=text_clips)]
-        miss_d = [d * 100 for d in paired_deltas(blocks, v, "missing_speech_share")]
-        wer_p = ll.sign_flip_p(wer_d, alternative="greater")
-        del_p = ll.sign_flip_p(del_d, alternative="greater")
-        miss_p = ll.sign_flip_p(miss_d, alternative="greater")
-        p_adj = ll.holm([wer_p, del_p, miss_p])
-
-        # Hallucinations: totals over the session against the mean of the two controls' totals.
-        hall_v = desc[v]["hallucinations_critical"]
-        hall_c = (desc["C0"]["hallucinations_critical"] + desc["C1"]["hallucinations_critical"]) / 2
-        control_attempts = desc["C0"]["attempts"] + desc["C1"]["attempts"]
-        control_drops = desc["C0"]["dropped_hops"] + desc["C1"]["dropped_hops"]
-        rate_c = control_drops / control_attempts if control_attempts else 0.0
-        rate_v = desc[v]["dropped_rate"] or 0.0
-
-        def paired_mean(key, scale=1.0):
-            return ll.bootstrap_mean_ci(paired_deltas(blocks, v, key, scale=scale))
-
-        g = gate
-        lat = effects["median"]
-        lower = (lat["interval"] or {}).get("lower95_one_sided")
-        gates = {
-            "latency": {"point": lat["reduction"], "p": lat["p"], "lower95_one_sided": lower,
-                        "pass": bool(lat["reduction"] is not None
-                                     and lat["reduction"] >= g["latency"]["minRelativeReduction"]
-                                     and lat["p"] < g["latency"]["supportAlpha"]
-                                     and (lower if lower is not None else -1) > 0)},
-            "wer": {"mean_delta_pt": ll.bootstrap_mean_ci(wer_d), "sign_flip_p": wer_p, "holm_p": p_adj[0],
-                    "clip_means": wer_clip_means,
-                    "pass": bool(wer_d and (p_adj[0] is None or p_adj[0] >= g["wer"]["supportedRegressionAlpha"])
-                                 and sum(wer_d) / len(wer_d) <= g["wer"]["maxMeanIncreasePt"]
-                                 and all((m is None or m["mean"] <= g["wer"]["maxClipMeanIncreasePt"])
-                                         for m in wer_clip_means.values()))},
-            "missingSpeech": {"deletion_rate_delta_pt": ll.bootstrap_mean_ci(del_d), "deletion_p": del_p,
-                              "deletion_holm_p": p_adj[1],
-                              "missing_share_delta_pt": ll.bootstrap_mean_ci(miss_d), "missing_p": miss_p,
-                              "missing_holm_p": p_adj[2],
-                              "pass": bool(del_d and miss_d
-                                           and sum(del_d) / len(del_d) <= g["missingSpeech"]["maxDeletionRateIncreasePt"]
-                                           and sum(miss_d) / len(miss_d) <= g["missingSpeech"]["maxMissingShareIncreasePt"]
-                                           and (p_adj[1] or 1) >= g["missingSpeech"]["alpha"]
-                                           and (p_adj[2] or 1) >= g["missingSpeech"]["alpha"])},
-            "hallucinations": {"variant_total": hall_v, "control_mean_total": hall_c, "pass": hall_v <= hall_c},
-            "immutability": {"violations_variant": violations[v], "violations_controls": violations["C0"] + violations["C1"],
-                             "pass": violations[v] + violations["C0"] + violations["C1"] <= g["immutability"]["maxViolations"]},
-            "droppedHops": {"variant_rate": rate_v, "control_rate": rate_c,
-                            "pass": bool(rate_v <= max(rate_c * (1 + g["droppedHops"]["maxRelativeIncrease"]),
-                                                       rate_c + g["droppedHops"]["orAbsolutePp"] / 100))},
-            "failures": {"failed_runs": len(failed), "failed_hops_variant": desc[v]["failed_hops"],
-                         "failed_hops_controls": desc["C0"]["failed_hops"] + desc["C1"]["failed_hops"],
-                         "pass": len(failed) <= g["failures"]["maxFailedRuns"]
-                         and desc[v]["failed_hops"] <= (desc["C0"]["failed_hops"] + desc["C1"]["failed_hops"]) / 2
-                         + g["failures"]["maxFailedDecodesIncrease"]},
-        }
+        full = evaluate_variant(plan, blocks, v, facts)
+        sensitivity = None
+        if bad_blocks and len(quiet) >= cg["minBlocksForSensitivity"]:
+            sensitivity = evaluate_variant(plan, quiet, v, facts)
+        gates = dict(full["gates"])
         gates["session_valid"] = {"aa_valid": analysis["aa"]["valid"], "pass": analysis["aa"]["valid"]}
-        gates["all_pass"] = all(gates[k]["pass"] for k in gates if k != "all_pass")
-        variants[v] = {
-            "variable": plan["arms"][v]["variable"], "what": plan["arms"][v]["what"], "flags": plan["arms"][v]["flags"],
-            "latency_wall": effects, "latency_audio_median": audio_effects, "per_clip": per_clip, "per_corpus": by_corpus,
-            "clips_faster": sum(1 for x in per_clip.values() if (x["effect"] or 0) > 0),
-            "clips": len(per_clip),
-            "secondary": {
-                "forced_commits_delta": paired_mean("forced_commits"),
-                "empty_hypotheses_delta": paired_mean("empty_hypotheses"),
-                "dropped_hops_delta": paired_mean("dropped_hops"),
-                "repeat_excess_delta": ll.bootstrap_mean_ci(paired_deltas(blocks, v, "repeat_excess", clips=text_clips)),
-                "ghost_words_delta": paired_mean("ghost_words"),
-                "cpu_s_per_audio_min_delta": paired_mean("cpu_s_per_audio_min"),
-                "infer_rtf_delta": paired_mean("infer_rtf"),
-                "decodes_per_min_delta": paired_mean("decodes_per_min"),
-                "mean_window_ms_delta": paired_mean("mean_window_ms"),
-                "finalization_latency_median_ms": {"variant": (desc[v]["finalization_latency"] or {}).get("median"),
-                                                   "controls": ll.quantile(pooled(blocks, "C0", "finalization_latency_ms") + pooled(blocks, "C1", "finalization_latency_ms") or [0], 0.5)},
-            },
-            "gates": gates,
-        }
+        gates["uncontended"] = {"contended_blocks": len(bad_blocks), "blocks_without": len(quiet),
+                                "evaluated": sensitivity is not None,
+                                "all_pass_without_contended_blocks": None if sensitivity is None else sensitivity["gates"]["all_pass"],
+                                "pass": sensitivity is None or sensitivity["gates"]["all_pass"]}
+        gates["all_pass"] = all(x["pass"] for k, x in gates.items() if k != "all_pass")
+        variants[v] = {"variable": plan["arms"][v]["variable"], "what": plan["arms"][v]["what"],
+                       "flags": plan["arms"][v]["flags"], **{k: x for k, x in full.items() if k != "gates"},
+                       "gates": gates,
+                       "uncontended": None if sensitivity is None else {
+                           "median_reduction": sensitivity["latency"]["median"]["reduction"],
+                           "p": sensitivity["latency"]["median"]["p"], "gates": sensitivity["gates"]}}
     analysis["variants"] = variants
     return analysis
 
@@ -914,6 +989,10 @@ def ms(x):
     return "n/a" if x is None else f"{x:,.0f}"
 
 
+def fnum(x, fmt="{:+.2f}"):
+    return "n/a" if x is None else fmt.format(x)
+
+
 def render_session(plan: dict, a: dict) -> str:
     L = []
     L.append(f"# Session {a['session']}: {plan.get('name', '')}")
@@ -922,10 +1001,14 @@ def render_session(plan: dict, a: dict) -> str:
              f"{a['blocks']} of {a['blocksPlanned']} blocks complete; {len(a['failedRuns'])} failed runs.")
     ld = a["load"]
     L.append("")
-    L.append(f"Machine during the replays: median {ld['machine_busy_cores_median']:.1f} of {ld['cores']} cores busy in total "
-             f"(p90 {ld['machine_busy_cores_p90']:.1f}); the replay itself used a median {ld['replay_own_cores_median']:.2f} cores; "
-             f"lock wait median {ld['lock_wait_seconds_median']:.0f} s." if ld["machine_busy_cores_median"] is not None
-             else "Machine load was not sampled.")
+    if ld["machine_busy_cores_median"] is not None:
+        L.append(f"Machine during the replays: median {ld['machine_busy_cores_median']:.1f} of {ld['cores']} cores busy in total "
+                 f"(p90 {ld['machine_busy_cores_p90']:.1f}); the replay itself used a median {ld['replay_own_cores_median']:.2f} cores; "
+                 f"lock wait median {ld['lock_wait_seconds_median']:.0f} s. "
+                 f"Blocks shared with other jobs (other cores p90 above the plan's limit): {len(ld['contended_blocks'])} "
+                 f"({', '.join(ld['contended_blocks']) or 'none'}).")
+    else:
+        L.append("Machine load was not sampled.")
     L.append("")
     L.append("## Commit latency by arm (mean over runs of each run's own quantile, wall clock, ms)")
     L.append("")
@@ -940,18 +1023,20 @@ def render_session(plan: dict, a: dict) -> str:
     L.append("Median commit latency of the words pooled by corpus, per arm (ms):")
     L.append("")
     corpora = sorted({c for d in a["arms"].values() for c in d["latency_wall_by_corpus"]})
-    L.append("| arm | " + " | ".join(corpora) + " |")
-    L.append("| --- | " + " | ".join("---:" for _ in corpora) + " |")
+    L.append("| arm | " + " | ".join(corpora) + " | reference-anchored segment median |")
+    L.append("| --- | " + " | ".join("---:" for _ in corpora) + " | ---: |")
     for arm, d in a["arms"].items():
-        L.append(f"| {arm} | " + " | ".join(ms((d["latency_wall_by_corpus"].get(c) or {}).get("median")) for c in corpora) + " |")
+        L.append(f"| {arm} | " + " | ".join(ms((d["latency_wall_by_corpus"].get(c) or {}).get("median")) for c in corpora)
+                 + f" | {ms(d['segment_latency_median_ms'])} |")
     L.append("")
     L.append("## A/A: the control against itself")
     L.append("")
     aa = a["aa"]
+
     def iv(x):
         return f"[{pct(x['ci95'][0])}, {pct(x['ci95'][1])}]" if x else "n/a"
     L.append(f"C1 against C0, commit latency reduction: median {pct(aa['median']['reduction'])} {iv(aa['median']['interval'])} "
-             f"(two-sided p {aa['median']['p_two_sided']:.3f}), p90 {pct(aa['p90']['reduction'])}, p95 {pct(aa['p95']['reduction'])}. "
+             f"(two-sided p {fnum(aa['median']['p_two_sided'], '{:.3f}')}), p90 {pct(aa['p90']['reduction'])}, p95 {pct(aa['p95']['reduction'])}. "
              f"Session {'valid' if aa['valid'] else 'NOT VALID for timing'}. "
              f"Per-block median ratios C1/C0: {', '.join(f'{x:.2f}' for x in aa['block_median_ratio'])}.")
     if aa["wer_delta_pt"]:
@@ -963,31 +1048,43 @@ def render_session(plan: dict, a: dict) -> str:
         L.append("")
         L.append(f"### {v}: {d['variable']}. {d['what']}")
         L.append("")
-        m, p90, p95 = d["latency_wall"]["median"], d["latency_wall"]["p90"], d["latency_wall"]["p95"]
+        m, p90, p95 = d["latency"]["median"], d["latency"]["p90"], d["latency"]["p95"]
+
         def ci(x):
             i = x.get("interval")
             return f"[{pct(i['ci95'][0])}, {pct(i['ci95'][1])}]" if i else ""
-        L.append(f"* Commit latency reduction (wall): median {pct(m['reduction'])} {ci(m)} (randomization p {m['p']:.4f}), "
-                 f"p90 {pct(p90['reduction'])} {ci(p90)} (p {p90['p']:.4f}), p95 {pct(p95['reduction'])} {ci(p95)} (p {p95['p']:.4f}); "
-                 f"audio clock median {pct(d['latency_audio_median']['reduction'])}. Faster on {d['clips_faster']} of {d['clips']} clips: "
+        L.append(f"* Commit latency reduction (wall): median {pct(m['reduction'])} {ci(m)} (randomization p {fnum(m['p'], '{:.4f}')}), "
+                 f"p90 {pct(p90['reduction'])} {ci(p90)} (p {fnum(p90['p'], '{:.4f}')}), p95 {pct(p95['reduction'])} {ci(p95)} (p {fnum(p95['p'], '{:.4f}')}). "
+                 f"Audio-clock median {pct(d['latency_audio_median']['reduction'])}; anchored on the reference segment ends {pct(d['segment_anchor']['reduction'])}. "
+                 f"Faster on {d['clips_faster']} of {d['clips']} clips: "
                  + ", ".join(f"{c} {pct(x['effect'])}" for c, x in d["per_clip"].items()))
         L.append("* By corpus (median): " + ", ".join(f"{c} {pct(x['reduction'])} {ci(x)}" for c, x in d["per_corpus"].items()))
         gt = d["gates"]
-        w = gt["wer"]["mean_delta_pt"]
-        L.append(f"* WER, variant minus control (blocks with a word reference): {w['mean']:+.2f} points {('[' + format(w['ci95'][0], '+.2f') + ', ' + format(w['ci95'][1], '+.2f') + ']') if w else ''}, "
-                 f"sign-flip p {gt['wer']['sign_flip_p']:.3f} (Holm {gt['wer']['holm_p']:.3f})" if w else "* WER: no blocks with a word reference")
-        ms_ = gt["missingSpeech"]
-        if ms_["deletion_rate_delta_pt"]:
-            dd, mm = ms_["deletion_rate_delta_pt"], ms_["missing_share_delta_pt"]
-            L.append(f"* Deletion rate {dd['mean']:+.2f} points (p {ms_['deletion_p']:.3f}); missing speech share {mm['mean']:+.2f} points (p {ms_['missing_p']:.3f}).")
+
+        def delta(x, unit=" points"):
+            i = x.get("interval")
+            return (f"{fnum(x['mean_delta'])}{unit}" + (f" [{i['ci95'][0]:+.2f}, {i['ci95'][1]:+.2f}]" if i else "")
+                    + f", p {fnum(x['p'], '{:.3f}')}") if x["mean_delta"] is not None else "n/a"
+        L.append(f"* Variant minus control, per block: WER {delta(d['wer'])} (Holm p {fnum(gt['wer']['holm_p'], '{:.3f}')}); "
+                 f"deletion rate {delta(d['deletion'])}; missing-speech share {delta(d['missing'])}; omitted turns {delta(d['omitted'])}.")
         s = d["secondary"]
+
         def sm(x, fmt="{:+.2f}"):
-            return "n/a" if x is None else fmt.format(x["mean"])
-        L.append(f"* Per block, variant minus control: forced commits {sm(s['forced_commits_delta'])}, dropped hops {sm(s['dropped_hops_delta'])}, "
-                 f"empty hypotheses {sm(s['empty_hypotheses_delta'])}, repeat excess {sm(s['repeat_excess_delta'])}, "
-                 f"CPU {sm(s['cpu_s_per_audio_min_delta'], '{:+.2f}')} s per audio minute, infer RTF {sm(s['infer_rtf_delta'], '{:+.3f}')}, "
-                 f"decodes/min {sm(s['decodes_per_min_delta'], '{:+.1f}')}, mean window {sm(s['mean_window_ms_delta'], '{:+.0f}')} ms.")
-        L.append("* Gates: " + ", ".join(f"{k} {'PASS' if v_['pass'] else 'FAIL'}" for k, v_ in gt.items() if isinstance(v_, dict) and 'pass' in v_)
+            return "n/a" if x is None or x["mean_delta"] is None else fmt.format(x["mean_delta"])
+        L.append(f"* Also, variant minus control per block: forced commits {sm(s['forced_commits'])}, dropped hops {sm(s['dropped_hops'])}, "
+                 f"empty hypotheses {sm(s['empty_hypotheses'])}, repeat excess {sm(s['repeat_excess'])}, ghost words {sm(s['ghost_words'])}, "
+                 f"CPU {sm(s['cpu_s_per_audio_min'])} s per audio minute, infer RTF {sm(s['infer_rtf'], '{:+.3f}')}, "
+                 f"decodes/min {sm(s['decodes_per_min'], '{:+.1f}')}, mean window {sm(s['mean_window_ms'], '{:+.0f}')} ms. "
+                 f"Finalization latency median {ms(s['finalization_latency_median_ms']['variant'])} ms against {ms(s['finalization_latency_median_ms']['controls'])} ms.")
+        h = gt["hallucinations"]
+        L.append(f"* Critical hallucinations {h['critical_variant']} against a control mean of {h['critical_control_mean']:.1f}; "
+                 f"ghost words {h['ghost_words_variant']} against {h['ghost_words_control_mean']:.1f}.")
+        if d.get("uncontended"):
+            u = d["uncontended"]
+            L.append(f"* Without the {gt['uncontended']['contended_blocks']} shared blocks: median reduction {pct(u['median_reduction'])} "
+                     f"(p {fnum(u['p'], '{:.4f}')}), every gate {'passes' if u['gates']['all_pass'] else 'does not pass'}.")
+        L.append("* Gates: " + ", ".join(f"{k} {'PASS' if v_['pass'] else 'FAIL'}" for k, v_ in gt.items()
+                                          if isinstance(v_, dict) and 'pass' in v_)
                  + f" -> **{'all pass' if gt['all_pass'] else 'not all pass'}**")
     L.append("")
     return "\n".join(L)
@@ -1001,7 +1098,7 @@ def promote(plan: dict, analysis: dict) -> list[str]:
     rule = plan["gate"]["promotion"]
     out = []
     for v, d in analysis["variants"].items():
-        point = d["latency_wall"]["median"]["reduction"]
+        point = d["latency"]["median"]["reduction"]
         if point is not None and point >= rule["minSession1Reduction"] and d["gates"]["immutability"]["pass"]:
             out.append(v)
     return out
@@ -1014,13 +1111,40 @@ def cmd_promote(args) -> int:
     return 0
 
 
+def check_sessions(sessions: list[tuple[dict, dict]]) -> list[str]:
+    """What makes two sessions independent and comparable. Returns the reasons they are not."""
+    problems = []
+    numbers = [p["session"] for p, _ in sessions]
+    if len(set(numbers)) < 2:
+        problems.append("fewer than two distinct sessions: reproducibility needs session 1 and session 2")
+    hashes = [a["planSha256"] for _, a in sessions]
+    if len(set(hashes)) != len(hashes):
+        problems.append("two sessions share a plan")
+    for plan, _ in sessions:
+        if plan["gate"] != DEFAULT_GATE:
+            problems.append(f"session {plan['session']}: the gate in the plan is not the gate in this version of the harness")
+    first = sessions[0][0]
+    for plan, _ in sessions[1:]:
+        if plan["seed"] != first["seed"] or plan["tier"] != first["tier"] or plan["base"] != first["base"]:
+            problems.append(f"session {plan['session']}: seed, tier or base flags differ from session {first['session']}")
+        for arm, definition in plan["arms"].items():
+            if arm in first["arms"] and definition["flags"] != first["arms"][arm]["flags"]:
+                problems.append(f"session {plan['session']}: arm {arm} has other flags than in session {first['session']}")
+        wavs = {c["id"]: c["wavSha256"] for c in first["clips"]}
+        for c in plan["clips"]:
+            if c["id"] in wavs and wavs[c["id"]] != c["wavSha256"]:
+                problems.append(f"session {plan['session']}: clip {c['id']} is not the clip of session {first['session']}")
+    return problems
+
+
 def cmd_decide(args) -> int:
     sessions = []
     for number in args.sessions:
         plan = json.loads((args.out / f"plan-session-{number}.json").read_text())
         analysis = json.loads((args.out / f"analysis-session-{number}.json").read_text())
         sessions.append((plan, analysis))
-    gate = sessions[0][0]["gate"]
+    gate = DEFAULT_GATE
+    problems = check_sessions(sessions) if not args.allow_unchecked else []
     candidates = sorted({v for _, a in sessions for v in a["variants"]})
     verdicts = {}
     for v in candidates:
@@ -1028,23 +1152,29 @@ def cmd_decide(args) -> int:
         for plan, analysis in sessions:
             d = analysis["variants"].get(v)
             per_session[plan["session"]] = None if d is None else {
-                "reduction": d["latency_wall"]["median"]["reduction"], "all_pass": d["gates"]["all_pass"],
+                "reduction": d["latency"]["median"]["reduction"], "all_pass": d["gates"]["all_pass"],
                 "failed": [k for k, g in d["gates"].items() if isinstance(g, dict) and not g.get("pass", True)]}
         ran_all = all(per_session.get(plan["session"]) is not None for plan, _ in sessions)
-        passed = ran_all and all(s["all_pass"] for s in per_session.values())
+        passed = ran_all and not problems and all(s["all_pass"] for s in per_session.values())
         verdicts[v] = {"per_session": per_session, "ran_in_every_session": ran_all, "meets_every_gate": passed}
-    change = [v for v, x in verdicts.items() if x["meets_every_gate"]]
+    meeting = [v for v, x in verdicts.items() if x["meets_every_gate"]]
+    # Each variant was tested alone. A default is changed by one variable; a pair was never tested.
+    best = max(meeting, key=lambda v: verdicts[v]["per_session"][sessions[-1][0]["session"]]["reduction"], default=None)
     decision = {"schema": SCHEMA, "created": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
-                "rule": gate["default"], "reproducibility": gate["reproducibility"], "verdicts": verdicts,
-                "changeDefaultTo": change, "productionConfigurationChanged": bool(change)}
+                "rule": gate["default"], "reproducibility": gate["reproducibility"], "problems": problems,
+                "verdicts": verdicts, "meetEveryGate": meeting, "changeDefaultTo": [best] if best else [],
+                "productionConfigurationChanged": best is not None,
+                "note": "only one variable is ever changed at once; combinations were not tested"}
     (args.out / "decision.json").write_text(json.dumps(decision, indent=2))
     lines = ["# Decision", "", f"Rule: {gate['default']}.", "", f"Reproducibility: {gate['reproducibility']}.", ""]
+    for p in problems:
+        lines.append(f"* **Not a valid pair of sessions:** {p}")
     for v, x in verdicts.items():
         lines.append(f"* **{v}**: " + "; ".join(
             f"session {s}: " + ("not run" if r is None else f"latency {pct(r['reduction'])}, "
                                 + ("every gate passes" if r["all_pass"] else "fails " + ", ".join(r["failed"])))
             for s, r in x["per_session"].items()) + f" -> {'MEETS EVERY GATE' if x['meets_every_gate'] else 'default stays'}")
-    lines += ["", f"**Production configuration {'CHANGED to ' + ', '.join(change) if change else 'UNCHANGED'}.**", ""]
+    lines += ["", f"**Production configuration {'CHANGED to ' + best if best else 'UNCHANGED'}.**", ""]
     (args.out / "DECISION.md").write_text("\n".join(lines))
     print("\n".join(lines))
     return 0
@@ -1102,6 +1232,7 @@ def build_parser() -> argparse.ArgumentParser:
     a = sub.add_parser("decide", help="apply the plan's rule across sessions")
     a.add_argument("--out", type=Path, required=True)
     a.add_argument("--sessions", type=int, nargs="+", required=True)
+    a.add_argument("--allow-unchecked", action="store_true", help="skip the checks that two sessions are independent (tests only)")
     a.set_defaults(fn=cmd_decide)
     return p
 

@@ -11,11 +11,14 @@ counters of the live decoder, the CPU it used and whether committed text was onl
 appended to.
 
 What the statistics assume. A run is not independent of its clip: the same audio gives
-similar latencies in every round. The unit of replication is therefore the ROUND within a
-CLIP, and the bootstrap resamples rounds inside each clip (stratified), never words. The
-clips are a fixed set, so an interval says how sure the effect is ON THESE CLIPS; whether
-it carries to other recordings is argued from the spread between clips, which the report
-prints. Nothing here uses a distributional assumption.
+similar latencies in every round. The unit of replication is therefore the BLOCK (one clip in
+one round), never the word. In a block the arms ran back to back in a seeded random order, so
+under "the arm has no effect" the control runs and the variant run are exchangeable. The tests
+permute exactly that (`randomization_test`, `randomization_mean_delta`): exact size at any
+number of blocks, no distribution assumed. The intervals are t-intervals over blocks, which
+carry the spread between clips as well as between rounds. The clips are a fixed set; whether an
+effect carries to other recordings is argued from the spread between clips, which the report
+prints.
 """
 
 from __future__ import annotations
@@ -271,6 +274,55 @@ def ghost_words(ref_spans: Sequence[Sequence[int]], words: Sequence[dict], *, pa
     return count
 
 
+def repeated_phrases(words: Sequence[str], *, n: int = 4, within: int = 30) -> int:
+    """Places where a phrase of `n` words is committed again within `within` words: the
+    signature of the live path's documented failure, a sentence committed two or three times
+    around a pause (FINDINGS 11). Speakers do repeat themselves, so a text-reference clip counts
+    the reference's own repeats too and the difference is used."""
+    count = 0
+    i = 0
+    last = len(words) - n
+    while i <= last:
+        gram = tuple(words[i:i + n])
+        if any(tuple(words[j:j + n]) == gram for j in range(i + n, min(i + within, last) + 1)):
+            count += 1
+            i += n
+        else:
+            i += 1
+    return count
+
+
+def omitted_segments(segments: Sequence[Sequence[int]], words: Sequence[dict], *, min_ms: int = 1000,
+                     pad_ms: int = 300) -> dict:
+    """Reference segments of at least `min_ms` (one speaker's turn, a vendor utterance, a read
+    sentence) that no committed word overlaps, give or take `pad_ms`. Unlike the frame-based share
+    this does not merge speakers, so a turn that is dropped beside one that is kept is seen."""
+    checked = omitted = 0
+    for start, end in segments:
+        if end - start < min_ms:
+            continue
+        checked += 1
+        if not any(w["end"] >= start - pad_ms and w["start"] <= end + pad_ms for w in words):
+            omitted += 1
+    return {"checked": checked, "omitted": omitted, "share": (omitted / checked) if checked else None}
+
+
+def segment_latencies(segments: Sequence[Sequence[int]], words: Sequence[dict], *, min_ms: int = 1000,
+                      pad_ms: int = 250) -> list[int]:
+    """For each reference segment of at least `min_ms` that has committed words in it, the wall
+    time when the LAST of those words was committed, minus where the reference says the segment
+    ended. Anchored on the reference, not on the model's word timestamps: a variant that only
+    shifts the timestamps later cannot look faster on this."""
+    out: list[int] = []
+    for start, end in segments:
+        if end - start < min_ms:
+            continue
+        inside = [w for w in words if start - pad_ms <= (w["start"] + w["end"]) // 2 <= end + pad_ms]
+        if inside:
+            out.append(round(max(w["wall"] for w in inside) - end))
+    return out
+
+
 # --------------------------------------------------------------------------
 # One run
 # --------------------------------------------------------------------------
@@ -295,7 +347,7 @@ def run_metrics(report: dict, clip: dict, *, ref_words: Sequence[str] | None = N
     words = commit_words(trace)
     tokens = report.get("words", [])
     consistent = (len(tokens) == len(words)
-                  and all(t["endMs"] == w["end"] for t, w in zip(tokens, words)))
+                  and all(t["endMs"] == w["end"] and t["startMs"] == w["start"] for t, w in zip(tokens, words)))
 
     out: dict = {"duration_ms": duration_ms, "words_committed": len(words),
                  "tokens_match_commits": consistent}
@@ -362,6 +414,8 @@ def run_metrics(report: dict, clip: dict, *, ref_words: Sequence[str] | None = N
     out["invariant_violations"] = len(inv["violations"])
     out["invariant_kinds"] = sorted({v["kind"] for v in inv["violations"]})
     out["invariant_words_checked"] = inv["words"]
+    out["invariant_words_match"] = inv["words"] == len(words)
+    out["empty_words"] = inv.get("emptyWords", 0)
 
     # Omissions, in time.
     if ref_spans is not None:
@@ -370,15 +424,26 @@ def run_metrics(report: dict, clip: dict, *, ref_words: Sequence[str] | None = N
         out["missing_speech_ms"] = ms["missing_ms"]
         out["ref_speech_ms"] = ms["ref_ms"]
         out["ghost_words"] = ghost_words(ref_spans, words)
+        om = omitted_segments(ref_spans, words)
+        out["omitted_segment_share"] = om["share"]
+        out["segments_checked"] = om["checked"]
+        out["segments_omitted"] = om["omitted"]
+        seg = segment_latencies(ref_spans, words)
+        out["segment_latency_ms"] = seg
+        out["segment_latency"] = latency_summary(seg)
     else:
         out["missing_speech_share"] = None
         out["ghost_words"] = None
+        out["omitted_segment_share"] = None
+        out["segment_latency_ms"] = []
+        out["segment_latency"] = None
 
     # Words against the reference.
     hyp_words, owner = token_words(tokens)
     out["hyp_words"] = len(hyp_words)
     loops = count_loops(hyp_words)
     fillers = filler_hits(ref_words, hyp_words)
+    phrases = repeated_phrases(hyp_words)
     if ref_words is not None:
         ops = align(ref_words, hyp_words)
         counts = error_counts(ops)
@@ -388,6 +453,7 @@ def run_metrics(report: dict, clip: dict, *, ref_words: Sequence[str] | None = N
                    deletion_rate=counts["del"] / n if n else None)
         ref_loops = count_loops(ref_words)
         loops = max(0, loops - ref_loops)
+        phrases = max(0, phrases - repeated_phrases(ref_words))
         invented = insertion_spans(ops) if clip.get("corpus") in CLEAN_REFERENCE_CORPORA else 0
         out["repeat_excess"] = count_repeats(hyp_words) - count_repeats(ref_words)
         # Which kind of commit made which errors: attribute each hypothesis word to its token.
@@ -409,7 +475,8 @@ def run_metrics(report: dict, clip: dict, *, ref_words: Sequence[str] | None = N
     out["hallucination_fillers"] = fillers
     out["hallucination_loops"] = loops
     out["hallucination_invented_spans"] = invented
-    out["hallucinations_critical"] = fillers + loops + invented
+    out["hallucination_repeated_phrases"] = phrases
+    out["hallucinations_critical"] = fillers + loops + invented + phrases
     return out
 
 
@@ -459,21 +526,55 @@ def randomization_test(blocks: Sequence[Sequence[Sequence[float]]], observed: in
     for q in quantiles:
         table = [run_quantiles(block, q) for block in blocks]
 
-        def stat(choice: Sequence[int]) -> float | None:
+        def mean_log(choice: Sequence[int]) -> float | None:
             logs = [log_ratio(row, c) for row, c in zip(table, choice)]
-            return reduction([x for x in logs if x is not None])
+            logs = [x for x in logs if x is not None]
+            return statistics.fmean(logs) if logs else None
 
-        real = stat([observed] * len(table))
+        real = mean_log([observed] * len(table))
+        if real is None:
+            out[q] = {"reduction": None, "p": None, "resamples": 0}
+            continue
+        # The reduction is 1 - exp(mean log ratio), so "more extreme" is decided on the log scale,
+        # where a 2x gain and a 2x loss are equally far from zero.
         hits = 1
-        if real is not None:
-            for _ in range(resamples):
-                value = stat([rng.randrange(len(row)) for row in table])
-                if value is None:
-                    continue
-                if (abs(value) >= abs(real) - 1e-12) if two_sided else (value >= real - 1e-12):
-                    hits += 1
-        out[q] = {"reduction": real, "p": hits / (resamples + 1), "resamples": resamples}
+        for _ in range(resamples):
+            value = mean_log([rng.randrange(len(row)) for row in table])
+            if value is None:
+                continue
+            if (abs(value) >= abs(real) - 1e-12) if two_sided else (value <= real + 1e-12):
+                hits += 1
+        out[q] = {"reduction": 1 - math.exp(real), "p": hits / (resamples + 1), "resamples": resamples}
     return out
+
+
+def randomization_mean_delta(blocks: Sequence[Sequence[float | None]], observed: int, *,
+                             alternative: str = "greater", resamples: int = 10_000,
+                             seed: int = 20261102) -> dict:
+    """The same randomization for a metric that is one number per run (WER, a deletion rate, a
+    share of missing speech). `blocks[b][j]` is the metric of run j of block b. The statistic
+    is the mean over blocks of (the variant run minus the mean of the controls); 'greater'
+    asks whether the variant is worse (higher). The variant role is permuted among the runs of
+    each block. Blocks with a missing value are left out. Returns the mean difference and p."""
+    rows = [row for row in blocks if all(v is not None for v in row)]
+    if not rows:
+        return {"mean_delta": None, "p": None, "blocks": 0}
+
+    def delta(choice: Sequence[int]) -> float:
+        total = 0.0
+        for row, c in zip(rows, choice):
+            others = [v for j, v in enumerate(row) if j != c]
+            total += row[c] - statistics.fmean(others)
+        return total / len(rows)
+
+    real = delta([observed] * len(rows))
+    rng = random.Random(seed)
+    hits = 1
+    for _ in range(resamples):
+        value = delta([rng.randrange(len(row)) for row in rows])
+        if (value >= real - 1e-12) if alternative == "greater" else (value <= real + 1e-12):
+            hits += 1
+    return {"mean_delta": real, "p": hits / (resamples + 1), "blocks": len(rows)}
 
 
 #: One-sided 95% and two-sided 95% critical values of Student's t, by degrees of freedom.
@@ -487,7 +588,7 @@ T95_TWO_SIDED = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7:
 
 def t_critical(df: int, table: dict[int, float], limit: float) -> float:
     """The tabulated value at the largest df not above `df` (so slightly conservative between
-    rows); `limit` (the normal quantile) from df 31 on."""
+    rows); `limit` (the value at df 30) beyond the table."""
     if df > 30:
         return limit
     return table[max(k for k in table if k <= df)]
@@ -505,54 +606,28 @@ def block_reduction_interval(blocks: Sequence[Sequence[Sequence[float]]], observ
         return None
     mean_ = statistics.fmean(logs)
     se = statistics.stdev(logs) / math.sqrt(n)
-    one = t_critical(n - 1, T95_ONE_SIDED, 1.645)
-    two = t_critical(n - 1, T95_TWO_SIDED, 1.960)
+    one = t_critical(n - 1, T95_ONE_SIDED, 1.696)
+    two = t_critical(n - 1, T95_TWO_SIDED, 2.040)
     return {"blocks": n, "reduction": 1 - math.exp(mean_),
             "ci95": [1 - math.exp(mean_ + two * se), 1 - math.exp(mean_ - two * se)],
             "lower95_one_sided": 1 - math.exp(mean_ + one * se),
             "per_block": [1 - math.exp(x) for x in logs]}
 
 
-def sign_flip_p(deltas: Sequence[float], *, alternative: str = "greater", seed: int = 20261102,
-                max_exact: int = 18, mc: int = 100_000) -> float | None:
-    """Randomization test of paired differences: under 'no effect' each block's difference
-    is as likely to carry either sign (the arm order inside a block was randomized).
-    The statistic is the mean. alternative 'greater' tests that the mean is above zero.
-    Exact for up to `max_exact` blocks, seeded Monte Carlo above."""
-    d = [x for x in deltas if x is not None]
+def t_mean_ci(values: Sequence[float | None]) -> dict | None:
+    """Mean of per-block values with a t-interval (two-sided 95%) and the one-sided 95% bound."""
+    d = [x for x in values if x is not None]
     n = len(d)
     if n == 0:
         return None
-    observed = sum(d)
-    if all(x == 0 for x in d):
-        return 1.0
-
-    def extreme(total: float) -> bool:
-        return total >= observed - 1e-12 if alternative == "greater" else total <= observed + 1e-12
-
-    if n <= max_exact:
-        hits = 0
-        for signs in itertools.product((1, -1), repeat=n):
-            if extreme(sum(s * x for s, x in zip(signs, d))):
-                hits += 1
-        return hits / 2 ** n
-    rng = random.Random(seed)
-    hits = 0
-    for _ in range(mc):
-        if extreme(sum(x if rng.random() < 0.5 else -x for x in d)):
-            hits += 1
-    return (hits + 1) / (mc + 1)
-
-
-def bootstrap_mean_ci(values: Sequence[float], *, resamples: int = 4000, seed: int = 20261102) -> dict | None:
-    d = [x for x in values if x is not None]
-    if not d:
-        return None
-    rng = random.Random(seed)
-    means = sorted(statistics.fmean(rng.choice(d) for _ in d) for _ in range(resamples))
-    return {"mean": statistics.fmean(d), "n": len(d), "ci90": [quantile(means, 0.05), quantile(means, 0.95)],
-            "ci95": [quantile(means, 0.025), quantile(means, 0.975)],
-            "upper95_one_sided": quantile(means, 0.95)}
+    mean_ = statistics.fmean(d)
+    if n == 1:
+        return {"mean": mean_, "n": 1, "ci95": [mean_, mean_], "upper95_one_sided": mean_}
+    se = statistics.stdev(d) / math.sqrt(n)
+    two = t_critical(n - 1, T95_TWO_SIDED, 2.040)
+    one = t_critical(n - 1, T95_ONE_SIDED, 1.696)
+    return {"mean": mean_, "n": n, "ci95": [mean_ - two * se, mean_ + two * se],
+            "upper95_one_sided": mean_ + one * se}
 
 
 def holm(p_values: Sequence[float | None]) -> list[float | None]:

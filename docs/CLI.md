@@ -28,7 +28,8 @@ transcribe --audio FILE [--reference FILE] [--models DIR]
            [--language tl] [--prompt "Maria, Jose"] [--style-hint]
            [--fast-diarize | --no-diarize] [--room-mode]
            [--format txt|markdown|srt|vtt|json] [--out FILE] [--json FILE]
-           [--live [--realtime] [--hop MS] [--pre-roll MS] [--context MS] [--adaptive-hop]]
+           [--live [--realtime] [--hop MS] [--pre-roll MS] [--context MS] [--adaptive-hop [--min-hop MS]]
+                   [--silence-boundary MS] [--head-tolerance N [--head-min-run N]] [--live-trace]]
 transcribe --audio FILE --lane room|remote
 transcribe --record [--source microphone|systemAudio|both] [--device UID]
            [--seconds N] [--out FILE.m4a] [--gui]
@@ -88,11 +89,16 @@ Replay a file through the live path at wall-clock speed:
 | `--out FILE` | Write the export to this file. Without it, the tool prints the export. |
 | `--json FILE` | Write a machine-readable report to this file. |
 | `--live` | Replay the file through the live path. |
-| `--realtime` | With `--live`, feed the audio at wall-clock speed. |
+| `--realtime` | With `--live`, feed the audio at wall-clock speed. The tool follows one absolute clock and hands over each 100 ms chunk when its last sample would have been captured, as a microphone does. A slow step is made up by the next ones, thus the replay does not drift. |
 | `--hop MS` | With `--live`, set the hop. The default is 1500. |
 | `--pre-roll MS` | With `--live`, set the pre-roll. The default is 1500. |
 | `--context MS` | With `--live`, set the context length. The default is 15000. |
 | `--adaptive-hop` | With `--live`, shorten the hop while decodes are fast. |
+| `--min-hop MS` | With `--live --adaptive-hop`, the shortest hop. The default is 1000. |
+| `--silence-boundary MS` | With `--live`, the silence that ends an utterance. The default is 700. |
+| `--head-tolerance N` | With `--live`, head-tolerant agreement: commit a run that two passes agree on when their first words differ, if the run starts within N words of each head. The default is 0, which is strict LocalAgreement, and the app uses 0. [FINDINGS.md](FINDINGS.md) entries 27 and 38 give the measurements. |
+| `--head-min-run N` | With `--head-tolerance`, how many words must agree. The default is 3. |
+| `--live-trace` | With `--live` and `--json`, add `liveTrace` to the report. Refer to the table below. |
 | `--lane room\|remote` | Read one channel of a two-lane recording. Channel 1 is `room` and channel 2 is `remote`. |
 | `--record` | Capture audio for `--seconds` and report the peak level of each lane. Refer to "Capture check". |
 | `--source microphone\|systemAudio\|both` | With `--record`, the lanes to capture. The default is `microphone`. |
@@ -201,6 +207,7 @@ older binary lacks them, and a reader has to cope.
 | `commitLatency` | Live only. Words committed, with minimum, median, mean, p95 and maximum of (audio fed so far − the word's end time), and `aheadOfAudio`, the number of words that ended after the audio fed so far. |
 | `commitLatencyWall` | Live with `--realtime` only. The same, against wall time since the replay began. |
 | `memory` | A list of snapshots at the stages `start`, `beforeModelLoad`, `afterModelLoad`, `afterVADLoad`, `afterDecode` and `end`. Each holds `physFootprintMB`, `lifetimePeakFootprintMB`, `residentMB`, `internalMB`, `externalMB`, `compressedMB`, `neuralMB` and `neuralPeakMB`. |
+| `liveTrace` | Live with `--live-trace` only. Numbers only, no words: every decode (`DecodeSpan`), every dropped hop, every utterance end and abandoned final decode, and every delivery of committed words with each word's start and end, the clock when it was committed and the reason (`agreed`, `forced`, `boundaryTail`, `finish`). It also holds the CPU time of the replay and the result of the commit-invariant check. Times are in milliseconds from the start of the replay. `eval/live_latency.py` reads it. |
 | `windows` | Offline only. The decode windows in order, each `{startMs, endMs}`. `eval/regress.py determinism` uses it to name the window in which two runs of one binary first differ. A live replay has none. |
 
 Three fields are for the evaluation framework. Each is optional.
@@ -212,6 +219,8 @@ Three fields are for the evaluation framework. Each is optional.
 | `performance` | The whole-file RTF, the live commit latency, the process peak footprint and the model residency, each apart, each "unavailable" when the run did not measure it. |
 
 `transcribe --score` reads these reports as hypotheses.
+
+Every live replay checks that committed text is only ever appended to. The log line `commit invariant: held over N words` reports it. If a word is rewritten, dropped, repeated, reordered or timestamped past the audio, the line says `COMMIT INVARIANT VIOLATED` and names the kind. `liveTrace.invariants` holds the same result.
 
 In a live report, `rtf` is the **replay** RTF, not a per-hop cost. With every
 decode awaited it is how fast the Mac replays the file. With `--realtime` it is

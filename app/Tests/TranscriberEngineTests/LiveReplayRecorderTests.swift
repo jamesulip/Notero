@@ -70,12 +70,74 @@ final class LiveReplayRecorderTests: XCTestCase {
     func testEveryBatchCarriesTheReasonItWasCommittedFor() async throws {
         let run = await replay(config: config())
 
-        let reasons = Set(run.trace.commits.map(\.reason))
+        let reasons = run.trace.commits.map(\.reason)
         XCTAssertTrue(reasons.contains(.agreed), "\(reasons)")
         // A 2 s pause closes the first utterance, committing its tail without agreement,
         // and the session end commits what the last pause did not.
         XCTAssertTrue(reasons.contains(.boundaryTail) || reasons.contains(.finish), "\(reasons)")
         XCTAssertEqual(run.trace.commits.map { $0.wordEndMs.count }.reduce(0, +), 20)
+    }
+
+    func testAForcedCommitIsRecordedAsForcedAndNotAsAgreed() async throws {
+        // Every pass names every word differently, so nothing agrees and the window has to slide.
+        let words = (0..<40).map { word("w\($0)", $0 * 500, $0 * 500 + 400) }
+        let asr = OracleRecognizer(words: words)
+        await asr.setMutation { text, call, _ in "\(text)_\(call)" }
+        let vad = ScriptedVAD(speech: [0..<20_000])
+        let decoder = LiveDecoder(config: SessionConfig(contextMs: 4_000, hopMs: 1_500, silenceBoundaryMs: 700,
+                                                        agreement: 2, language: "tl", prompt: nil,
+                                                        useNeuralVAD: false, preRollMs: 1_000, adaptiveHop: false,
+                                                        minHopMs: 1_000, headTolerance: 0, headMinRun: 3),
+                                  recognizer: asr, vad: vad)
+        let recorder = LiveReplayRecorder(decoder: decoder, realtime: false)
+        recorder.begin()
+        var clock = 0
+        while clock < 12_000 {
+            recorder.noteFed(clock + 100)
+            decoder.ingest(OraclePCM.data(fromMs: clock, ms: 100))
+            clock += 100
+            await decoder.drain()
+        }
+        let trace = recorder.finish()
+
+        let forced = trace.commits.filter { $0.reason == .forced }
+        XCTAssertGreaterThan(decoder.stats.forcedCommits, 0)
+        XCTAssertEqual(forced.count, decoder.stats.forcedCommits)
+        XCTAssertFalse(trace.commits.contains { $0.reason == .agreed },
+                       "nothing agreed in this script, so nothing may be recorded as agreed")
+        XCTAssertTrue(trace.invariants.holds, "\(trace.invariants.violations)")
+    }
+
+    func testWallTimesFollowTheAudioWhenTheReplayIsPacedLikeTheCLI() async throws {
+        // Same pacing as `transcribe --live --realtime`: one absolute clock, each 100 ms chunk
+        // handed over when its last sample would have been captured. Four seconds of audio.
+        let words = (0..<8).map { word("w\($0)", 300 + $0 * 350, 300 + $0 * 350 + 300) }
+        let asr = OracleRecognizer(words: words)
+        let vad = ScriptedVAD(speech: [300..<3_100])
+        let decoder = LiveDecoder(config: config(), recognizer: asr, vad: vad)
+        let recorder = LiveReplayRecorder(decoder: decoder, realtime: true)
+        let clock = ContinuousClock()
+        recorder.begin()
+        let start = clock.now
+        var cursor = 0
+        while cursor < 4_000 {
+            let end = cursor + 100
+            try? await Task.sleep(until: start + .milliseconds(end), clock: clock)
+            recorder.noteFed(end)
+            decoder.ingest(OraclePCM.data(fromMs: cursor, ms: 100))
+            cursor = end
+        }
+        await decoder.finish()
+        let trace = recorder.finish()
+
+        XCTAssertGreaterThanOrEqual(trace.replayWallMs, 3_900)
+        XCTAssertFalse(trace.commits.isEmpty)
+        for commit in trace.commits {
+            // A word cannot be committed before the audio that holds it was handed over, and the
+            // wall clock and the audio clock agree to within scheduling noise.
+            XCTAssertGreaterThanOrEqual(commit.wallMs, Double((commit.wordEndMs.max() ?? 0)) - 150, "\(commit)")
+            XCTAssertEqual(commit.wallMs, Double(commit.audioFedMs), accuracy: 400, "\(commit)")
+        }
     }
 
     func testTheTraceCountsMatchTheDecodersOwnStats() async throws {

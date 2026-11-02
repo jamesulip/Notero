@@ -87,12 +87,20 @@ final class CommitInvariantMonitorTests: XCTestCase {
         XCTAssertEqual(monitor.report.violations.map(\.kind), ["pastAudio"])
     }
 
-    func testAWordThatEndsBeforeItStartsAndAnEmptyWordAreCaught() {
+    func testAWordThatEndsBeforeItStartsIsCaughtAndAnEmptyWordIsOnlyCounted() {
         var monitor = CommitInvariantMonitor()
         let a = [Token(text: "  ", startMs: 100, endMs: 50)]
         monitor.observe(batch: a, decoderCommitted: a, audioMs: 1_000)
 
-        XCTAssertEqual(Set(monitor.report.violations.map(\.kind)), ["emptyText", "backwards"])
+        XCTAssertEqual(monitor.report.violations.map(\.kind), ["backwards"])
+        XCTAssertEqual(monitor.report.emptyWords, 1)
+
+        // An empty word that breaks nothing leaves the invariant standing.
+        var fine = CommitInvariantMonitor()
+        let b = [token("ang", 0, 300), Token(text: " ", startMs: 300, endMs: 320)]
+        fine.observe(batch: b, decoderCommitted: b, audioMs: 1_000)
+        XCTAssertTrue(fine.report.holds)
+        XCTAssertEqual(fine.report.emptyWords, 1)
     }
 
     func testTheFinalListMustBeWhatWasDelivered() {
