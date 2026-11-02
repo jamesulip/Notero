@@ -35,8 +35,10 @@ import json
 import os
 import platform
 import random
+import math
 import shutil
 import signal
+import statistics
 import subprocess
 import sys
 import threading
@@ -81,7 +83,7 @@ CONTROLS = ("C0", "C1")
 #: Fixed in the plan before the first run; `analyze` and `decide` read the plan's copy.
 DEFAULT_GATE = {
     "latency": {
-        "metric": "pooled median of the wall commit latency of every committed word, all clips and rounds of a session",
+        "metric": "the geometric mean, over the blocks of a session, of (the variant run's median wall commit latency / the mean of the two control runs' medians in the same block); the reduction is 1 minus that. A block is one clip in one round. Not a pooled median of words: pooled over clips that differ by 5x it sits in the gap of a bimodal mixture and moves by seconds on a few words.",
         "minRelativeReduction": 0.20,
         "support": "one-sided randomization test of that statistic, p < 0.05: in a block any of the three runs (C0, C1, the variant) is as likely to be the variant under 'no effect'",
         "supportAlpha": 0.05,
@@ -380,7 +382,8 @@ def cmd_plan(args) -> int:
                        "unit": "the block (one clip in one round); words are never resampled",
                        "controlForVariants": "the mean (or the pool, for latency) of C0 and C1 in the same block",
                        "aa": "C0 against C1, the same statistics, two-sided",
-                       "whyNotABootstrap": "a bootstrap over 3 to 4 rounds per clip was simulated before the first run: its 95% intervals covered a true null 80% of the time. The randomization test has exact size; the t-interval covered 91-92%."},
+                       "whyNotABootstrap": "a bootstrap over 3 to 4 rounds per clip was simulated before the first run: its 95% intervals covered a true null 80% of the time. The randomization test has exact size; the t-interval covered 91-92%.",
+                       "whyNotAPooledMedian": "the pilot (not evidence) showed C0 at 3.9 s and C1 at 6.9 s pooled over a 3 s clip and a 17 s clip: a bimodal pool has a median in the gap"},
         "notes": args.note or [],
     }
     path = out / f"plan-session-{args.session}.json"
@@ -635,26 +638,27 @@ def block_words(blocks: dict, arms: list[str], clip_ids: set[str] | None = None,
 def per_clip_effects(blocks: dict, variant: str, clip_ids: list[str]) -> dict:
     out = {}
     for clip in clip_ids:
-        rows = [(b["C0"]["metrics"]["latency_wall_ms"] + b["C1"]["metrics"]["latency_wall_ms"],
-                 b[variant]["metrics"]["latency_wall_ms"]) for (c, _), b in blocks.items() if c == clip]
+        rows = [[b["C0"]["metrics"]["latency_wall_ms"], b["C1"]["metrics"]["latency_wall_ms"],
+                 b[variant]["metrics"]["latency_wall_ms"]] for (c, _), b in sorted(blocks.items()) if c == clip]
         if not rows:
             continue
-        control = [x for r in rows for x in r[0]]
-        var = [x for r in rows for x in r[1]]
-        out[clip] = {"median_control_ms": ll.quantile(control, 0.5), "median_variant_ms": ll.quantile(var, 0.5),
-                     "effect": ll.pooled_median_effect(control, var), "rounds": len(rows)}
+        medians = [ll.run_quantiles(r, 0.5) for r in rows]
+        logs = [x for x in (ll.log_ratio(m, 2) for m in medians) if x is not None]
+        out[clip] = {"median_control_ms": statistics.fmean(v for m in medians for v in m[:2]),
+                     "median_variant_ms": statistics.fmean(m[2] for m in medians),
+                     "effect": ll.reduction(logs), "rounds": len(rows),
+                     "per_round": [1 - math.exp(x) for x in logs]}
     return out
 
 
 def per_clip_effects_aa(blocks: dict, clip_ids: list[str]) -> dict:
     out = {}
     for clip in clip_ids:
-        rows = [(b["C0"]["metrics"]["latency_wall_ms"], b["C1"]["metrics"]["latency_wall_ms"])
-                for (c, _), b in blocks.items() if c == clip]
+        rows = [[b["C0"]["metrics"]["latency_wall_ms"], b["C1"]["metrics"]["latency_wall_ms"]]
+                for (c, _), b in sorted(blocks.items()) if c == clip]
         if rows:
-            control = [x for r in rows for x in r[0]]
-            var = [x for r in rows for x in r[1]]
-            out[clip] = {"effect": ll.pooled_median_effect(control, var), "rounds": len(rows)}
+            logs = [x for x in (ll.log_ratio(ll.run_quantiles(r, 0.5), 1) for r in rows) if x is not None]
+            out[clip] = {"effect": ll.reduction(logs), "rounds": len(rows)}
     return out
 
 
@@ -697,12 +701,18 @@ def analyze_session(plan: dict, results: dict) -> dict:
                       "excluded": excluded, "failedRuns": failed, "load": load,
                       "tokenCommitMismatch": mismatched, "invariantViolationsByArm": violations}
 
-    # Per-arm descriptives, pooled over all words of the session.
+    # Per-arm descriptives. The headline figures are the mean over runs of each run's own
+    # median, p90 and p95: pooled over clips that differ by 5x, the median of all words sits in
+    # the gap between two clusters and moves by seconds on a few words. Words pooled by CORPUS
+    # are kept beside them.
     arms = list(plan["arms"])
     desc = {}
+
+    def run_mean(arm_: str, key: str, q: float) -> float | None:
+        return mean([ll.quantile(b[arm_]["metrics"][key], q) for b in blocks.values() if b[arm_]["metrics"][key]])
+
     for arm in arms:
         wall = pooled(blocks, arm, "latency_wall_ms")
-        audio = pooled(blocks, arm, "latency_audio_ms")
         by_corpus = {}
         for corpus in sorted(set(corpus_of.values())):
             ids = {c for c in clip_ids if corpus_of[c] == corpus}
@@ -720,7 +730,10 @@ def analyze_session(plan: dict, results: dict) -> dict:
                         errs[r][op] += e[r][op]
         desc[arm] = {
             "runs": len(blocks), "words": len(wall),
-            "latency_wall": ll.latency_summary(wall), "latency_audio": ll.latency_summary(audio),
+            "latency_wall": {"median": run_mean(arm, "latency_wall_ms", 0.5), "p90": run_mean(arm, "latency_wall_ms", 0.9),
+                             "p95": run_mean(arm, "latency_wall_ms", 0.95), "n": len(wall)},
+            "latency_audio": {"median": run_mean(arm, "latency_audio_ms", 0.5), "p90": run_mean(arm, "latency_audio_ms", 0.9),
+                              "p95": run_mean(arm, "latency_audio_ms", 0.95)},
             "latency_wall_by_corpus": by_corpus,
             "reason_share": {r: (reasons.count(i) / len(reasons) if reasons else None) for i, r in enumerate(ll.REASONS)},
             "dropped_hops": sums("dropped_hops"), "attempts": attempts,
@@ -914,7 +927,7 @@ def render_session(plan: dict, a: dict) -> str:
              f"lock wait median {ld['lock_wait_seconds_median']:.0f} s." if ld["machine_busy_cores_median"] is not None
              else "Machine load was not sampled.")
     L.append("")
-    L.append("## Commit latency by arm (every committed word, wall clock, ms)")
+    L.append("## Commit latency by arm (mean over runs of each run's own quantile, wall clock, ms)")
     L.append("")
     L.append("| arm | words | median | p90 | p95 | audio-clock median | dropped hops | forced | empty | failed hops | critical halluc. | invariant breaks |")
     L.append("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
@@ -923,6 +936,14 @@ def render_session(plan: dict, a: dict) -> str:
         L.append(f"| {arm} | {w['n']} | {ms(w['median'])} | {ms(w['p90'])} | {ms(w['p95'])} | {ms(au['median'])} | "
                  f"{d['dropped_hops']} ({pct(d['dropped_rate'])}) | {d['forced_commits']} | {d['empty_hypotheses']} | {d['failed_hops']} | "
                  f"{d['hallucinations_critical']} | {a['invariantViolationsByArm'].get(arm, 0)} |")
+    L.append("")
+    L.append("Median commit latency of the words pooled by corpus, per arm (ms):")
+    L.append("")
+    corpora = sorted({c for d in a["arms"].values() for c in d["latency_wall_by_corpus"]})
+    L.append("| arm | " + " | ".join(corpora) + " |")
+    L.append("| --- | " + " | ".join("---:" for _ in corpora) + " |")
+    for arm, d in a["arms"].items():
+        L.append(f"| {arm} | " + " | ".join(ms((d["latency_wall_by_corpus"].get(c) or {}).get("median")) for c in corpora) + " |")
     L.append("")
     L.append("## A/A: the control against itself")
     L.append("")

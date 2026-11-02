@@ -3,8 +3,8 @@
 None of this needs a model. The real binary and the real corpora are exercised by the
 sessions in eval/baselines/live-latency-2026-11-02/."""
 
-import hashlib
 import json
+import math
 import random
 import sys
 from pathlib import Path
@@ -206,11 +206,27 @@ def test_ghost_words_lie_away_from_all_reference_speech():
 
 # ---- statistics ------------------------------------------------------------
 
-def test_pooled_median_effect():
-    assert ll.pooled_median_effect([100, 100, 100], [70, 70, 70]) == pytest.approx(0.3)
-    assert ll.pooled_median_effect([100], [150]) == pytest.approx(-0.5)
-    assert ll.pooled_median_effect([], [1]) is None
-    assert ll.pooled_median_effect([0, 0], [1, 1]) is None
+def test_log_ratio_and_reduction_known_answers():
+    assert ll.reduction([math.log(0.7)] * 3) == pytest.approx(0.3)
+    assert ll.reduction([math.log(0.5), math.log(2.0)]) == pytest.approx(0.0)   # a 2x gain and a 2x loss cancel
+    assert ll.reduction([]) is None
+    assert ll.log_ratio([100, 100, 70], 2) == pytest.approx(math.log(0.7))
+    assert ll.log_ratio([100, 140, 60], 2) == pytest.approx(math.log(0.5))        # against the mean of the controls
+    assert ll.log_ratio([None, 100, 50], 2) == pytest.approx(math.log(0.5))
+    assert ll.log_ratio([100, 100, None], 2) is None
+
+
+def test_a_bimodal_pool_does_not_move_the_headline():
+    # Two clips, 3 s and 17 s, a 30% gain on each. The variant happens to commit more words on the
+    # fast clip and the controls more on the slow one: pooled over words the "median" would claim
+    # an 88% gain. Per block it is each clip's own median, and the reduction is the 30% built in.
+    blocks = [[[3_000] * 100, [3_000] * 100, [2_100] * 300],
+              [[17_000] * 300, [17_000] * 300, [11_900] * 100]]
+    r = ll.randomization_test(blocks, 2, resamples=500, seed=1)[0.5]
+    assert r["reduction"] == pytest.approx(0.3, abs=1e-9)
+    pooled_c = [x for b in blocks for x in b[0] + b[1]]
+    pooled_v = [x for b in blocks for x in b[2]]
+    assert 1 - ll.quantile(pooled_v, 0.5) / ll.quantile(pooled_c, 0.5) == pytest.approx(0.876, abs=0.01)
 
 
 def blocks_of(effect, *, clips=3, rounds=3, words=100, spread=0.15, run_shift=0.06, seed=1):
@@ -228,15 +244,6 @@ def blocks_of(effect, *, clips=3, rounds=3, words=100, spread=0.15, run_shift=0.
                 runs.append([round(base * shift * scale * (1 + rng.gauss(0, spread))) for _ in range(words)])
             out.append(runs)
     return out
-
-
-def test_union_quantile_matches_a_sort_of_the_union():
-    rng = random.Random(4)
-    for _ in range(50):
-        arrays = [sorted(rng.randint(0, 20_000) for _ in range(rng.randint(1, 40))) for _ in range(rng.randint(1, 6))]
-        merged = [x for a in arrays for x in a]
-        for q in (0.0, 0.25, 0.5, 0.9, 0.95, 1.0):
-            assert ll.union_quantile(arrays, q) == pytest.approx(ll.quantile(merged, q))
 
 
 def test_the_randomization_test_finds_a_real_effect():

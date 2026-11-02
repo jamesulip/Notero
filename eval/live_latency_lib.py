@@ -417,97 +417,62 @@ def run_metrics(report: dict, clip: dict, *, ref_words: Sequence[str] | None = N
 # Statistics
 # --------------------------------------------------------------------------
 
-def pooled_median_effect(control: Sequence[float], variant: Sequence[float]) -> float | None:
-    """1 - median(variant)/median(control): the relative reduction, positive when the
-    variant is faster. None when either side is empty or the control median is zero."""
-    if not control or not variant:
+def reduction(logs: Sequence[float]) -> float | None:
+    """1 - exp(mean log ratio): the relative reduction as a geometric mean over blocks."""
+    return (1 - math.exp(statistics.fmean(logs))) if logs else None
+
+
+def run_quantiles(block: Sequence[Sequence[float]], q: float) -> list[float | None]:
+    """One quantile of each run's word latencies in a block; None for a run with no words."""
+    return [quantile(run, q) if run else None for run in block]
+
+
+def log_ratio(values: Sequence[float | None], observed: int) -> float | None:
+    """ln(observed run's quantile / mean of the other runs' quantiles) in one block."""
+    mine = values[observed]
+    others = [v for j, v in enumerate(values) if j != observed and v is not None]
+    if mine is None or mine <= 0 or not others:
         return None
-    base = quantile(control, 0.5)
-    if base <= 0:
-        return None
-    return 1 - quantile(variant, 0.5) / base
-
-
-def pooled_quantile_effect(control: Sequence[float], variant: Sequence[float], q: float) -> float | None:
-    if not control or not variant:
-        return None
-    base = quantile(control, q)
-    if base <= 0:
-        return None
-    return 1 - quantile(variant, q) / base
-
-
-def kth(arrays: Sequence[Sequence[int]], k: int) -> int:
-    """The k-th smallest (0-based) of the union of sorted integer arrays, by bisecting on the
-    value: no merge, no sort."""
-    lo = min(a[0] for a in arrays if a)
-    hi = max(a[-1] for a in arrays if a)
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if sum(bisect.bisect_right(a, mid) for a in arrays) >= k + 1:
-            hi = mid
-        else:
-            lo = mid + 1
-    return lo
-
-
-def union_quantile(arrays: Sequence[Sequence[int]], q: float) -> float:
-    """`quantile` of the union of sorted integer arrays (the same linear interpolation)."""
-    n = sum(len(a) for a in arrays)
-    if n == 0:
-        raise ValueError("quantile of nothing")
-    position = q * (n - 1)
-    low = math.floor(position)
-    high = math.ceil(position)
-    a = kth(arrays, low)
-    if high == low:
-        return float(a)
-    return a + (kth(arrays, high) - a) * (position - low)
-
-
-def _reduction(control: Sequence[Sequence[int]], variant: Sequence[Sequence[int]], q: float) -> float | None:
-    base = union_quantile(control, q)
-    if base <= 0:
-        return None
-    return 1 - union_quantile(variant, q) / base
+    base = statistics.fmean(others)
+    return math.log(mine / base) if base > 0 else None
 
 
 def randomization_test(blocks: Sequence[Sequence[Sequence[float]]], observed: int, *,
                        quantiles: Sequence[float] = (0.5,), resamples: int = 10_000,
                        seed: int = 20261102, two_sided: bool = False) -> dict:
-    """Exact-size test of 'the arms are the same', on the pooled-quantile reduction.
+    """Exact-size test of 'the arms are the same'.
 
     `blocks[b][j]` is the word latencies of run j of block b; run `observed` is the variant,
-    the others are controls. In a block the arms ran in a seeded random order, back to back,
-    so under 'no effect of the arm' any run of the block is as likely to have been the variant:
-    each permutation picks one run per block to be the variant and recomputes the pooled
-    reduction. The p-value is the share of permutations (the observed arrangement included)
-    at least as extreme as the real one. No distribution is assumed, and it does not matter
-    how few blocks there are.
+    the others are controls. The statistic is the relative reduction of a quantile of the
+    commit latency, as the geometric mean over blocks of (the variant run's quantile / the mean
+    of the controls' quantiles in the same block). A block is one clip in one round, its arms
+    ran back to back in a seeded random order, so under 'no effect of the arm' any run of the
+    block is as likely to have been the variant. Each permutation picks one run per block to
+    play the variant and recomputes the statistic; the p-value is the share of permutations
+    (the real arrangement included) at least as extreme as the real one. No distribution is
+    assumed and it does not matter how few blocks there are. (A bootstrap over 3 to 4 rounds
+    per clip was simulated first and covered a true null only 80% of the time.)
 
     Returns, per quantile, the observed reduction and the p-value."""
-    sorted_blocks = [[sorted(int(round(x)) for x in run) for run in block] for block in blocks]
     rng = random.Random(seed)
-
-    def reduction(choice: Sequence[int], q: float) -> float | None:
-        variant = [b[c] for b, c in zip(sorted_blocks, choice)]
-        control = [run for b, c in zip(sorted_blocks, choice) for j, run in enumerate(b) if j != c]
-        return _reduction(control, variant, q)
-
-    real = [observed] * len(sorted_blocks)
     out: dict[float, dict] = {}
-    real_values = {q: reduction(real, q) for q in quantiles}
-    hits = {q: 1 for q in quantiles}
-    for _ in range(resamples):
-        choice = [rng.randrange(len(b)) for b in sorted_blocks]
-        for q in quantiles:
-            value = reduction(choice, q)
-            if value is None or real_values[q] is None:
-                continue
-            if (abs(value) >= abs(real_values[q]) - 1e-12) if two_sided else (value >= real_values[q] - 1e-12):
-                hits[q] += 1
     for q in quantiles:
-        out[q] = {"reduction": real_values[q], "p": hits[q] / (resamples + 1), "resamples": resamples}
+        table = [run_quantiles(block, q) for block in blocks]
+
+        def stat(choice: Sequence[int]) -> float | None:
+            logs = [log_ratio(row, c) for row, c in zip(table, choice)]
+            return reduction([x for x in logs if x is not None])
+
+        real = stat([observed] * len(table))
+        hits = 1
+        if real is not None:
+            for _ in range(resamples):
+                value = stat([rng.randrange(len(row)) for row in table])
+                if value is None:
+                    continue
+                if (abs(value) >= abs(real) - 1e-12) if two_sided else (value >= real - 1e-12):
+                    hits += 1
+        out[q] = {"reduction": real, "p": hits / (resamples + 1), "resamples": resamples}
     return out
 
 
@@ -529,22 +494,12 @@ def t_critical(df: int, table: dict[int, float], limit: float) -> float:
 
 
 def block_reduction_interval(blocks: Sequence[Sequence[Sequence[float]]], observed: int, q: float = 0.5) -> dict | None:
-    """The relative reduction as the mean of per-block log ratios, with a t-interval.
+    """The same reduction with a t-interval on the per-block log ratios.
 
-    Per block: ln(variant quantile / mean of the controls' quantiles). Blocks are the unit,
-    so it carries the spread between clips as well as between rounds; that makes it wider
-    than a conditional-on-the-clips interval and so safe to gate on. Reported as
-    1 - exp(mean +- t * se)."""
-    logs = []
-    for block in blocks:
-        v = quantile(block[observed], q) if block[observed] else None
-        controls = [quantile(run, q) for j, run in enumerate(block) if j != observed and run]
-        if v is None or not controls or v <= 0:
-            continue
-        base = statistics.fmean(controls)
-        if base <= 0:
-            continue
-        logs.append(math.log(v / base))
+    Blocks are the unit, so the interval carries the spread between clips as well as between
+    rounds. That makes it wider than an interval conditional on these clips, and so safe to
+    gate on. Reported as 1 - exp(mean +- t * se)."""
+    logs = [x for x in (log_ratio(run_quantiles(block, q), observed) for block in blocks) if x is not None]
     n = len(logs)
     if n < 2:
         return None
@@ -552,7 +507,7 @@ def block_reduction_interval(blocks: Sequence[Sequence[Sequence[float]]], observ
     se = statistics.stdev(logs) / math.sqrt(n)
     one = t_critical(n - 1, T95_ONE_SIDED, 1.645)
     two = t_critical(n - 1, T95_TWO_SIDED, 1.960)
-    return {"blocks": n, "geometric_mean_reduction": 1 - math.exp(mean_),
+    return {"blocks": n, "reduction": 1 - math.exp(mean_),
             "ci95": [1 - math.exp(mean_ + two * se), 1 - math.exp(mean_ - two * se)],
             "lower95_one_sided": 1 - math.exp(mean_ + one * se),
             "per_block": [1 - math.exp(x) for x in logs]}
