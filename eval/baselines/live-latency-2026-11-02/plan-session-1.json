@@ -2,9 +2,9 @@
   "schema": 1,
   "session": 1,
   "name": "screening: every variant against the control, three clips",
-  "created": "2026-11-02T18:06:03+08:00",
-  "commit": "fe3d0ddd495eceb46209e3279e865690ba5b5880",
-  "dirty": true,
+  "created": "2026-11-02T18:06:09+08:00",
+  "commit": "8b4b9a39e68de4a91bd434bae168287392470b01",
+  "dirty": false,
   "hardware": {
     "model": "Mac14,12",
     "chip": "Apple M2 Pro",
