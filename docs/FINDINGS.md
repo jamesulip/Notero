@@ -1496,7 +1496,7 @@ meeting was measured. The word lists have no native-speaker review. The alignmen
 (40 million cells) is a guard, not a measured bound. Reference times are per utterance, so the
 timestamp report is an upper bound. It has not been run on the Swift side (`transcribe --score`).
 
-## 38. Head-tolerant agreement does not cut the median on real audio; no variant clears 20% in two sessions; the default stays (2026-11-02)
+## 38. Head-tolerant agreement is not reliably faster on real audio; no variant clears 20% in two sessions; the default stays (2026-11-02)
 
 FINDINGS 27 left head-tolerant agreement (HT) implemented and off, "wanting a second session, preferably on
 real audio". This is that session, and five other levers, one at a time, against the production configuration.
@@ -1514,6 +1514,12 @@ audio"? It is real speech under a licence that allows the use, with the publishe
 agreed to the release (not checked here). Nobody agreed to this project's use in writing, so it is not what
 BENCHMARKS "What real data is needed" asks for, and it is not a meeting of this app's users.
 
+**Three changes to the plan, each before the result it could affect.** The first plan was amended after an
+independent code review; four runs of the earlier plan had finished, none was read, and they were deleted with
+their binary. Plan 1 announced six clips for session 2; session 2 used the three held-out ones. HT was added to
+session 2 by the investigator, not by the promotion rule (`decision.json` still carries the sentence "on the clips of
+session 1 and the held-out clips").
+
 **Results** (median commit latency, wall clock, reduction against the controls, 95% interval over blocks):
 
 | | session 1 | session 2 | p90 / p95, session 1 | gate |
@@ -1526,44 +1532,58 @@ BENCHMARKS "What real data is needed" asks for, and it is not a meeting of this 
 | VAD 500 ms | -1.4% | not run | 0% / -3% | no |
 | PRE 3 s | -10.3% | not run | -8% / -8% | no |
 
+**The statistic matters.** The plan fixed the geometric mean over blocks of per-run median ratios. Pooled over
+all words instead, ADA would read 35.1% and 28.1% faster and HT 32.8% and 24.0%, over 20% in both sessions: the
+pooled median sits in a low-density stretch between the 3 s clips and the 17 s Liva clips, so a few percent of words
+crossing it move it by seconds (the pooled controls were 3.6% and 6.7% apart in a session, and 14% to 23% apart
+round by round in session 2). The per-block reading is the more honest one about a typical clip (ADA 17%), and it
+was fixed before the first run; but the latency verdict depends on that choice, and then on the safety gates.
+
 **The median is two different problems.** On AMI and FLEURS it is about 3.4 s: the floor of LocalAgreement-2
 at a 1.5 s hop, which FINDINGS 26 found on the easiest synthetic clip. On Liva it is about 17 s, the 15 s window
-cap: in the pilot (not evidence) decodes on Liva ran a median 1.3-1.5 s with a p90 above 4 s (the retry
-ladder) and 31-38% of hops were dropped; and 23-25% of all words of the controls in session 1 came from forced commits. A variant moves the median
-only by moving Liva, and only the 12 s cap did (24%), by committing without agreement more often: 16 critical
-hallucinations against a control mean of 10, and a latency anchored on the reference segment ends that was 7% worse.
+cap. On the controls: WER 77.6% and 69.6% on the two Liva clips (13.6% and 9.7% on FLEURS), 39-43% deletions,
+35-37% of hops dropped, decodes a median 1.4-1.5 s with a p90 of 3.6 s (the retry ladder), and forced commits
+made 69% and 56% of the words of the Liva clips and 0-4% of the others (23-25% over all of session 1). A variant
+moves the median only by moving Liva, and only the 12 s cap did (24%). It forced fewer commits than the controls
+(97 against 115 and 130), so it forces sooner, not more often; it had more critical hallucinations (16 against a
+control mean of 10, cause not found) and a latency anchored on the reference segment ends that was 7% worse.
 
-**HT does not cut the median; it cuts the tail.** Session 1: median 0.6%, p90 27%, p95 24%. Forced commits fell
-from 115 and 130 (controls) to 89, and the share of forced words from 23-25% to 16%. Session 2: 62 against 92 and
-106, the share from 16-19% to 10%, the median 14.5%. The two controls of session 2 differed by 25% on `ami-b` in all
-three rounds, and HT's 28% on that clip is inside it. Pooled over both sessions (not in the plan): 7.8% [-1.3, 16.1]
-on the median, 17.8% on p90. The 35-43% of FINDINGS 27 came from two clips whose agreement stalled on a `say`
-voice; on real audio the stall is not what sets the median. HT also failed its safety gates in both sessions, by
-small margins that are inside the A/A spread (deletion rate +0.9 point; 3 critical hallucinations against 2.5). It
+**HT is not reliably faster on the median, and its tail gain did not repeat.** Session 1: median 0.6%, p90 27%,
+p95 24%. Forced commits fell from 115 and 130 (controls) to 89, and the share of forced words from 23-25% to 16%.
+Session 2: 62 against 92 and 106, the share from 16-19% to 10%, the median 14.5% but p90 7.0% [-7.0, 19.2]. The two
+controls of session 2 differed by 25% on `ami-b` in all three rounds, and HT's 28% on that clip is inside it. Pooled
+over both sessions (not in the plan): 7.8% [-1.3, 16.1] on the median, 17.8% on p90. The 35-43% of FINDINGS 27 came
+from two clips whose agreement stalled on a `say` voice; on real audio the stall is not what sets the median. HT
+also failed the missing-speech gate in both sessions and the hallucination gate in session 2, by point estimates
+inside the A/A spread (deletion rate +0.9 point, Holm p 0.74-0.98; 3 critical hallucinations against 2.5). It
 stays off.
 
 **ADA is the near miss.** 17.1% and 16.7%, faster on all 6 clips, pooled 16.9% [8.8, 24.2], and in session 2 it
-passed every gate except the 20% bar. It is under the bar, it costs 19-26% more decodes (infer RTF 0.61 to 0.64
-and 0.62 to 0.66; CPU did not rise), its p90 and p95 did not improve in session 2, and in session 1 it failed the
-missing-speech and ghost-word gates (deletion +1.0 point, omitted turns +1.7 points, ghost words 7 against 4.5).
-FINDINGS 11 rejected it on an older build. Not enabled.
+passed every gate except the 20% bar. The gain is on the clips that are not Liva (15.8-27.4%; 1.7% and 5.4% on the
+two Liva clips). It is under the bar, but a true effect of 20% is not excluded by the pooled interval. It costs 19-26%
+more decodes (infer RTF 0.61 to 0.64 and 0.62 to 0.66; CPU did not rise), its p90 and p95 did not improve in
+session 2, and in session 1 it failed the missing-speech and ghost-word gates by point estimates (deletion +1.0
+point, omitted turns +1.7 points, ghost words 7 against 4.5; Holm p 0.74-0.81). FINDINGS 11 rejected it on an older
+build. Not enabled.
 
-**VAD 500 ms** shortened the utterance close (finalization latency 1.12 s against 1.35 s) and left the median where
-it was; the median-word gate cannot credit it, and no result says it is worth the earlier unagreed commits.
-**PRE 3 s** was worse (-10%, deletion rate +8.0 points, p = 0.023): more context in front is not free. **HOP 1.3 s**
+**VAD 500 ms** closed utterances sooner at the median (finalization latency 1.12 s against 1.35 s) and later in the
+tail (p90 2.06 s against 1.59-1.65 s), with 81 boundaries against 59-60, and left the median commit latency where it
+was; the median-word gate cannot credit it, and no result says it is worth the earlier unagreed commits.
+**PRE 3 s** was worse (-10%, deletion rate +8.0 points, p = 0.023, 0.068 after Holm): more context in front is not free. **HOP 1.3 s**
 gave 10%, with more dropped hops per block (+4.7).
 
 **Safety held everywhere.** The append-only invariant (`CommitInvariantMonitor`, on every delivery) held in all 108
 runs over 33,937 committed words: no word rewritten, dropped, repeated, reordered or stamped past the audio, for
-every arm. No decode failed. The other jobs on this Mac used a median 0.7 of 10 cores while the replays ran; three
-blocks (of 18) were shared with them, and every gate was also evaluated without those blocks. The verdicts are the same.
+every arm. No decode failed. The whole Mac used a median 0.7 of 10 cores while the replays ran, which includes the replay's own 0.16-0.18 (the
+other jobs used about 0.5); three blocks (of 18) were shared with them, and every gate was also evaluated without
+those blocks. The verdicts are the same.
 
 **What the harness taught.** (1) A pooled median of words over clips that differ by 5x is unstable: a pilot gave C0
 3.9 s and C1 6.9 s, because the pool's median sits in the gap. The statistic is the per-block geometric mean of
 median ratios. (2) A bootstrap over 3-4 rounds per clip covered a true null only 80% of the time in simulation; the
 randomization test has exact size, and the interval is a t-interval over blocks. (3) The A/A replicate in every block is
 worth its cost: one block of identical configurations differs by 10% (standard deviation of the log ratio over 18
-blocks 0.098), and one clip by 25%. FINDINGS 15's non-determinism shows up in the live path as a run-level
+blocks 0.098), the worst block by 35% and one clip (`ami-b`) by 25%. FINDINGS 15's non-determinism shows up in the live path as a run-level
 shift that no per-word statistic sees. (4) An independent review of the harness before any result was read found
 that the first `decide` accepted one session, the hallucination gate would usually read 0 <= 0, and the
 missing-speech check could not see an omitted turn under 2 s; all three were fixed first. (5) `--realtime` slept
@@ -1571,7 +1591,11 @@ missing-speech check could not see an omitted turn under 2 s; all three were fix
 
 **Decision.** Production unchanged; `headTolerance` stays 0 and `SessionConfigDefaultsTests` still pins it. No
 candidate met every gate in both sessions (`eval/live_latency.py decide`). The gates are in the plan and were
-not changed after the first run.
+not changed after the first run. How strong is it? "No variant is demonstrably 20% faster on the per-block median"
+is supported moderately well. "No variant is useful" is not: the safety gates are point-estimate caps that two
+identical controls fail against each other in 3 of 4 trials (the hallucination gate), so only the latency gate
+discriminates, and ADA's 17% is real. The call to keep the default follows from the rule written first and from
+the cost of ADA (19-26% more decodes), not from a demonstrated harm.
 
 **Not shown, and next.** Nothing here says anything about real Taglish meetings, far-field rooms or another Mac.
 AMI has no word reference. Session 2 used three held-out clips and not all six. The cheapest next experiments, in
