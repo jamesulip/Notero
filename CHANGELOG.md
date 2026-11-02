@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Export
+
+- **Export and Copy write the transcript revision on screen.** With an earlier revision open
+  from the info bar, the exported file and the copied text held the latest revision, and nothing
+  said so. The open revision now lives on the app state, tagged with its recording and cleared
+  when the selection changes, and the export sheet says which revision it will write when that
+  is not the latest. Ported from the first part of #10.
+
 ### Evaluation framework
 
 - **`transcribe --score` scores saved transcripts with one written method,** and loads no model,

@@ -44,6 +44,16 @@ struct ExportSheet: View {
             Text("Export “\(recording.title)”")
                 .font(.headline)
 
+            if let shown = RecordingStore.transcript(of: recording,
+                                                     revision: state.openRevision(for: recording)),
+               let latest = recording.transcript, shown.revision != latest.revision {
+                Label("Revision \(shown.revision) of \(latest.revision). "
+                      + "The file holds the revision on screen, not the latest one.",
+                      systemImage: "clock.arrow.circlepath")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             HStack(alignment: .top, spacing: 24) {
                 VStack(alignment: .leading, spacing: 10) {
                     Picker("Format", selection: $state.exportFormat) {
@@ -105,7 +115,7 @@ struct ExportSheet: View {
             document: TextDocument(text: text, format: state.exportFormat),
             contentType: state.exportFormat.contentType,
             defaultFilename: Exporter.filename(
-                for: RecordingStore.document(for: recording), format: state.exportFormat
+                for: state.exportDocument(recording), format: state.exportFormat
             )
         ) { result in
             if case .failure(let error) = result {

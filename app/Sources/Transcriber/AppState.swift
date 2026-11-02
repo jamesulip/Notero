@@ -39,7 +39,28 @@ final class AppState {
     let hotKeys = GlobalHotKeys()
 
     /// Sidebar selection. Nil is the empty state.
-    var route: Route?
+    var route: Route? {
+        didSet { if route != oldValue { openRevision = nil } }
+    }
+    /// An earlier transcript revision open for reading, and the recording it
+    /// belongs to. Nil is the latest. Export and Copy read it, so the file
+    /// holds the revision on screen. Cleared when the selection changes.
+    var openRevision: OpenRevision?
+
+    struct OpenRevision: Equatable {
+        let recording: UUID
+        let revision: Int
+    }
+
+    /// The revision open for `recording`, nil when it shows the latest. A
+    /// revision opened on another recording never applies to this one.
+    func openRevision(for recording: StoredRecording) -> Int? {
+        openRevision?.recording == recording.id ? openRevision?.revision : nil
+    }
+
+    func setOpenRevision(_ revision: Int?, for recording: StoredRecording) {
+        openRevision = revision.map { OpenRevision(recording: recording.id, revision: $0) }
+    }
     var searchText = ""
     /// Set when a search result or a note back-link asks the transcript to
     /// scroll somewhere.
@@ -336,8 +357,14 @@ final class AppState {
 
     func exportText(_ recording: StoredRecording, format: ExportFormat,
                     options: ExportOptions = .everything) -> String {
-        Exporter.render(format, document: RecordingStore.document(for: recording),
-                        options: options)
+        Exporter.render(format, document: exportDocument(recording), options: options)
+    }
+
+    /// The recording as the exporters see it: the revision open on screen
+    /// when there is one, else the latest. The one place Export and Copy
+    /// resolve which revision they write.
+    func exportDocument(_ recording: StoredRecording) -> MeetingDocument {
+        RecordingStore.document(for: recording, revision: openRevision(for: recording))
     }
 
     /// The transcript onto the clipboard, in the format the destination
