@@ -1,0 +1,86 @@
+# English word list used by eval/taxonomy_lex.py: the most common English words plus the
+# vocabulary of meetings, software and office work that turns up in Taglish. Written by Claude (the AI model that made this change)
+# from general knowledge; it is NOT copied or derived from any dictionary, corpus,
+# frequency list or system word list, so it carries no third-party licence. It is small on
+# purpose: an English word that is missing here is reported as "unknown", never guessed.
+# Regular inflections (-s -es -ed -ing -ly -er) are handled by the code, so list base forms.
+# Format: lower-case words, any number per line, '#' starts a comment.
+
+# --- function words ---
+a an the and or but if then than that this these those there here where when while because so as
+of to in on at by for with from into onto over under about after before between through during
+without within up down out off again further once all any both each few more most other some such
+no nor not only own same too very can will just should now i me my mine myself you your yours
+he him his she her hers it its we us our ours they them their theirs who whom whose which what
+how why is am are was were be been being have has had having do does did doing done would could
+might must shall may need needs ought yes yeah yep okay ok nope right well oh wow hey hi hello
+bye goodbye please sorry thanks thank sure maybe actually basically literally really honestly
+anyway also even still already yet always never often sometimes usually soon later today tomorrow
+yesterday tonight morning afternoon evening night week month year day hour minute second time
+first second third next last previous one two three four five six seven eight nine ten hundred
+thousand million half double couple many much lot lots every another else either neither
+something anything nothing everything someone anyone everyone nobody somebody anybody
+somewhere anywhere nowhere everywhere
+
+# --- common verbs ---
+go goes went gone going come came coming get got getting give gave given take took taken make made
+know knew known think thought say said tell told ask asked see saw seen look looked want wanted
+use used find found put keep kept let begin began start started stop stopped show showed shown
+try tried call called work worked play played run ran move moved live lived believe feel felt
+bring brought happen happened write wrote written sit sat stand stood hear heard mean meant
+leave left meet met pay paid sell sold buy bought send sent build built stay stayed fall fell cut
+reach reached kill remain suggest raise pass require report decide pull help helped talk talked
+turn turned follow wait waited open opened close closed learn learned change changed lead led
+understand watch watched speak spoke spoken read eat ate eaten drink drank sleep slept drive drove
+walk walked hold held bring carry carried choose chose chosen join joined check checked fix fixed
+test tested ship shipped release released deploy deployed review reviewed approve approved reject
+rejected schedule scheduled share shared present presented record recorded upload uploaded
+download downloaded update updated install installed log logged click clicked type typed save
+saved delete deleted edit edited copy paste print printed scan scanned submit submitted
+forward forwarded reply replied email emailed text texted chat chatted mute muted unmute unmuted
+login logout connect connected disconnect refresh refreshed reboot restart restarted launch
+launched discuss discussed finalize finalized confirm confirmed cancel cancelled reschedule
+rescheduled follow-up assign assigned handle handled manage managed plan planned prepare prepared
+buy order ordered book booked arrange arranged invite invited attend attended complete completed
+finish finished focus focused improve improved increase increased reduce reduced prioritize
+discussing agree agreed disagree explain explained clarify clarified notify notified
+
+# --- nouns ---
+people person man woman men women child children boy girl guy guys friend friends family mother
+father brother sister team teams member members group company companies business office home
+house room table chair desk door window car bus train road street city country world life hand
+head face eye eyes mind body heart name word words number numbers question questions answer answers
+problem problems issue issues case cases fact point points part parts place places area side
+thing things way ways idea ideas story result results reason reasons level form order process
+system systems service services program project projects plan plans goal goals tool tools
+meeting meetings agenda minutes call calls video audio voice sound screen screens slide slides
+deck presentation document documents file files folder link links email emails message messages
+chat channel channels thread threads group groups update updates status report reports summary
+notes note task tasks ticket tickets bug bugs feature features release releases version versions
+build builds branch branches commit commits code app apps application website web page pages
+server servers cloud database data model models tool tools platform account accounts user users
+customer customers client clients vendor partner partners manager managers director boss staff
+employee employees intern interns developer developers engineer engineers designer designers
+sales marketing finance budget cost costs price prices rate rates revenue profit target targets
+quarter quarters deadline deadlines milestone milestones priority priorities risk risks
+blocker blockers dependency dependencies requirement requirements scope timeline schedule
+calendar invite invites agenda action actions item items follow decision decisions feedback
+comment comments review reviews approval approvals contract contracts invoice invoices
+payment payments order orders delivery deliveries stock inventory supply product products
+brand brands market markets campaign campaigns content post posts video videos photo photos
+event events conference seminar workshop training session sessions class classes course
+school university student students teacher teachers lunch dinner breakfast coffee tea water
+food rice phone phones laptop computer computers keyboard mouse headset headphones mic microphone
+camera speaker speakers network wifi internet connection signal battery charger device devices
+game games gaming discord stream streaming server lag ping mushroom mushrooms forest tree trees
+money bank card cash load data load promo
+
+# --- adjectives and adverbs ---
+good better best bad worse worst big bigger small little long short high low new old young great
+important different same easy hard simple clear ready sure possible available busy free full
+late early fast slow quick quickly slowly right wrong true false real main major minor
+free open closed public private special general local global final initial current previous
+next last next live online offline remote hybrid urgent critical optional required
+mandatory pending done active inactive muted happy sad angry tired hungry nice cool awesome
+amazing great fine okay terrible horrible perfect weird crazy funny serious normal
+online offline early late next previous

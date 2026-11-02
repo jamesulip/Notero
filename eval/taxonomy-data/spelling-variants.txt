@@ -1,0 +1,34 @@
+# Groups of spellings of the same Tagalog word that people use interchangeably. If a reference
+# word and a hypothesis word are in the same group, the substitution is counted as a
+# "spelling_variant" and not as a recognition error. One group per line, words separated by
+# spaces, lower-case, no hyphens (the tokenizer splits at hyphens). Written by Claude (the AI model that made this change) from
+# its general knowledge of how Taglish is typed; it is incomplete and has not been reviewed by a
+# native speaker.
+diyan dyan jan
+iyan yan
+iyon yun yon iyun
+noon nun
+doon don dun
+iyong yung iyung
+ganoon ganun ganon
+kasi kase
+puwede pwede
+puwedeng pwedeng
+ninyo niyo nyo
+siya sya
+talaga talga
+mayroon meron
+mayroong merong
+okay ok okey
+sino sinu
+saan san
+paano pano
+nandito andito
+nandiyan andyan andiyan
+nandoon andun andoon
+kuwento kwento
+kuwarto kwarto
+eskwela eskuwela
+ngayon ngayun
+ito eto
+kaya kya

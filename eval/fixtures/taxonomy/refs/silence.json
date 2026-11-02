@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "itemId": "silence",
+  "annotation": {
+    "annotator": "Claude, AI model (synthetic text)",
+    "note": "times are invented"
+  },
+  "utterances": [
+    {
+      "id": "u1",
+      "speaker": "A",
+      "startMs": 0,
+      "endMs": 4000,
+      "language": "tl",
+      "text": "Magandang umaga po sa inyong lahat."
+    },
+    {
+      "id": "u2",
+      "speaker": "A",
+      "startMs": 10000,
+      "endMs": 14000,
+      "language": "mixed",
+      "text": "Simulan na po natin ang meeting ngayon dito.",
+      "languageSpans": [
+        {
+          "text": "Simulan na po natin ang ",
+          "language": "tl"
+        },
+        {
+          "text": "meeting ",
+          "language": "en"
+        },
+        {
+          "text": "ngayon dito.",
+          "language": "tl"
+        }
+      ]
+    },
+    {
+      "id": "u3",
+      "speaker": "B",
+      "startMs": 20000,
+      "endMs": 24000,
+      "text": "Salamat sa pakikinig natin."
+    }
+  ]
+}

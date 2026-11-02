@@ -73,6 +73,9 @@ def main() -> int:
     parser.add_argument("hyp_dir", type=Path, help="directory of <id>.txt outputs")
     parser.add_argument("--label", default="system", help="name for this run")
     parser.add_argument("--manifest", type=Path, default=EVAL_DIR / "manifest.json")
+    parser.add_argument("--taxonomy-out", type=Path, default=None, metavar="DIR",
+                        help="also write the optional error-taxonomy report (eval/taxonomy.py) to DIR; "
+                             "the table above is unchanged")
     args = parser.parse_args()
 
     if not args.manifest.exists():
@@ -122,6 +125,13 @@ def main() -> int:
         subs, dels, ins, words = totals[bucket]
         wer = (subs + dels + ins) / words * 100 if words else 0.0
         print(f"{bucket:>9} {wer:>6.2f}% {subs:>6} {dels:>6} {ins:>6} {words:>7}")
+    if args.taxonomy_out is not None:
+        sys.path.insert(0, str(EVAL_DIR))
+        import taxonomy
+
+        report = taxonomy.report_from_manifest(args.manifest, args.hyp_dir, label=args.label,
+                                               out_dir=args.taxonomy_out)
+        print(f"\ntaxonomy: {report['corpus'].get('errors', 0)} errors -> {args.taxonomy_out}/taxonomy.json, taxonomy.md")
     return 0
 
 
