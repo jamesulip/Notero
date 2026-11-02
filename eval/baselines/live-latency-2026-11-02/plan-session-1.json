@@ -2,8 +2,8 @@
   "schema": 1,
   "session": 1,
   "name": "screening: every variant against the control, three clips",
-  "created": "2026-11-02T18:06:09+08:00",
-  "commit": "8b4b9a39e68de4a91bd434bae168287392470b01",
+  "created": "2026-11-02T18:34:21+08:00",
+  "commit": "cab57f7308bb01e4d862badc72e3a316e9557676",
   "dirty": false,
   "hardware": {
     "model": "Mac14,12",
@@ -14,7 +14,7 @@
   },
   "binary": {
     "path": "/tmp/notero-p2/bin/transcribe",
-    "sha256": "449ba4d6d979ef200bc6db614e6b05c07e11d4b9dc2c86383abb08b24fd2c365",
+    "sha256": "93f6b23deb9e7a522fe2f91a2dcc5a364c513fe9858f4b9dfa38d6dd02661f27",
     "builtFrom": "/Users/server/.t3/worktrees/Notero/t3-db100cb8/app/.build/arm64-apple-macosx/release/transcribe"
   },
   "tier": "balanced",
@@ -67,15 +67,15 @@
         "3000"
       ],
       "variable": "context anchoring",
-      "what": "3 s of committed audio kept in front of the active region instead of 1.5 s"
+      "what": "3 s of committed audio kept in front of the active region instead of 1.5 s (the ring holds context + pre-roll, so the active region is still capped at 15 s)"
     },
     "HOP": {
       "flags": [
         "--hop",
-        "1250"
+        "1300"
       ],
       "variable": "hop scheduling",
-      "what": "a decode every 1.25 s instead of 1.5 s"
+      "what": "a decode every 1.3 s instead of 1.5 s (the replay hands over 100 ms chunks, so a hop is a whole number of chunks)"
     },
     "ADA": {
       "flags": [
@@ -166,7 +166,7 @@
       "refText": null,
       "refWords": null,
       "refSpans": "/tmp/notero-p2/refs/ami-a.spans.json",
-      "refSpansSha256": "ad636f177aeae11042ca96513be4220c01b283efc5386e93b73529d4e2db69d7",
+      "refSpansSha256": "530498fe0e8becbd562197eb1916dd321a75a511851ea65aedc337e34b630704",
       "source": {
         "dataset": "AMI Meeting Corpus, test set, Mix-Headset",
         "licence": "CC BY 4.0",
@@ -617,26 +617,40 @@
       "support": "one-sided randomization test of that statistic, p < 0.05: in a block any of the three runs (C0, C1, the variant) is as likely to be the variant under 'no effect'",
       "supportAlpha": 0.05,
       "randomizationResamples": 10000,
-      "interval": "t-interval on the per-block log ratio of median latencies (blocks are the unit); reported, and its one-sided lower bound must also be above 0"
+      "interval": "t-interval on the per-block log ratio of median latencies (blocks are the unit); reported, and its one-sided lower bound must also be above 0",
+      "tailGuard": {
+        "minReduction": -0.05,
+        "what": "the p90 and the p95 commit latency must not be more than 5% worse, by the same statistic"
+      },
+      "perClipGuard": {
+        "minReduction": -0.1,
+        "what": "no clip may get more than 10% slower (its reduction, as a geometric mean over its rounds)"
+      },
+      "referenceAnchor": {
+        "minReduction": 0.1,
+        "what": "the same statistic on the time from the end of each reference segment (a speaker turn, an utterance, a read sentence) to the commit of the last word inside it must fall by at least 10%: a variant that only shifts the model's own word timestamps cannot pass"
+      }
     },
     "wer": {
       "clips": "clips with a word reference",
       "supportedRegressionAlpha": 0.05,
-      "test": "paired sign-flip on the block differences, one-sided, against the mean of the two controls",
+      "test": "paired randomization over blocks (variant minus the mean of the two controls, one-sided), Holm-adjusted over the four safety metrics",
       "maxMeanIncreasePt": 0.5,
       "maxClipMeanIncreasePt": 3.0
     },
     "missingSpeech": {
       "alpha": 0.05,
       "maxDeletionRateIncreasePt": 0.5,
-      "maxMissingShareIncreasePt": 0.5
+      "maxMissingShareIncreasePt": 0.5,
+      "maxOmittedSegmentsIncreasePt": 0.5,
+      "what": "deletion rate (word-reference clips); share of reference speech time with no word within 1 s; share of reference segments of 1 s or more (one speaker's turn, one utterance) with no word overlapping them, 300 ms either side. The last two on every clip, AMI included."
     },
     "hallucinations": {
-      "rule": "the variant's total of fillers, loops and invented spans must not exceed the mean of the two controls' totals"
+      "rule": "the variant's total of critical hallucinations (invented filler phrases, loops of 4 repeats or more, runs of 6 or more inserted words on clean references, and a 4-word phrase committed again within 30 words, each net of the reference's own) must not exceed the mean of the two controls' totals; the same for ghost words (words more than 1 s from any reference speech)"
     },
     "immutability": {
       "maxViolations": 0,
-      "scope": "every run of every arm"
+      "scope": "every run of every arm of the session, and the monitor's word count must equal the words committed"
     },
     "droppedHops": {
       "maxRelativeIncrease": 0.2,
@@ -649,6 +663,11 @@
     "aa": {
       "maxAbsEffect": 0.1,
       "twoSidedRandomizationPMustBeAtLeast": 0.05
+    },
+    "contention": {
+      "otherCoresP90Above": 2.0,
+      "minBlocksForSensitivity": 4,
+      "what": "a run is shared when the other jobs on the Mac used more than 2 cores at the 90th percentile of the samples taken during it; its whole block is then shared. Every gate is evaluated on all blocks AND, when 4 or more blocks are not shared, on those alone; both must pass."
     },
     "reproducibility": "every rule above holds in session 1 AND in session 2, which runs later, in its own invocation, on the clips of session 1 and the held-out clips",
     "promotion": {
@@ -667,7 +686,8 @@
     "whyNotAPooledMedian": "the pilot (not evidence) showed C0 at 3.9 s and C1 at 6.9 s pooled over a 3 s clip and a 17 s clip: a bimodal pool has a median in the gap"
   },
   "notes": [
-    "A pilot of 6 runs on two short clips outside this set (pilot-liva, pilot-ami; harness check, not evidence) preceded this plan. It showed that a pooled median of words over a 3 s clip and a 17 s clip is unstable, so the latency statistic is the per-block geometric mean of median ratios, fixed here before the first measured run.",
+    "A pilot of 6 runs on two short clips outside this set (pilot-liva, pilot-ami; harness check, not evidence) preceded this plan. It showed that a pooled median of words over a 3 s clip and a 17 s clip is unstable, so the latency statistic is the per-block geometric mean of median ratios.",
+    "An independent read-only review of the harness code ran after four measured runs of an earlier version of this plan had finished. None of their results was read or scored, and they were deleted with their binary. The review led to the amendments in this plan: a tail guard, a per-clip guard and a reference-anchored latency check; omitted turns, repeated phrases and ghost words; contention flagged per block with a sensitivity analysis; a paired randomization for the per-run metrics; the hop arm at 1.3 s.",
     "Session 2 is planned after this session. Its clips are fixed now: all six clips of eval/fixtures/live-latency-clips.json. Its arms are C0, C1 and every variant that clears the promotion rule.",
     "The binary is a copy of app/.build/release/transcribe built from the commit above; the plan records its sha256 and run refuses a different one."
   ]
