@@ -477,6 +477,9 @@ final class SpeakerCarryOverTests: XCTestCase {
     func testTheRevisionBeingWrittenIsNotTheEvidence() async throws {
         // `storeTranscript` inserts the new revision, finished and empty, before
         // its rows are decided. Taken for the earlier run it would match nothing.
+        // Two guards keep it out: `excluding`, and the rule that a revision with
+        // no labels is never the evidence (`labelledRows`), which also covers a
+        // finished revision stored with identification off.
         let (id, writer) = try await seed(["S1", "S2", "S1", "S2"])
         try rename("S1", to: "Maria", in: id)
         try await writer.storeTranscript(segments: [], roster: [], modelId: "turbo",
@@ -487,13 +490,10 @@ final class SpeakerCarryOverTests: XCTestCase {
         let labels: [String?] = ["S2", "S1", "S2", "S1"]
         let roster = Self.roster(of: labels, lineMs: lineMs)
 
-        let ignored = try await writer.carriedSpeakers(
+        let unlabelledSkipped = try await writer.carriedSpeakers(
             segments: transcribedAgain(labels), roster: roster, for: id)
-        XCTAssertNotEqual(ignored.segments.map(\.speakerId), ["S1", "S2", "S1", "S2"],
-                          "with the empty revision as evidence nothing is matched, so Maria's "
-                          + "voice is not found, and her label is not handed to somebody else")
-        XCTAssertFalse(ignored.segments.compactMap(\.speakerId).contains("S1"),
-                       "S1 is Maria's, and nobody inherited it")
+        XCTAssertEqual(unlabelledSkipped.segments.map(\.speakerId), ["S1", "S2", "S1", "S2"],
+                       "a revision with no labels is passed over for the one before it")
 
         let carried = try await writer.carriedSpeakers(
             segments: transcribedAgain(labels), roster: roster, for: id, excluding: [newest.id])
