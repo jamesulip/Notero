@@ -1,0 +1,198 @@
+# Tagalog / Filipino word list used by eval/taxonomy_lex.py.
+#
+# Written by Claude (the AI model that made this change) from
+# its general knowledge of Tagalog, for this project. To the writer's knowledge it was not copied from any dictionary, corpus, frequency list or
+# other lexicon (that cannot be proved); it is offered under the repository's MIT licence. It is small
+# and incomplete on purpose: a word that is missing here is reported as "unknown", never
+# guessed. It has not been reviewed by a native speaker; treat entries as a working list.
+#
+# Format: lower-case words, any number per line, separated by spaces. A '#' starts a comment.
+# Roots are listed bare (the affix analyser in taxonomy_lex.py strips prefixes, infixes,
+# suffixes and reduplication and looks the root up here). A few very common inflected forms
+# are listed too. Hyphenated words are listed as their pieces, because the tokenizer splits
+# at hyphens exactly as eval/score.py does.
+
+# --- markers, pronouns, demonstratives, question words ---
+ang ng mga sa si ni kay kina nina sina ay at o ngunit pero subalit datapwat kaya dahil sapagkat
+kasi kase kung kapag pag habang bago pagkatapos hanggang mula tungkol laban ayon para upang
+samantala saka tsaka
+ako ikaw ka siya kami tayo kayo sila ko mo niya namin natin ninyo nyo nila akin iyo kanya amin atin
+inyo kanila aking iyong kanyang aming ating inyong kanilang
+ito iyan iyon yan yun yon nito niyan niyon noon nun dito diyan doon rito riyan roon dyan jan don dun
+ganito ganyan ganoon ganun ganon ganyan
+ano sino saan kailan bakit paano paanong alin ilan gaano magkano anong saang
+sino-sino
+hindi di huwag wag wala walang may mayroon meron mayroong merong
+oo opo hindi po ho
+lahat bawat marami madami konti kaunti iba ibang ilang buong buo
+sarili mismo na pa lang lamang din rin daw raw naman nga pala yata ata ba muna sana talaga sobra sobrang
+medyo masyado masyadong lalo lalong higit mas pinaka napaka
+tuloy man
+
+# --- numbers, time, quantity ---
+isa dalawa tatlo apat lima anim pito walo siyam sampu labing dalawampu tatlumpu daan sandaan libo
+milyon una pangalawa pangatlo ikalawa ikatlo ikaapat ikalima huli panghuli
+ngayon kanina mamaya bukas kahapon araw gabi umaga hapon tanghali madaling
+linggo buwan taon oras minuto segundo sandali saglit ulit uli kanina palagi lagi madalas minsan
+dati dating bigla agad kaagad kaagad-agad pagkatapos matapos tapos simula
+
+# --- particles and interjections ---
+naku hay uy oy aba ay-ay ewan sige tara halika halina sana nawa siyempre syempre kumusta kamusta
+salamat pasensya paumanhin pakiusap pasensiya paalam
+
+# --- bound prefixes written as separate tokens when a hyphen or space is dropped ---
+nag mag naka maka pag pang nang mang ipa ipag ipang magpa nagpa pinag pina ika paki maki naki napa mapa
+magka nagka
+
+# --- common verb roots and forms ---
+gawa gawin ginawa gagawin gumawa gumagawa ginagawa nagawa magawa
+sabi sinabi sasabihin magsabi nagsabi sinasabi sabihin
+kita nakita makita nakikita makikita kitang
+tingin tingnan tumingin tinitingnan titingnan
+alam alamin malaman nalaman nalalaman
+kilala kilalanin nakilala kilalanin
+punta pumunta pupunta pumupunta pinuntahan puntahan
+bili bumili bibili binili bilhin
+kain kumain kakain kinain kainin kumakain
+uwi umuwi uuwi umuuwi
+bigay ibigay binigay magbigay nagbigay ibinigay
+kuha kunin kinuha kumuha kukuha kuhanin
+dala dalhin dinala magdala nagdala dumating dumadating dating
+tawag tawagin tinawag tumawag tatawag tumatawag
+usap usapan pag-usapan magusap nag-usap
+hintay hintayin naghihintay maghintay naghintay
+tulong tumulong tulungan tinulungan magtulungan
+trabaho nagtatrabaho magtrabaho nagtrabaho
+aral mag-aral nag-aaral nag-aral pag-aralan magaral nagaral nag-aaral
+basa bumasa binasa magbasa nagbabasa
+sulat sumulat sinulat isulat magsulat
+isip isipin iniisip nag-iisip mag-isip nag-isip naisip
+sagot sumagot sagutin sinagot sumasagot
+tanong magtanong nagtanong tanungin tinanong
+hanap maghanap nanghanap hanapin hinanap hinahanap naghahanap
+simula magsimula nagsimula simulan sinimulan nagsisimula
+tapos tapusin natapos matapos tinapos magtapos
+lipat lumipat ilipat inilipat magpalit
+pasok pumasok pumapasok ipasok papasukin
+labas lumabas lumalabas ilabas
+upo umupo maupo magupo
+tayo tumayo magtayo
+tulog matulog natulog natutulog matutulog
+gising gumising nagising
+kanta kumanta umawit awit
+sayaw sumayaw
+laro maglaro naglaro naglalaro laruin
+luto magluto nagluto lutuin niluto
+linis maglinis naglinis linisin nilinis
+hugas maghugas nanghugas hugasan
+ligo maligo naligo naliligo
+inom uminom nag-inom inumin ininom
+higa humiga nakahiga
+lakad maglakad naglakad lumakad lakarin
+takbo tumakbo tumatakbo takbuhan
+sakay sumakay nakasakay sakyan
+baba bumaba bababa ibaba
+akyat umakyat umaakyat
+buksan buksan binuksan magbukas nagbukas
+sara isara sinara magsara nagsara
+patay patayin pinatay mamatay namatay
+buhay mabuhay nabuhay
+gusto nagustuhan magustuhan ayaw ayoko
+kailangan kakailanganin pangangailangan
+pwede puwede pwedeng puwedeng maaari
+dapat marapat baka siguro
+subukan sumubok sinubukan sinubukan
+ulitin inulit inuulit
+ipaliwanag magpaliwanag nagpaliwanag paliwanag
+ayusin inayos aayusin ayos mag-ayos nag-ayos
+isama isinama sumama kasama sama
+iwan iwanan iniwan umalis aalis umalis alis
+balik bumalik babalik ibalik
+dating nauna nauuna
+lumapit lapit lumayo layo
+pumili pili piliin pinili
+makinig pakinggan pinakinggan nakinig
+nakakapagod pagod napagod pagod
+natatakot takot natakot
+nagagalit galit nagalit
+natutuwa tuwa natuwa
+nalulungkot lungkot nalungkot
+masaya saya sumaya
+nahihirapan hirap nahirapan
+
+# --- nouns ---
+tao bahay kotse sasakyan pera trabaho opisina kumpanya tanggapan paaralan eskwela eskwelahan
+simbahan ospital palengke tindahan kalsada daan bayan lungsod probinsya baryo barangay
+anak asawa magulang nanay tatay ina ama kapatid kuya ate ate ditse lolo lola tito tita pamangkin
+pinsan apo kaibigan kasama katrabaho kaklase kapitbahay kasambahay
+lalaki babae bata matanda binata dalaga ginoo ginang binibini
+pagkain kanin ulam tubig kape gatas itlog isda manok baboy baka gulay prutas saging mangga
+oras panahon tag-init tag-ulan ulan araw hangin init lamig bagyo
+pangalan salita wika pangungusap tanong sagot usapan balita kwento kuwento
+problema solusyon tanong gamit gamitin ginamit gagamitin kagamitan
+simula wakas gitna unahan likuran harap harapan tabi gilid itaas ibaba loob labas kanan kaliwa
+paa kamay ulo mata ilong bibig tenga tainga buhok mukha katawan puso isip
+libro papel lapis bag sapatos damit pantalon
+telepono selpon cellphone
+kamusta ingat paalam
+
+# --- adjectives, adverbs ---
+tama mali totoo tunay peke sarap masarap ganda maganda pangit mahal mura
+malaki maliit mahaba maikli matagal mabilis mabagal madali mahirap mabuti mabait masama
+mabigat magaan malayo malapit mataas mababa maaga huli bago luma matanda bata
+malinaw malabo masaya malungkot galit pagod gutom busog uhaw antok inaantok
+ayos bahala sapat kulang labis sobra tiyak sigurado malamang
+marunong magaling mahusay mahina malakas maingay tahimik madilim maliwanag
+bago pa-bago matalino tanga loko baliw
+# --- common clipped or colloquial forms ---
+nasa nandito nandiyan nandoon andito andyan andun narito naririto
+kung-ano ewan sige tara ayun ayan ito'y eto ayan heto
+sino-sino kahit kahit-sino
+ngani nakakahiya nakakatawa nakakainis nakakagulat
+bakit-ganun
+
+# --- a second batch of everyday words (added once, from general knowledge, before any corpus
+# was scored; the list was NOT tuned on the evaluation corpora) ---
+yung iyung dami gubat pareho kapwa pati maging naging nagiging magiging kahit kaysa
+akala inakala akalain intindi intindihin naiintindihan unawa maintindihan alala alalahanin
+nag-aalala bagay pagkakataon pagkakaiba pagbabago binago magbago palitan pinalitan palit
+bayad magbayad bayaran binayaran utang singil presyo halaga singilin
+yari mangyari nangyari nangyayari mangyayari nangyaring
+karoon magkaroon nagkaroon magkakaroon roon ngayon-ngayon
+umasa asa asahan umaasa
+nakarating makarating dumarating pagdating pagdating
+nakakaintindi nakakaalam nakakakita nakakakuha nakakagawa nakakabili
+magkita magkasama magkasabay sabay sabayan magsabay
+tanggap tanggapin tinanggap tumanggap tanggihan tumanggi
+tapat totoo-tao hirap hirapan pahirapan paghihirap
+buo buuin binuo pagsama pagsasama sumasama
+dahan-dahan dahan marahan mabilisan unti-unti unti
+kuwarto silya mesa bintana pinto kama unan kumot plato baso kutsara tinidor kutsilyo
+kamiseta kumpleto plano proyekto gobyerno pamahalaan pangulo alkalde kapitan pulis sundalo
+doktor nars abogado guro estudyante mag-aaral propesor
+lugar lugar-lugar sulok kanto kanto tulay ilog dagat bundok bukid gubat kagubatan puno halaman bulaklak
+hayop aso pusa ibon ahas daga langgam lamok
+panahon-na kulay pula asul dilaw berde itim puti kayumanggi
+init lamig basa tuyo basa-basa
+laki liit haba ikli taas baba bigat gaan lapad kipot
+ilan-ilan ilang-ilan kakaunti karamihan karamihan bahagi kalahati kaunti-unti
+gumagamit gumagamit nagamit gamit-gamit nagagamit
+kumakain kumakanta kumakatok kumakalat
+nagpapasalamat pasasalamat magpasalamat nagpasalamat
+nagpapahinga magpahinga pahinga nagpahinga
+nagsasalita magsalita nagsalita salita sinasalita
+nakikinig nakikita nakakarinig narinig marinig dinig
+nakukuha nakuha makuha nakuhang
+magkano-magkano ilan-ilan
+mabuhay paalam kamusta-na
+tuwing tuwing-umaga
+halos halos-lahat
+muli muling
+agad agarang
+kapag-ganun
+naku-po
+ayan-na
+oo-nga
+sige-na
+tama-na
+ganun-din

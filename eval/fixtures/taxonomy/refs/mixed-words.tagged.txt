@@ -1,0 +1,9 @@
+# Synthetic fixture. A Tagalog affix on an English stem is tagged /mix; a hyphenated one tags both pieces.
+!annotator: Claude, AI model (synthetic text)
+[id=m01] Pakiusap/tl i-share/mix mo/tl ang/tl screen/en.
+[id=m02] Nag-meeting/mix kami/tl kahapon/tl.
+[id=m03] Naka-mute/mix ka/tl pala/tl.
+[id=m04] Mag-update/mix tayo/tl bukas/tl.
+[id=m05] I-click/mix mo/tl yung/tl button/en.
+[id=m06] Nagmeeting/mix kami/tl kahapon/tl.
+[id=m07] Tumawag/tl sila/tl at/tl nagmeeting/mix ulit/tl.

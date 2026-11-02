@@ -694,6 +694,15 @@ def render_decision(d: dict) -> str:
 
 # ---------------------------------------------------------------- main
 
+def command_taxonomy(args: argparse.Namespace) -> int:
+    """Optional: the Taglish error taxonomy (eval/taxonomy.py) of every tier's saved hypotheses.
+    It reads files `decode` already wrote, decodes nothing, and changes no score or decision."""
+    import taxonomy
+
+    return taxonomy.main(["plan", "--plan", str(args.plan), "--out-dir", str(args.out_dir),
+                          "--repeat", str(args.repeat)])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -743,6 +752,12 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("decide", help="apply the plan's gate")
     p.add_argument("--plan", required=True)
     p.set_defaults(func=command_decide)
+
+    p = sub.add_parser("taxonomy", help="optional error-taxonomy report for each tier's saved hypotheses")
+    p.add_argument("--plan", required=True)
+    p.add_argument("--out-dir", required=True)
+    p.add_argument("--repeat", type=int, default=0, help="0 = first decode, 1 = the repeat decodes")
+    p.set_defaults(func=command_taxonomy)
 
     args = parser.parse_args(argv)
     return args.func(args)

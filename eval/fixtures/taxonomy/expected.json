@@ -1,0 +1,108 @@
+{
+  "categories": {
+    "boundary_error": {
+      "basis": {
+        "heuristic": 1,
+        "verified": 1
+      },
+      "error_words": 2,
+      "events": 2
+    },
+    "deleted_speech": {
+      "basis": {
+        "structural": 3
+      },
+      "error_words": 3,
+      "events": 1
+    },
+    "en_to_tl_substitution": {
+      "basis": {
+        "heuristic": 1
+      },
+      "error_words": 1,
+      "events": 1
+    },
+    "enclitic_particle": {
+      "basis": {
+        "heuristic": 3
+      },
+      "error_words": 3,
+      "events": 3
+    },
+    "hallucination": {
+      "basis": {
+        "structural": 12
+      },
+      "error_words": 12,
+      "events": 3
+    },
+    "mixed_word_error": {
+      "basis": {
+        "verified": 7
+      },
+      "error_words": 7,
+      "events": 6
+    },
+    "morphology_error": {
+      "basis": {
+        "heuristic": 7
+      },
+      "error_words": 7,
+      "events": 7
+    },
+    "other_deletion": {
+      "basis": {
+        "structural": 1
+      },
+      "error_words": 1,
+      "events": 1
+    },
+    "other_insertion": {
+      "basis": {
+        "structural": 1
+      },
+      "error_words": 1,
+      "events": 1
+    },
+    "other_substitution": {
+      "basis": {
+        "heuristic": 2
+      },
+      "error_words": 2,
+      "events": 2
+    },
+    "proper_noun_error": {
+      "basis": {
+        "verified": 2
+      },
+      "error_words": 2,
+      "events": 2
+    },
+    "spelling_variant": {
+      "basis": {
+        "heuristic": 5
+      },
+      "error_words": 5,
+      "events": 3
+    },
+    "tl_to_en_substitution": {
+      "basis": {
+        "heuristic": 2
+      },
+      "error_words": 2,
+      "events": 2
+    }
+  },
+  "del": 11,
+  "errors": 48,
+  "hyp_words": 173,
+  "ins": 15,
+  "note": "Hand-verified against the fixture text (eval/fixtures/taxonomy/README.md lists every case). Counts are error words; events are in brackets in the README.",
+  "ref_words": 169,
+  "sub": 22,
+  "timestamps": {
+    "misaligned": 1,
+    "pairs": 15
+  },
+  "verified_reference_tokens": 112
+}

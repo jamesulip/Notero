@@ -1,0 +1,144 @@
+{
+ "transcript": "Magandang umaga po sa inyong lahat. Thank you for watching. Simulan na po natin dito. Salamat sa pakikinig natin. hello hello hello hello",
+ "words": [
+  {
+   "text": " Magandang",
+   "startMs": 200,
+   "endMs": 900,
+   "confidence": 0.9
+  },
+  {
+   "text": " umaga",
+   "startMs": 900,
+   "endMs": 1500,
+   "confidence": 0.9
+  },
+  {
+   "text": " po",
+   "startMs": 1500,
+   "endMs": 1800,
+   "confidence": 0.9
+  },
+  {
+   "text": " sa",
+   "startMs": 1800,
+   "endMs": 2100,
+   "confidence": 0.9
+  },
+  {
+   "text": " inyong",
+   "startMs": 2100,
+   "endMs": 2700,
+   "confidence": 0.9
+  },
+  {
+   "text": " lahat.",
+   "startMs": 2700,
+   "endMs": 3500,
+   "confidence": 0.9
+  },
+  {
+   "text": " Thank",
+   "startMs": 6000,
+   "endMs": 6400,
+   "confidence": 0.9
+  },
+  {
+   "text": " you",
+   "startMs": 6400,
+   "endMs": 6800,
+   "confidence": 0.9
+  },
+  {
+   "text": " for",
+   "startMs": 6800,
+   "endMs": 7200,
+   "confidence": 0.9
+  },
+  {
+   "text": " watching.",
+   "startMs": 7200,
+   "endMs": 8000,
+   "confidence": 0.9
+  },
+  {
+   "text": " Simulan",
+   "startMs": 10200,
+   "endMs": 10800,
+   "confidence": 0.9
+  },
+  {
+   "text": " na",
+   "startMs": 10800,
+   "endMs": 11000,
+   "confidence": 0.9
+  },
+  {
+   "text": " po",
+   "startMs": 11000,
+   "endMs": 11300,
+   "confidence": 0.9
+  },
+  {
+   "text": " natin",
+   "startMs": 11300,
+   "endMs": 11900,
+   "confidence": 0.9
+  },
+  {
+   "text": " dito.",
+   "startMs": 13000,
+   "endMs": 13500,
+   "confidence": 0.9
+  },
+  {
+   "text": " Salamat",
+   "startMs": 15500,
+   "endMs": 15900,
+   "confidence": 0.9
+  },
+  {
+   "text": " sa",
+   "startMs": 20300,
+   "endMs": 20700,
+   "confidence": 0.9
+  },
+  {
+   "text": " pakikinig",
+   "startMs": 20700,
+   "endMs": 21500,
+   "confidence": 0.9
+  },
+  {
+   "text": " natin.",
+   "startMs": 21500,
+   "endMs": 22000,
+   "confidence": 0.9
+  },
+  {
+   "text": " hello",
+   "startMs": 25000,
+   "endMs": 25200,
+   "confidence": 0.9
+  },
+  {
+   "text": " hello",
+   "startMs": 25200,
+   "endMs": 25400,
+   "confidence": 0.9
+  },
+  {
+   "text": " hello",
+   "startMs": 25400,
+   "endMs": 25600,
+   "confidence": 0.9
+  },
+  {
+   "text": " hello",
+   "startMs": 25600,
+   "endMs": 26000,
+   "confidence": 0.9
+  }
+ ],
+ "durationMs": 27000
+}

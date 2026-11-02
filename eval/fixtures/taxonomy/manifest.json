@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "corpusId": "synthetic-taxonomy-fixture-v1",
+  "items": [
+    {"id": "switching", "ref": "refs/switching.tagged.txt", "category": "mixed"},
+    {"id": "mixed-words", "ref": "refs/mixed-words.tagged.txt", "category": "mixed"},
+    {"id": "morphology", "ref": "refs/morphology.txt", "category": "tagalog"},
+    {"id": "silence", "ref": "refs/silence.json", "category": "tagalog"},
+    {"id": "plain-heuristic", "ref": "refs/plain-heuristic.txt", "category": "mixed"}
+  ]
+}

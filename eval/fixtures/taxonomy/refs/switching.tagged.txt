@@ -1,0 +1,16 @@
+# Synthetic fixture written for this repository. Not corpus text. The tags were written with the sentences, by Claude (an AI model).
+!annotator: Claude, AI model (synthetic text; tags written to test the tool, not as linguistic ground truth)
+[id=s01] Simulan/tl na/tl natin/tl ang/tl standup/en bukas/tl ng/tl umaga/tl.
+[id=s02] Gusto/tl ko/tl sanang/tl umalis/tl agad/tl bukas/tl ng/tl umaga/tl.
+[id=s03] Please/en send/en the/en agenda/en before/en lunch/en today/en.
+[id=s04] Ayos/tl na/tl ang/tl schedule/en natin/tl bukas/tl.
+[id=s05] Ayos/tl ang/tl meeting/en kahapon/tl.
+[id=s06] Tanungin/tl natin/tl si/tl Andy/ne tungkol/tl dito/tl.
+[id=s07] Kausapin/tl mo/tl si/tl Marites/ne bukas/tl.
+[id=s08] Salamat/tl po/tl sa/tl lahat/tl.
+[id=s09] Sige/tl na/tl naman/tl bukas/tl.
+[id=s10] Tapos/tl na/tl ang/tl trabaho/tl natin/tl.
+[id=s11] Pwede/tl ba/tl bukas/tl.
+[id=s12] Malaki/tl ang/tl bahay/tl nila/tl.
+[id=s13] Kumain/tl na/tl ba/tl kayo/tl kahapon/tl.
+[id=s14] Maganda/tl ang/tl panahon/tl ngayon/tl.

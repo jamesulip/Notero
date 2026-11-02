@@ -63,7 +63,7 @@ catalogue and the storage layout.
 cd app && swift test
 ```
 
-There are 706 tests: 669 XCTest tests and 37 swift-testing tests. **They need
+There are 707 tests: 670 XCTest tests and 37 swift-testing tests. **They need
 no model weights, no microphone and no network.** This property is deliberate,
 and you must keep it. The four-layer split in
 [ARCHITECTURE.md](ARCHITECTURE.md) is what makes it possible.
@@ -72,6 +72,19 @@ The experimental Nemotron 3 package is not part of `app/` and `swift test` there
 does not build it. Test it on its own: `cd experimental/nemotron3 && swift test`
 (7 tests, no model weights). It resolves FluidAudio 0.18.0, so its first build
 downloads that package.
+
+## Test the Python evaluation tools
+
+```bash
+/tmp/notero-venv/bin/python -m pytest tests --ignore=tests/test_protocol.py
+```
+
+There are 595 tests in this run: 468 for the older tools and 127 in
+`tests/test_taxonomy.py` for the Taglish error taxonomy. `tests/test_protocol.py`
+tests the legacy server. It needs the models and the network, so leave it out.
+The other tests need no model, no audio and no network. The taxonomy tests use
+only the synthetic text in `eval/fixtures/taxonomy/`. The expected counts in that
+folder were worked out from the sentences. They are not a copy of the tool output.
 
 | Test target | What it covers |
 | --- | --- |

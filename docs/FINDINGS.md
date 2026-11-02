@@ -1406,6 +1406,96 @@ on the Mac mini M2 Pro, under a gate written before the first run.
 [DIARIZATION.md](DIARIZATION.md) has the tables and what a switch still needs. The data is
 English meetings and a Taglish voice chat. No Taglish meeting was measured.
 
+## 37. What kind of error: a taxonomy of the Taglish decodes, and a corrected claim about public corpora (2026-11-02)
+
+**What was built.** `eval/taxonomy.py` sorts every word error of a transcript into one kind:
+Tagalog written as English, English written as Tagalog, errors at code-switch points, mixed words
+("nag-meeting"), Filipino morphology (affix, reduplication, linker), names, particles, runs of
+invented words, runs of deleted speech and spelling variants. It also reports timestamp
+misalignment. It uses the same tokens and edit distance as the WER, so the error words of all
+categories add up to S + D + I (3,784 on the Liva Balanced decode, 1,121 on FLEURS), and the totals
+equal the published WER (Liva Best differs by 0.07 and 0.08 points because of two backticks). It
+changes no existing number. Every count is split into `verified`, `heuristic` and `structural`.
+[eval/TAXONOMY.md](../eval/TAXONOMY.md) gives the method.
+
+**No result is verified.** Neither Liva nor FLEURS has word-level language tags. On the Liva decodes
+26.9% of the reference tokens are `unknown` or `ambiguous`, and the labels that remain come from
+word lists written by an AI model (Claude) that no native speaker has reviewed. The numbers show how
+the decodes fail. They do not measure the speech.
+
+**The category counts depend on the tie-break.** The total of a decode is fixed. But when two
+alignments have the same cost, the choice moves words between categories. Two other tie-breaks move
+the Liva Best `morphology_error` from 44 to 28 words, `other_insertion` from 52 to 106 and
+`boundary_error` from 168 to 140. A difference of less than about 70 words in one category means
+nothing (the largest move was 67 words). The `tl_to_en` gap between Balanced and Best survives (98 words, then 91 and 89). An
+independent review found this; it is now an option (`--tie-break`) and a committed baseline.
+
+**What the Liva decodes show (heuristic, one friend group, two decodes of each tier).**
+
+- **Most of the error is speech that produced no words.** Runs of three or more deleted words are
+  38.8% of the Balanced errors (1,467 of 3,784 words in 230 runs). Insertions are 2.5% (3.2% and 3.4%
+  with the other tie-breaks).
+- **Best's lead over Balanced is mostly two things.** In the first decode Best has 192 fewer errors:
+  98 fewer Tagalog-to-English substitutions and 108 fewer words in deleted runs (and 40 fewer particle
+  errors and 14 more invented words, which are inside the tie-break spread and mean nothing). The second
+  decode gives 95 and 50 (and 44 fewer particle errors, 43 more invented words). Under the other two
+  tie-breaks the first decode gives 91 and 89, and 127 and 127. Most of the
+  Tagalog-to-English words are short Tagalog function words that became "I", "hello" or "okay"
+  (123 of 159 reference words have four letters or fewer). The category counts the output word's
+  language and cannot tell a mishearing from a translation. TIER-RESULTS found no translation by hand.
+- **The `tl_to_en` gap between Balanced and Best repeats** (159 and 61, then 162 and 67). Fast does not
+  (165, then 92). A difference of less than about 70 words in one category is inside the spread
+  between two decodes of one tier.
+- **No evidence that code-switch points are worse.** 58.0% of 495 words at 274 heuristic switch
+  points are wrong, against 63.3% of the other words that carry a `tl` or `en` label (the fair
+  control) and 67.5% of all other words (a biased control, because a switch point needs two labelled
+  words). The gap is 5.3 points for Balanced and 1.9 for Best. A first draft of this entry compared
+  with all other words and reported a gap of 9.7 points; the independent review corrected it.
+- **Best's invented runs are the long ones.** Two of the 25 inserted runs in the six decodes lie outside
+  every reference utterance (18 and 102 words). Both are Best's.
+
+**What FLEURS shows (read Tagalog, heuristic).** Most errors are spelling: 403 of 561
+`other_substitution` words are near misses, 138 words are joins or splits of the same letters, names
+are 10.3% (mostly a near spelling of the name), and a dropped linker is the largest morphology
+subtype (32 words; 64 of the 97 morphology words have a root that is not on the word list). Language
+swaps are 1 word. The older `langscore` heuristic called 608 tokens in these references English (with
+its own tokenizer). This tool labels 38 of 9,613 `en` and 2,574 `unknown`.
+
+**A claim from the earlier work was wrong as worded.** BENCHMARKS.md said "no public conversational
+Taglish corpus of a useful size has a licence that allows this use". It ignored CEnTaCS (Ghent
+University with UP Diliman; 5.4 hours of story-retelling monologue; CC BY 4.0 on OSF since
+2026-08-25, CC BY-NC-SA 4.0 before that). Liva `en-tl` is also permissive, and its measured length is
+40 minutes (a research estimate of "about 1 hour" was wrong). **FilSwitch still states no licence**:
+no card key, no file, no statement in the preprint. The part that stands, from the checks listed in
+[TAGLISH-CORPORA.md](TAGLISH-CORPORA.md): no public set found is large, conversational,
+human-transcribed and clearly permissive, and none of the sets found is Filipino meeting speech.
+That file lists every dataset with its licence text, which fields were re-read directly, and what
+was not verified.
+
+**Things the work found about itself.**
+
+- **Adjacent runs align as substitutions.** A deleted run of 3 words directly beside an inserted run of
+  4 words is cheaper as 3 substitutions and 1 insertion, so no tool built on an edit distance can call
+  it "speech lost, then words invented". The fixture separates the two with four matching words.
+- **An affix analyser needs a list of words that are never roots.** It first read "Manila" as "ma" +
+  "nila" and "naman" as "na" + "man". Function words and question words now cannot be roots. Claude
+  read 48 morphology events and judged 44 plausible, 2 wrong (now fixed) and 2 doubtful. Those
+  readings were not saved as a file.
+- **The standard WER splits hyphens,** so "nag-meeting" written "nag meeting" is not an error and
+  "nagmeeting" is. The taxonomy keeps the hyphen as a group, so it can name mixed words without
+  changing the total. It counts a join or split as a `spelling_variant`.
+- **Tuning after looking at output.** Changes were made after the first runs and are listed in
+  TAXONOMY.md: a shorter homograph list, no names for ordinary words, function words that cannot be
+  roots, the `'t` rule (Tagalog "ba't" had been called English), the linker rule (an English word
+  cannot make a linker pair), and the removal of corpus-flavoured English entries.
+- **Tagged references do not go through `score.py`.** It reads a reference as plain text, so it counts
+  the tags as words. `score.py --taxonomy-out` now refuses such a manifest.
+
+**Not done.** No new corpus was downloaded or decoded (CEnTaCS is the first candidate). No Taglish
+meeting was measured. The word lists have no native-speaker review. The alignment limit
+(40 million cells) is a guard, not a measured bound. Reference times are per utterance, so the
+timestamp report is an upper bound. It has not been run on the Swift side (`transcribe --score`).
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a

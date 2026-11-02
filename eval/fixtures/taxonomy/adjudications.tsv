@@ -1,0 +1,2 @@
+# item<TAB>r<reference token index>|h<hypothesis token index><TAB>category<TAB>subtype<TAB>note. Indexes come from `taxonomy.py report --events-tsv`.
+plain-heuristic	r8	spelling_variant	adjudicated	same word, spelling only (decided by a person)
