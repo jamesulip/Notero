@@ -1,8 +1,9 @@
 # English word list used by eval/taxonomy_lex.py: the most common English words plus the
 # vocabulary of meetings, software and office work that turns up in Taglish. Written by Claude (the AI model that made this change)
-# from general knowledge; it is NOT copied or derived from any dictionary, corpus,
-# frequency list or system word list, so it carries no third-party licence. It is small on
-# purpose: an English word that is missing here is reported as "unknown", never guessed.
+# from general knowledge. To the writer's knowledge it was not copied from any dictionary, corpus,
+# frequency list or system word list (that cannot be proved); it is offered under the repository's
+# MIT licence. The writer had already read an error analysis of the Liva sample, so some entries
+# (game and streaming words) may reflect it. It is small on purpose: an English word that is missing here is reported as "unknown", never guessed.
 # Regular inflections (-s -es -ed -ing -ly -er) are handled by the code, so list base forms.
 # Format: lower-case words, any number per line, '#' starts a comment.
 
@@ -72,7 +73,7 @@ event events conference seminar workshop training session sessions class classes
 school university student students teacher teachers lunch dinner breakfast coffee tea water
 food rice phone phones laptop computer computers keyboard mouse headset headphones mic microphone
 camera speaker speakers network wifi internet connection signal battery charger device devices
-game games gaming discord stream streaming server lag ping mushroom mushrooms forest tree trees
+game games gaming stream streaming server tree trees
 money bank card cash load data load promo
 
 # --- adjectives and adverbs ---

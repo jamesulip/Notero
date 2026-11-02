@@ -49,10 +49,11 @@
 - **The first results are on the saved Liva and FLEURS tier decodes.**
   [BENCHMARKS.md](docs/BENCHMARKS.md#error-taxonomy-of-the-tier-decodes-2026-11-02) gives them
   with their limits. On the Liva sample, 38.8% of the Balanced errors are runs of three or more
-  deleted words. Best has 98 fewer Tagalog-to-English substitutions than Balanced in the first decode (93 in the second; heuristic).
+  deleted words. Best has 97 fewer Tagalog-to-English substitutions than Balanced in the first decode (94 in the second; heuristic).
+  The category counts move with the alignment tie-break (`--tie-break`): read no difference of less than about 40 words.
   No reference has word-level tags, so no result is `verified`.
 - **Synthetic fixtures with expected counts worked out from the text** are in `eval/fixtures/taxonomy/`. `tests/test_taxonomy.py`
-  adds 88 tests.
+  adds 107 tests.
 - **A research report corrects an earlier statement.** [docs/TAGLISH-CORPORA.md](docs/TAGLISH-CORPORA.md)
   lists the public Filipino and Taglish speech resources with their licences. FilSwitch still
   states no licence. The earlier claim that no public conversational Taglish corpus has a

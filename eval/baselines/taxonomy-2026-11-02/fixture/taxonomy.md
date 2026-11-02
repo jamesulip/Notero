@@ -10,7 +10,7 @@ Optional report on top of the headline WER (`eval/taxonomy.py`, schema `notero-t
 - items scored: 5; missing a hypothesis or reference: 0
 - reference formats: {'json': 1, 'tagged': 2, 'txt': 2}; hypothesis formats: {'json': 1, 'txt': 4}
 - reference items with word-level language tags: 3 (112 tokens); annotators: ['Claude, AI model (synthetic text)', 'Claude, AI model (synthetic text; tags written to test the tool, not as linguistic ground truth)']
-- word lists: `homographs.txt` 20, `lexicon-en.txt` 942, `lexicon-names.txt` 151, `lexicon-other.txt` 27, `lexicon-tl.txt` 990, `particles.txt` 21, `spelling-variants.txt` 28
+- word lists: `homographs.txt` 20, `lexicon-en.txt` 936, `lexicon-names.txt` 151, `lexicon-other.txt` 27, `lexicon-tl.txt` 990, `particles.txt` 21, `spelling-variants.txt` 28
 
 ## Headline
 
@@ -22,7 +22,7 @@ Optional report on top of the headline WER (`eval/taxonomy.py`, schema `notero-t
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `tl_to_en_substitution` | 2 | 2 | 4.2% | 0 | 2 | 0 |
 | `en_to_tl_substitution` | 1 | 1 | 2.1% | 0 | 1 | 0 |
-| `boundary_error` | 2 | 2 | 4.2% | 2 | 0 | 0 |
+| `boundary_error` | 2 | 2 | 4.2% | 1 | 1 | 0 |
 | `mixed_word_error` | 6 | 7 | 14.6% | 7 | 0 | 0 |
 | `morphology_error` | 7 | 7 | 14.6% | 0 | 7 | 0 |
 | `proper_noun_error` | 2 | 2 | 4.2% | 2 | 0 | 0 |
@@ -38,51 +38,51 @@ Definitions: `tl_to_en_substitution` a Tagalog reference word replaced by an Eng
 
 ### Subtypes
 
-| category | subtype | events | error words |
-| --- | --- | ---: | ---: |
-| `tl_to_en_substitution` | `heuristic-hypothesis-language` | 2 | 2 |
-| `en_to_tl_substitution` | `heuristic-hypothesis-language` | 1 | 1 |
-| `boundary_error` | `carry_over` | 1 | 1 |
-| `boundary_error` | `deleted` | 1 | 1 |
-| `mixed_word_error` | `affix_changed` | 1 | 1 |
-| `mixed_word_error` | `affix_dropped` | 2 | 2 |
-| `mixed_word_error` | `both_wrong` | 1 | 2 |
-| `mixed_word_error` | `deleted` | 1 | 1 |
-| `mixed_word_error` | `stem_changed` | 1 | 1 |
-| `morphology_error` | `affix_added` | 1 | 1 |
-| `morphology_error` | `affix_changed` | 1 | 1 |
-| `morphology_error` | `affix_missing` | 1 | 1 |
-| `morphology_error` | `ligature_added` | 1 | 1 |
-| `morphology_error` | `ligature_dropped` | 1 | 1 |
-| `morphology_error` | `reduplication_added` | 1 | 1 |
-| `morphology_error` | `reduplication_dropped` | 1 | 1 |
-| `proper_noun_error` | `deleted` | 1 | 1 |
-| `proper_noun_error` | `near_spelling` | 1 | 1 |
-| `hallucination` | `repetition_loop` | 1 | 4 |
-| `hallucination` | `run` | 2 | 8 |
-| `deleted_speech` | `run` | 1 | 3 |
-| `enclitic_particle` | `deleted` | 1 | 1 |
-| `enclitic_particle` | `inserted` | 1 | 1 |
-| `enclitic_particle` | `substituted` | 1 | 1 |
-| `spelling_variant` | `spacing` | 2 | 4 |
-| `spelling_variant` | `variant-table` | 1 | 1 |
-| `other_substitution` | `near_miss` | 1 | 1 |
-| `other_substitution` | `unrelated` | 1 | 1 |
-| `other_deletion` | `isolated` | 1 | 1 |
-| `other_insertion` | `isolated` | 1 | 1 |
+| category | subtype | events | error words | verified | heuristic | structural |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `tl_to_en_substitution` | `heuristic-hypothesis-language` | 2 | 2 | 0 | 2 | 0 |
+| `en_to_tl_substitution` | `heuristic-hypothesis-language` | 1 | 1 | 0 | 1 | 0 |
+| `boundary_error` | `carry_over` | 1 | 1 | 0 | 1 | 0 |
+| `boundary_error` | `deleted` | 1 | 1 | 1 | 0 | 0 |
+| `mixed_word_error` | `affix_changed` | 1 | 1 | 1 | 0 | 0 |
+| `mixed_word_error` | `affix_dropped` | 2 | 2 | 2 | 0 | 0 |
+| `mixed_word_error` | `both_wrong` | 1 | 2 | 2 | 0 | 0 |
+| `mixed_word_error` | `deleted` | 1 | 1 | 1 | 0 | 0 |
+| `mixed_word_error` | `stem_changed` | 1 | 1 | 1 | 0 | 0 |
+| `morphology_error` | `affix_added` | 1 | 1 | 0 | 1 | 0 |
+| `morphology_error` | `affix_changed` | 1 | 1 | 0 | 1 | 0 |
+| `morphology_error` | `affix_missing` | 1 | 1 | 0 | 1 | 0 |
+| `morphology_error` | `ligature_added` | 1 | 1 | 0 | 1 | 0 |
+| `morphology_error` | `ligature_dropped` | 1 | 1 | 0 | 1 | 0 |
+| `morphology_error` | `reduplication_added` | 1 | 1 | 0 | 1 | 0 |
+| `morphology_error` | `reduplication_dropped` | 1 | 1 | 0 | 1 | 0 |
+| `proper_noun_error` | `deleted` | 1 | 1 | 1 | 0 | 0 |
+| `proper_noun_error` | `near_spelling` | 1 | 1 | 1 | 0 | 0 |
+| `hallucination` | `repetition_loop` | 1 | 4 | 0 | 0 | 4 |
+| `hallucination` | `run` | 2 | 8 | 0 | 0 | 8 |
+| `deleted_speech` | `run` | 1 | 3 | 0 | 0 | 3 |
+| `enclitic_particle` | `deleted` | 1 | 1 | 0 | 1 | 0 |
+| `enclitic_particle` | `inserted` | 1 | 1 | 0 | 1 | 0 |
+| `enclitic_particle` | `substituted` | 1 | 1 | 0 | 1 | 0 |
+| `spelling_variant` | `spacing` | 2 | 4 | 0 | 4 | 0 |
+| `spelling_variant` | `variant-table` | 1 | 1 | 0 | 1 | 0 |
+| `other_substitution` | `near_miss` | 1 | 1 | 0 | 1 | 0 |
+| `other_substitution` | `unrelated` | 1 | 1 | 0 | 1 | 0 |
+| `other_deletion` | `isolated` | 1 | 1 | 0 | 0 | 1 |
+| `other_insertion` | `isolated` | 1 | 1 | 0 | 0 | 1 |
 
 ### Flags (overlays; a word can carry several)
 
 `at_boundary`: the reference word is next to a code-switch point (any category); `outside_reference_speech`: at least 80% of the timed inserted words fall outside every padded reference utterance; `time_unknown`: the reference has no times, or the hypothesis has no word times; `language_unresolved`: the reference or hypothesis word is ambiguous, unknown, other, a name or a mixed word.
 
-| category | flag | events | error words |
-| --- | --- | ---: | ---: |
-| `boundary_error` | `at_boundary` | 2 | 2 |
-| `hallucination` | `outside_reference_speech` | 2 | 8 |
-| `hallucination` | `time_unknown` | 1 | 4 |
-| `deleted_speech` | `at_boundary` | 1 | 3 |
-| `spelling_variant` | `at_boundary` | 1 | 2 |
-| `other_substitution` | `language_unresolved` | 1 | 1 |
+| category | flag | events | error words | verified | heuristic | structural |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `boundary_error` | `at_boundary` | 2 | 2 | 1 | 1 | 0 |
+| `hallucination` | `outside_reference_speech` | 2 | 8 | 0 | 0 | 8 |
+| `hallucination` | `time_unknown` | 1 | 4 | 0 | 0 | 4 |
+| `deleted_speech` | `at_boundary` | 1 | 3 | 0 | 0 | 3 |
+| `spelling_variant` | `at_boundary` | 1 | 2 | 0 | 2 | 0 |
+| `other_substitution` | `language_unresolved` | 1 | 1 | 0 | 1 | 0 |
 
 ## Language labels
 
@@ -145,7 +145,11 @@ Switch points (adjacent clearly-Tagalog and clearly-English words in one utteran
 | word position | words | errors (S+D) | rate |
 | --- | ---: | ---: | ---: |
 | at a verified switch point | 16 | 6 | 37.5% |
-| elsewhere | 153 | 27 | 17.6% |
+| elsewhere, labelled `tl` or `en` (verified) | 82 | 7 | 8.5% |
+| elsewhere, labelled `tl` or `en` (heuristic) | 55 | 8 | 14.5% |
+| elsewhere, any label | 153 | 27 | 17.6% |
+
+A switch point needs two words that are clearly Tagalog and English, so the fair comparison is with other words that carry such a label (the first rows). "Any label" includes `unknown`, `ambiguous`, `other` and `name` words, which are wrong more often.
 
 ## Timestamp misalignment (overlay on recognised words)
 
@@ -156,6 +160,7 @@ Items without it: 4 × reference has no utterance times.
 ## Caveats
 
 - 112 of 169 reference tokens carry a word-level tag supplied by the reference annotation (the tool does not check the annotator). The remaining tokens, and every hypothesis token, are heuristic. The two are kept apart in every table.
+- The category counts depend on which of several equal-cost alignments is chosen (this tool uses the same tie-break as eval/langscore.py). The total never changes, but a category of a few dozen words can move by tens of words under another tie-break: do not read a difference of less than about 40 words in one category.
 - Hypothesis words are never tagged by a person, so tl_to_en / en_to_tl substitutions rest on a heuristic label for the hypothesis word even when the reference word is verified.
 - The word lists are small and were written by an AI model (Claude) without a native speaker's review: `unknown` is the largest honest answer for words they do not cover, and the ambiguous/unknown shares are reported rather than hidden.
 - Categories partition the word errors by a first-match rule list; a word that fits two rules is counted under the earlier one. Which rule fired is a design choice, not a linguistic finding.
@@ -166,7 +171,7 @@ Items without it: 4 × reference has no utterance times.
 **boundary_error**
 
 - `switching` deleted [verified]: ref `schedule` → hyp ``
-- `switching` carry_over [verified]: ref `meeting` → hyp `usapan`
+- `switching` carry_over [heuristic]: ref `meeting` → hyp `usapan`
 
 **deleted_speech**
 

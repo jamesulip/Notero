@@ -226,7 +226,8 @@ def morphology_relation(ref: str, hyp: str, lex: Lexicon) -> tuple[str, dict] | 
 
     Subtypes: ligature_dropped / ligature_added (the linker -ng / -g), reduplication_dropped /
     reduplication_added, affix_missing (the hypothesis has fewer affixes), affix_added,
-    affix_changed. Never applied when both words are English words. The root must be a listed
+    affix_changed. Never applied when both words are English words, and a linker pair needs
+    both words to be off the English list. The root must be a listed
     Tagalog word; with an unlisted root only a root of 4+ letters between two non-English
     words is accepted, and the detail says `root_listed: False`."""
     if ref == hyp or (ref in lex.en and hyp in lex.en):
@@ -241,10 +242,12 @@ def morphology_relation(ref: str, hyp: str, lex: Lexicon) -> tuple[str, dict] | 
             return base + "g"
         return None
 
-    if linker(hyp) == ref:
-        return "ligature_dropped", {"base": hyp, "root_listed": hyp in lex.tl}
-    if linker(ref) == hyp:
-        return "ligature_added", {"base": ref, "root_listed": ref in lex.tl}
+    # The linker is Tagalog: a pair with an English word ("meeting"/"meetin") is not a linker pair.
+    if ref not in lex.en and hyp not in lex.en:
+        if linker(hyp) == ref:
+            return "ligature_dropped", {"base": hyp, "root_listed": hyp in lex.tl}
+        if linker(ref) == hyp:
+            return "ligature_added", {"base": ref, "root_listed": ref in lex.tl}
 
     best: tuple[int, Analysis, Analysis] | None = None
     ar, ah = analyses(ref), analyses(hyp)
@@ -321,7 +324,9 @@ def _classify_word(word: str, lex: Lexicon) -> Label:
         return Label("other", "heuristic", "alphanumeric")
     if "'" in word:
         head, _, tail = word.partition("'")
-        if tail in _CONTRACTION_TAILS and head:
+        # "n't" is English ("don't", "can't"); a bare "'t" after anything else is Tagalog or unknown
+        # ("ba't" = bakit, "hangga't" = hanggang): the head must end in "n" to count as English.
+        if tail in _CONTRACTION_TAILS and head and (tail != "t" or head.endswith("n")):
             return Label("en", "heuristic", "english-contraction")
         if tail == "y" and head and (_in_tl(head, lex) or head in lex.tl):
             return Label("tl", "heuristic", "tagalog-clitic-y")

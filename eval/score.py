@@ -89,6 +89,11 @@ def main() -> int:
         return 1
 
     entries = json.loads(args.manifest.read_text())
+    if args.taxonomy_out is not None and any(str(e.get("ref", "")).endswith((".tagged.txt", ".json")) for e in entries):
+        print("stop: this manifest has tagged-text or JSON references. This scorer reads a reference as plain "
+              "text and would count the tags and the JSON syntax as words. Use eval/taxonomy.py report with a "
+              "manifest of its own for those.", file=sys.stderr)
+        return 2
     # Reference paths are relative to the manifest, not to eval/, so an
     # alternate manifest elsewhere resolves its own refs.
     base = args.manifest.parent

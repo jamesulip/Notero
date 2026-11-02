@@ -17,8 +17,13 @@ committed.
 
 Two read-only research passes read dataset cards, README and licence files, API metadata (Hugging
 Face `api/datasets/<repo>`, the OSF API, GitHub and Zenodo APIs), paper pages and catalogue pages.
-They downloaded no dataset file. **Claude (the model that made this change) then re-read these
-primary fields itself**, with the same read-only requests:
+They downloaded no dataset file. One pass did stream the first 3 KB of one Liva transcript record to
+its terminal while it checked the file format, and saved nothing. It touched the Liva audio only
+with HTTP HEAD requests. (The Liva sample is already this project's CC BY 4.0 test data.)
+**Claude (the model that made this change) then re-read these primary fields itself**, with the
+same read-only requests. An independent review repeated each of them, and also read the FilSwitch
+card text and all 25 of its revisions, the OSF child components and the Liva WAV headers. It found
+them as stated.
 
 | Re-read directly on 2026-11-02 | Value |
 | --- | --- |
@@ -29,9 +34,13 @@ primary fields itself**, with the same read-only requests:
 | `google/fleurs` | sha `70bb2e84…` (2026-05-15), `gated: false`, `license: ["cc-by-4.0"]` |
 | `SilencioNetwork/tagalog-filipino-speech` | sha `9fd981c7…` (2026-09-22), `gated: false`, `license: cc-by-nc-4.0` |
 
-Everything else below is as the research passes reported it. Those reads went through a page
-summariser for most web pages, so a quotation is a short string it returned. Where a verdict
-depends on such a read, the entry says so.
+Everything else below is as the research passes reported it, **and is not re-read**: the CEnTaCS
+paper, the FilSwitch Croissant and datasets-server records and preprint, Common Voice, the Mozilla Data
+Collective pages, the LDC pages, MLC-SLM, WorldSpeech, and the licences of AMI and the other English
+meeting sets. Those reads went through a page summariser for most web pages, so a quotation is a
+short string it returned. Where a verdict depends on such a read, the entry says so.
+Every statement of the form "there is no X" means "none was found in the checks described here". The
+checks were catalogue and search reads, not an exhaustive survey.
 
 ## Summary
 
@@ -54,15 +63,17 @@ depends on such a read, the entry says so.
 
 ## A correction to an earlier claim
 
-`docs/BENCHMARKS.md`, `eval/TIER-RESULTS.md` and the changelog said: *"No public conversational
-Taglish corpus of a useful size has a licence that allows this use"*, and that FilSwitch has
-**no licence stated**.
+`docs/BENCHMARKS.md` said: *"Real meeting accuracy is unmeasured, because no public conversational
+Taglish corpus of a useful size has a licence that allows this use"*. `eval/TIER-RESULTS.md` said
+that no permissively licensed corpus of conversational Taglish *meetings* exists, and that FilSwitch
+has **no licence stated**.
 
-- **FilSwitch has no licence stated: confirmed**, today, in the Hugging Face card (its current text
-  and the revision history), the repository file list, the Croissant and datasets-server
-  metadata, and the preprint. An early revision of the card said the licence "will be provided
-  upon release", and a later one dropped that line without adding one. The camera-ready paper was
-  not available, so a licence there is not excluded.
+- **FilSwitch has no licence stated: confirmed.** Claude re-read the API record (no `license` key). The
+  independent review read the card text, all 25 revisions and the file list (no licence). The
+  Croissant and datasets-server records and the preprint were read only by the research pass. An
+  early revision of the card said the licence "will be provided upon release", and a later one
+  dropped that line without adding one. The camera-ready paper was not available, so a licence
+  there is not excluded.
 - **The broader claim was wrong as worded.** Licences that allow our use do exist for public Taglish
   speech: Liva's `en-tl` sample (conversational, CC BY 4.0) and **CEnTaCS (CC BY 4.0, public on
   OSF, no form or fee)**. CEnTaCS was not in the earlier note. Its OSF licence was changed from
@@ -75,9 +86,9 @@ Taglish corpus of a useful size has a licence that allows this use"*, and that F
 - **No public Filipino meeting speech was found, and none that is far-field.** "Real meeting
   accuracy is unmeasured" remains true.
 
-Better wording: *there is no large, human-transcribed, conversational Taglish corpus under a
-clearly permissive licence; two small permissive sets exist (CEnTaCS, 5.4 h of monologue; Liva
-`en-tl`, 40 minutes), and nothing public is a Filipino meeting.*
+Better wording: *none of the sources checked here is a large, human-transcribed, conversational
+Taglish corpus under a clearly permissive licence; two small permissive sets exist (CEnTaCS, 5.4 h of
+monologue; Liva `en-tl`, 40 minutes), and none of the sources checked is Filipino meeting speech.*
 
 ## Resources suitable for Notero
 
@@ -171,7 +182,7 @@ clearly permissive licence; two small permissive sets exist (CEnTaCS, 5.4 h of m
   disclosing the data, and permits "models, insights and outputs" that do not disclose it. That
   plausibly covers aggregate scores; a quoted transcript snippet might not. Price on the page:
   $9,450 plus a 5% fee. **The only conversational, human-transcribed Tagalog set over 5 hours
-  whose licence plausibly allows our use**, and the price puts it out of reach here.
+  found whose licence plausibly allows our use**, and the price puts it out of reach here.
 - **UP-DSP Philippine Languages Database** (Mozilla Data Collective, release 2026-03-19): "over 454
   hours", ten languages, news, medical, education, tourism and about 32 hours of elicited
   spontaneous speech (one source says speakers answer a question with free speech, and its
@@ -210,8 +221,8 @@ clearly permissive licence; two small permissive sets exist (CEnTaCS, 5.4 h of m
 
 ## Far-field and meeting speech
 
-There is **no public far-field Filipino speech with a licence that fits**, and none was found
-that is a meeting. For far-field acoustics only English proxies exist, and none was verified to
+**No public far-field Filipino speech with a licence that fits was found**, and none that is a
+meeting. For far-field acoustics only English proxies exist, and none was verified to
 include Filipino speakers:
 
 | Corpus | Style | Licence |

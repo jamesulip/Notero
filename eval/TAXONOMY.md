@@ -15,6 +15,7 @@ python3 -I eval/taxonomy.py report --manifest eval/fixtures/taxonomy/manifest.js
     --hyp-dir eval/fixtures/taxonomy/hyp --label fixture --out-dir /tmp/taxonomy
 
 python3 -I eval/taxonomy.py pair --reference R.tagged.txt --hypothesis H.txt      # one file against one
+python3 -I eval/taxonomy.py report ... --tie-break del-ins-sub    # how far the categories move (see below)
 python3 -I eval/taxonomy.py plan --plan /tmp/notero-data/tiers/liva-run1/plan.json --out-dir /tmp/tax
 python3 -I eval/taxonomy.py table /tmp/tax/balanced/taxonomy.json /tmp/tax/best/taxonomy.json
 
@@ -42,8 +43,12 @@ dropped, hyphens split, apostrophes inside a word kept). That has two consequenc
 - **The categories partition the errors.** Each substitution, deletion and insertion is in exactly
   one event, so the error words of all categories add up to S + D + I, and that equals the
   standard-policy error count. The report prints both and says if they differ.
-  (The split between S, D and I can differ from another aligner's through tie-breaking; the total
-  cannot.)
+  The total cannot change. **The split between S, D and I can, and so can some category counts:**
+  where two alignments have the same cost, the tie-break moves words between categories. The tool
+  uses `langscore.align`'s tie-break (the older tools' choice). `--tie-break del-ins-sub` and
+  `ins-del-sub` show the spread. On the Liva first decode it moved a category by up to about 50
+  words (Best `other_insertion` 52 to 106); read no difference of less than about 40 words in one
+  category. FLEURS moves by at most a few words.
 - **A hyphen is never an error.** "nag-meeting" is the tokens "nag" and "meeting", kept as one
   group so a mixed-language word can be recognised. "nagmeeting" and "nag meeting" are a
   join/split of the same letters, and are counted as `spelling_variant`.
@@ -57,7 +62,7 @@ A word error belongs to the first rule that matches, in this order. Counts are *
 | --- | --- | --- |
 | 1 | `spelling_variant` (spacing) | a window of up to 4 operations has the same letters on both sides ("standup" / "stand up") |
 | 2 | `deleted_speech` | it is in a run of 3 or more deleted reference words |
-| 3 | `hallucination` | it is in a run of 3 or more inserted words. Flags: `repetition_loop` (3 identical words in a row, or 6+ words with at most a third distinct), and with times `outside_reference_speech` or `inside_reference_speech`. `time_unknown` if the reference or hypothesis has no times |
+| 3 | `hallucination` | it is in a run of 3 or more inserted words. Flags: `repetition_loop` (3 identical words in a row, or 6+ words with at most 34% distinct), and with times `outside_reference_speech` (80% or more of the timed words fall outside every padded reference utterance) or `inside_reference_speech` (fewer). `time_unknown` if the reference or hypothesis has no times |
 | 4 | `mixed_word_error` | a Tagalog-affix + English-stem word (a hyphen group of two tokens, or one token) labelled `mix` is deleted or mangled. Subtypes: `affix_dropped`, `affix_changed`, `stem_dropped`, `stem_changed`, `both_wrong`, `deleted` |
 | 5 | `proper_noun_error` | a reference word labelled `name` is deleted or replaced (`near_spelling`, `different_word`, `deleted`) |
 | 6 | `spelling_variant` (table) | reference and hypothesis are in one group of `eval/taxonomy-data/spelling-variants.txt` ("jan" / "dyan") |
@@ -75,7 +80,11 @@ event also carries overlay flags that do not change its category (`at_boundary`,
 
 The same report lists **every** substitution by reference and hypothesis language (a matrix),
 the error rate by reference label, and the error rate at code-switch points against elsewhere.
-Those tables are not limited by the precedence above.
+Those tables are not limited by the precedence above. A switch point needs two words that are
+clearly Tagalog and English, so the fair comparison for a switch-point word is with other
+`tl`- or `en`-labelled words; the report prints that control and the rate for all other words
+(which includes the `unknown`, `ambiguous`, `other` and `name` words, and is biased against the
+control).
 
 `timestamp_misalignment` is **not a category**. It is an overlay on recognised words (equal or
 substituted): the hypothesis word's time is more than `timestampToleranceMs` (1,000 ms) outside
@@ -95,10 +104,15 @@ Every token has a language label, and every label has a **basis**:
 | `heuristic` | the tool guessed, from small word lists and rules (below) |
 | `structural` | no language judgement is needed: a run of missing or invented words, an isolated extra or missing word, a timestamp |
 
-`verified` and `heuristic` are **never added together**: every category row, every language table
-and every count in the report is split by basis. A hypothesis word is never tagged by a person, so
-a language-direction substitution (`tl_to_en`, `en_to_tl`) is `heuristic` even when its reference
-word is `verified`. A human decision about a whole event (adjudication) is `verified`.
+`verified` and `heuristic` are **never added together**: every category row, every subtype and flag
+row, every language table and the switch-point table is split by basis. A hypothesis word is never
+tagged by a person, so a language-direction substitution (`tl_to_en`, `en_to_tl`) is `heuristic`
+even when its reference word is `verified`. The same holds for a boundary event: only `deleted`
+can be `verified` (it needs the reference tags of the word and its neighbour); `carry_over`,
+`anticipation`, `same_language` and `unresolved` read the hypothesis word's language and are
+`heuristic`. `spelling_variant` is `heuristic`: it is decided by letter equality or a list, with no
+language judgement, but the list is a heuristic. A human decision about a whole event
+(adjudication) is `verified`.
 
 Labels: `tl`, `en`, `mix` (a Tagalog affix on an English stem), `name`, `other` (digits, fillers,
 laughter, acronyms), `ambiguous` and `unknown`. **`unknown` is the answer for any word the lists
@@ -108,7 +122,8 @@ not, and the report states how many tokens are `unknown` or `ambiguous`.
 The heuristic, in order (the report counts tokens by the rule that fired):
 
 1. digits, fillers (`lexicon-other.txt`), laughter: `other`;
-2. an apostrophe form: English contraction (`don't`) is `en`; Tagalog `'y` (`ako'y`) is `tl`;
+2. an apostrophe form: an English contraction (`don't`, `it's`, `I'm`; for `'t` the head must end
+   in "n") is `en`; Tagalog `'y` (`ako'y`) is `tl`; any other (`ba't`, `hangga't`) is `unknown`;
 3. a word on `homographs.txt`, or on both the Tagalog and the English list: `ambiguous`;
 4. a name on `lexicon-names.txt` that is on neither list: `name`;
 5. the Tagalog list, a Tagalog affix analysis (below) whose root is listed, or the linker
@@ -125,21 +140,30 @@ The heuristic, in order (the report counts tokens by the rule that fired):
 ### Word lists
 
 All lists are in `eval/taxonomy-data/`, **written by Claude (the AI model that made this change) from general
-knowledge, for this project**. None is copied or derived from a dictionary, a corpus, a frequency
-list or the system word list, so none carries a third-party licence: they are MIT, like the
-repository. They have not been reviewed by a native speaker, and they are small: about 990
-Tagalog, 940 English and 150 name entries at the time of writing. The report records each list's
+knowledge, for this project**. They were not copied from a dictionary, a corpus, a frequency list or
+the system word list. An independent check found no sign of a copy (for example, the English list has
+195 inflected forms that the system list does not contain), but a model writing from memory cannot
+prove that its sources are clean, so treat "no third-party licence" as an assertion and not a
+finding. They are offered under this repository's MIT licence. They have not been reviewed by a
+native speaker, and they are small: about 990 Tagalog, 940 English and 150 name entries at the time
+of writing. The report records each list's
 size and SHA-256. A list can be extended with `--english-wordlist FILE` (for example
 `/usr/share/dict/words`); its hash is recorded, and the change of labels is real, so say so when
 you quote the result.
 
-The first batch of lists was written before any corpus was scored. Three changes were made after
-looking at output on the evaluation corpora, and they are disclosed here because they are tuning:
-(1) the homograph list was shortened to words that are real words in both languages (it had
-obscure entries and "ay" and "ha"); (2) a capitalised word that is on either list is no longer
-called a name; (3) a set of function words ("ano", "man", pronouns, markers) can no longer be the
-root of an affix analysis ("ma" + "nila" had made "Manila" Tagalog, "na" + "man" had made "naman"
-an affixed word). No change added words because they were frequent in a corpus.
+**These lists are not blind to the Liva corpus.** The model that wrote them had already read the Liva
+error analysis of the tier comparison. The first English list had a line of game words (including
+"mushroom", "discord", "lag", "ping", "forest") that matched that corpus; they were removed before the
+committed reports were made, and the English list still has generic game and streaming words. The first
+batch of lists was written before any corpus was scored by this tool. These changes were made after
+looking at its output, and they are disclosed because they are tuning:
+(1) the homograph list was shortened to words that are real words in both languages; (2) a capitalised
+word that is on either list is no longer called a name; (3) a set of function words ("ano", "man",
+pronouns, markers) can no longer be the root of an affix analysis ("ma" + "nila" had made "Manila"
+Tagalog, "na" + "man" had made "naman" an affixed word); (4) `'t` is English only after "n" (Tagalog
+"ba't" had been called English); (5) a linker pair cannot contain an English word ("meeting" /
+"meetin"); (6) the corpus-flavoured English entries above. No change added words because they were
+frequent in a corpus.
 
 ### The affix analyser
 
@@ -176,10 +200,19 @@ The tagged text form:
 Sige, i-follow/mix up/mix ko yan.            (no header: the id is the line number; untagged words are heuristic)
 ```
 
-A tag is `/tl`, `/en`, `/mix`, `/ne` (a proper name) or `/oth`, written directly after a word and
-before its trailing punctuation. It tags every token of that whitespace-separated word, so
-`nag-meeting/mix` tags both pieces. Header keys: `id`, `spk`, `t` (start-end in ms), `overlap=1`.
-Times are optional and are only used for the hallucination-in-silence and timestamp reports.
+A tag is `/tl`, `/en`, `/mix`, `/ne` (a proper name) or `/oth` (any case), written directly after a
+word and before its trailing punctuation. It tags every token of that whitespace-separated word, so
+`nag-meeting/mix` tags both pieces. A word that ends in `/letters` that is not a tag (a typo such as
+`natin/xx`) stays in the text, and **the report counts it and says so**, because it changes the
+reference length. A leading `[...]` is a header only when every part is `key=value`; `[laughing]` is
+text. Header keys: `id`, `spk`, `t` (start-end in ms), `overlap=1`. Times are optional and are only
+used for the hallucination-in-silence and timestamp reports.
+
+**Keep tagged and JSON references out of any manifest that `score.py`, `compare_language.py` or
+`transcribe --score` reads.** `score.py` reads a reference as plain text and would count the tags as
+words; `score.py --taxonomy-out` refuses such a manifest. Use a manifest of its own with
+`taxonomy.py report`. When a hypothesis directory has both `<id>.json` and `<id>.txt`, the taxonomy
+reads the `.json`, and `score.py` reads the `.txt`. The tool needs Python 3.10 or newer.
 
 ### Adjudications
 
@@ -208,6 +241,9 @@ unchanged.
 
 - **It is not ground truth.** With no tagged reference, every language label is a heuristic from
   small lists. The report says so at the top when that is the case.
+- **The category counts depend on the tie-break** between equal-cost alignments (above).
+- **The capitalisation rule over-calls names** in references whose capitals are not all names. Read a
+  `proper_noun_error` count from a cased vendor transcript as an upper bound.
 - **It is not a benchmark of a corpus.** The Liva and FLEURS numbers in
   [BENCHMARKS.md](../docs/BENCHMARKS.md#error-taxonomy-of-the-tier-decodes-2026-11-02) are from one
   friend group and one read-speech set. They say how these decodes fail, not how Notero fails on
@@ -215,10 +251,11 @@ unchanged.
 - **Overlapped speech breaks the reading order.** A reference that interleaves speakers has no
   single word order, so part of its substitutions, deletions and insertions are alignment
   artefacts.
-- **Heuristic precision was spot-checked, not measured.** Claude read 24 morphology events
-  from each of the two corpora: 44 looked right, 2 were wrong ("ano" read as "nag" + "ano", "naman"
-  as "na" + "man"; both fixed by keeping function words from being roots) and 2 were doubtful.
-  The rest are unaudited, and no native speaker has reviewed the lists.
+- **Heuristic precision was not measured.** Claude read 24 morphology events from each of the two
+  corpora and judged 44 plausible, 2 wrong ("ano" read as "nag" + "ano", "naman" as "na" + "man";
+  both fixed by keeping function words from being roots) and 2 doubtful. Those readings were not
+  saved, so treat them as an anecdote. An independent review scanned the pairs the lists can make
+  and found no clear error in an 80-pair sample. No native speaker has reviewed the lists.
 - **No claim of representativeness.** None of the data used here is a meeting, and none is
   far-field.
 
@@ -232,5 +269,5 @@ unchanged.
 | `eval/taxonomy-config.v1.json` | settings |
 | `eval/taxonomy-data/` | the word lists (provenance above) |
 | `eval/fixtures/taxonomy/` | synthetic fixtures with expected counts worked out from the sentences |
-| `eval/baselines/taxonomy-2026-11-02/` | aggregate reports on the local Liva and FLEURS decodes (no corpus text) |
+| `eval/baselines/taxonomy-2026-11-02/` | aggregate reports on the local Liva and FLEURS decodes, with two other tie-breaks (no corpus text) |
 | `tests/test_taxonomy.py` | the tests |

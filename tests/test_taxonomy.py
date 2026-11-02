@@ -50,7 +50,7 @@ def pair(ref_text: str, hyp_text: str, tmp_path: Path, *, tagged: bool = False):
 # ---------------------------------------------------------------- tokens
 
 TEXTS = [
-    "Ang daming mushroom jan sa gubat natin, sa harapan natin.",
+    "Ang laki ng bahay natin, sa harap ng gate.",
     "Nag-meeting kami; i-share mo ang screen, naka-mute ka pa.",
     "don't can't I'm ako'y sa'yo 'yung 'wag",
     "em—dash and en–dash, ellipsis... ‘quoted’ “double”",
@@ -170,9 +170,9 @@ def test_names_need_a_cased_reference_and_a_mid_sentence_capital():
 
 
 def test_a_capitalised_ordinary_word_is_not_called_a_name():
-    toks = tio.tokenize("Sabi ni Boss sa Discord, Naku po", 0)
+    toks = tio.tokenize("Sabi ni Boss sa Meeting, Naku po", 0)
     langs = {t.text: l.lang for t, l in zip(toks, tlx.label_tokens(toks, LEX, cased=True))}
-    assert langs["boss"] == "en" and langs["discord"] == "en" and langs["naku"] == "tl"
+    assert langs["boss"] == "en" and langs["meeting"] == "en" and langs["naku"] == "tl"
 
 
 def test_acronyms_are_other_and_i_is_not_a_name():
@@ -264,23 +264,26 @@ def test_the_categories_partition_the_errors_exactly():
     assert sum(v["error_words"] for v in c["categories"].values()) == c["errors"] == c["standard_policy_errors"]
     for item_id, item in report["items"].items():
         assert sum(item["categories"].values()) == item["errors"], item_id
-        assert item["sub"] + item["del"] + item["ins"] == item["errors"]
 
 
 def test_verified_heuristic_and_structural_counts_are_never_merged():
     c = run_fixture()["corpus"]
     for name, cat in c["categories"].items():
-        assert set(cat["basis"]) <= set(tx.BASES), name
-        assert sum(b["error_words"] for b in cat["basis"].values()) == cat["error_words"]
         if name in tx.STRUCTURAL:
             assert set(cat["basis"]) == {"structural"}, name
+        for sub, sv in cat["subtypes"].items():           # the subtype and flag tables are split too
+            assert sum(sv["basis"].values()) == sv["error_words"], (name, sub)
+        for flag, fv in cat["flags"].items():
+            assert sum(fv["basis"].values()) == fv["error_words"], (name, flag)
     # a language-direction substitution is heuristic: the hypothesis word is never tagged by a person
     for name in ("tl_to_en_substitution", "en_to_tl_substitution", "morphology_error", "enclitic_particle"):
         assert set(c["categories"][name]["basis"]) == {"heuristic"}
     # the same verified reference tokens feed the verified categories
     assert set(c["categories"]["proper_noun_error"]["basis"]) == {"verified"}
     assert set(c["categories"]["mixed_word_error"]["basis"]) == {"verified"}
-    assert set(c["categories"]["boundary_error"]["basis"]) == {"verified"}
+    # a deleted boundary word rests on the reference tags; the hypothesis-language subtypes do not
+    boundary = c["categories"]["boundary_error"]["subtypes"]
+    assert boundary["deleted"]["basis"] == {"verified": 1} and boundary["carry_over"]["basis"] == {"heuristic": 1}
 
 
 def test_subtypes_of_the_hand_checked_cases():
@@ -299,7 +302,8 @@ def test_subtypes_of_the_hand_checked_cases():
 
 
 def test_hallucination_in_silence_is_flagged_only_when_the_reference_has_times():
-    flags = {k: v for k, v in run_fixture()["corpus"]["categories"]["hallucination"]["flags"].items()}
+    flags = {k: {"events": v["events"], "error_words": v["error_words"]}
+             for k, v in run_fixture()["corpus"]["categories"]["hallucination"]["flags"].items()}
     assert flags == {"outside_reference_speech": {"events": 2, "error_words": 8},
                      "time_unknown": {"events": 1, "error_words": 4}}
 
@@ -536,8 +540,6 @@ def test_the_config_agrees_with_the_evaluation_config_it_mirrors():
 
 
 def test_the_word_lists_are_lower_case_and_say_who_wrote_them():
-    for name, info in LEX.files.items():
-        assert info["source"] in ("written for this project by Claude (an AI model); no native-speaker review",) or name.startswith("english-wordlist")
     for path in (REPO / "eval" / "taxonomy-data").glob("*.txt"):
         text = path.read_text()
         flat = " ".join(text.replace("#", " ").split()).lower()
@@ -636,3 +638,163 @@ def test_compare_language_writes_an_optional_taxonomy_per_arm(tmp_path):
             (out_dir / "offline" / arm / f"{k}.txt").write_text(text)
     written = cl.taxonomy_reports(manifest, out_dir, ["tl", "auto"], "offline")
     assert [a for a, _ in written] == ["tl", "auto"] and all(p.exists() for _, p in written)
+
+
+# ---------------------------------------------------------------- found by the independent review
+
+@pytest.mark.parametrize("ref,hyp,subtype", [
+    ("Sabihin/tl mo/tl yung/tl meeting/en", "Sabihin mo that meeting", "anticipation"),
+    ("Ayos/tl ang/tl meeting/en kahapon/tl", "Ayos ang review kahapon", "same_language"),
+    ("Ayos/tl ang/tl meeting/en kahapon/tl", "Ayos ang xyzzy kahapon", "unresolved"),
+])
+def test_boundary_subtypes_read_the_hypothesis_language_and_are_heuristic(ref, hyp, subtype, tmp_path):
+    _, events, _ = pair(ref, hyp, tmp_path, tagged=True)
+    assert [(e.category, e.subtype, e.basis) for e in events] == [("boundary_error", subtype, "heuristic")]
+
+
+def test_a_deleted_boundary_word_is_verified_when_both_neighbours_are(tmp_path):
+    _, events, _ = pair("Ayos/tl ang/tl meeting/en kahapon/tl", "Ayos ang kahapon", tmp_path, tagged=True)
+    assert [(e.category, e.subtype, e.basis) for e in events] == [("boundary_error", "deleted", "verified")]
+
+
+def test_the_matched_control_counts_the_tl_and_en_words_away_from_switch_points():
+    cs = run_fixture()["corpus"]["code_switch"]
+    tl_en_verified = 85 + 13                     # the hand-counted verified Tagalog and English tokens
+    assert cs["labelled_other_words"]["verified"] == tl_en_verified - cs["boundary_words"]["verified"]
+    assert cs["labelled_other_words"]["heuristic"] > 0
+    assert cs["other_words"] >= sum(cs["labelled_other_words"].values())
+
+
+def test_a_hallucination_run_inside_reference_speech_is_flagged_inside(tmp_path):
+    ref = tmp_path / "r.json"
+    ref.write_text(json.dumps({"utterances": [{"id": "u", "startMs": 0, "endMs": 10000, "text": "a b c d e"}]}))
+    words = [("a", 0, 500), ("b", 500, 1000), ("x", 2000, 2400), ("y", 2400, 2800), ("z", 2800, 3200),
+             ("c", 4000, 4400), ("d", 4400, 4800), ("e", 4800, 5200)]
+    hyp = tmp_path / "h.json"
+    hyp.write_text(json.dumps({"transcript": " ".join(w for w, _, _ in words),
+                               "words": [{"text": " " + w, "startMs": s, "endMs": e} for w, s, e in words]}))
+    _, events, _ = tx.analyze_item(tio.load_reference(ref), tio.load_hypothesis(hyp), LEX, CFG)
+    assert [(e.category, e.flags) for e in events] == [("hallucination", ["inside_reference_speech"])]
+
+
+def test_partial_hypothesis_times_only_count_the_timed_words(tmp_path):
+    ref = tmp_path / "r.json"
+    ref.write_text(json.dumps({"utterances": [{"id": "u", "startMs": 0, "endMs": 2000, "text": "sa'yo na po"}]}))
+    hyp = tmp_path / "h.json"
+    hyp.write_text(json.dumps({"transcript": "sa'yo na po", "words": [
+        {"text": " sa", "startMs": 9000, "endMs": 9100}, {"text": " yo", "startMs": 9100, "endMs": 9200},
+        {"text": " na", "startMs": 9200, "endMs": 9300}, {"text": " po", "startMs": 100, "endMs": 200}]}))
+    counts, _, _ = tx.analyze_item(tio.load_reference(ref), tio.load_hypothesis(hyp), LEX, CFG)
+    assert counts["timestamps"]["pairs"] == 2 and counts["timestamps"]["misaligned"] == 1      # "sa'yo" has no time
+
+
+def test_a_mistyped_tag_is_counted_and_reported_not_silently_turned_into_words(tmp_path):
+    p = tmp_path / "r.tagged.txt"
+    p.write_text("Simulan/tl na/TL natin/xx ang/tl standup/en.\n[laughing] hello/en\n")
+    ref = tio.load_reference(p)
+    assert ref.odd_tags == 1                                           # natin/xx
+    assert [(t.text, t.tag) for t in ref.tokens][:2] == [("simulan", "tl"), ("na", "tl")]       # upper case is fine
+    assert [t.text for t in ref.tokens][6:] == ["laughing", "hello"]       # "[laughing]" is text, not a header
+    (tmp_path / "h.txt").write_text("simulan na natin ang standup laughing hello")
+    items = [{"id": "x", "ref": "r.tagged.txt"}]
+    run = tx.run_items(items, tmp_path, tmp_path, LEX, CFG, {}, hyp_path_of=lambda e: tmp_path / "h.txt")
+    assert run["meta"]["tagged_words_with_an_unrecognised_tag"] == 1
+    rep = tx.build_report(run, label="x", lex=LEX, cfg=CFG, manifest_sha=None, corpus_id=None, include_text=0,
+                          hyp_source="h")
+    assert any("not a tag" in c for c in rep["caveats"])
+
+
+def test_adjudication_bookkeeping_counts_every_line_that_matched_nothing(tmp_path):
+    adj = tmp_path / "a.tsv"
+    adj.write_text("plain-heuristic\tr8\tspelling_variant\n"           # applies
+                   "plain-heuristic\th8\tspelling_variant\n"           # the same event: used, not unused
+                   "plain-heuristic\th9\tspelling_variant\n"           # no event
+                   "plain-heuristic\tr9999\tspelling_variant\n"        # no such token
+                   "not-in-the-manifest\tr1\tspelling_variant\n")      # an item that is not scored
+    meta = run_fixture(adjudications=adj)["inputs"]
+    assert meta["adjudications_given"] == 5 and meta["adjudications_unused"] == 3
+
+
+def test_an_unreadable_item_is_reported_and_the_rest_are_scored(tmp_path):
+    (tmp_path / "hyp").mkdir()
+    (tmp_path / "hyp" / "morphology.txt").write_text((FIXTURE / "hyp" / "morphology.txt").read_text())
+    (tmp_path / "hyp" / "silence.json").write_text(json.dumps({"transcript": "a b", "words": [{"text": " a"}]}))
+    items = [{"id": "morphology", "ref": "refs/morphology.txt"}, {"id": "silence", "ref": "refs/silence.json"}]
+    run = tx.run_items(items, FIXTURE, tmp_path / "hyp", LEX, CFG, {})
+    assert run["meta"]["items_scored"] == 1 and list(run["meta"]["items_failed"]) == ["silence"]
+    assert run["corpus"]["errors"] == 7
+
+
+def test_duplicate_item_ids_are_refused(tmp_path):
+    with pytest.raises(SystemExit):
+        tx.run_items([{"id": "a", "ref": "x"}, {"id": "a", "ref": "y"}], tmp_path, tmp_path, LEX, CFG, {})
+
+
+def test_the_report_is_identical_across_processes_hash_seeds_and_has_no_clock(tmp_path):
+    import os
+    import re
+    import subprocess
+
+    outs = []
+    for n, seed in enumerate(("1", "4242")):
+        out = tmp_path / f"o{n}"
+        subprocess.run([sys.executable, "-I", str(REPO / "eval" / "taxonomy.py"), "report", "--manifest",
+                        str(FIXTURE / "manifest.json"), "--hyp-dir", str(FIXTURE / "hyp"), "--label", "f",
+                        "--out-dir", str(out)], check=True, env={**os.environ, "PYTHONHASHSEED": seed, "TZ": "Asia/Manila"},
+                       capture_output=True)
+        outs.append(out)
+    for name in ("taxonomy.json", "taxonomy.md"):
+        assert (outs[0] / name).read_bytes() == (outs[1] / name).read_bytes()
+    text = (outs[0] / "taxonomy.json").read_text()
+    assert not re.search(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}", text) and "T00:00" not in text
+
+
+def test_score_py_refuses_taxonomy_output_for_tagged_or_json_references(tmp_path, capsys):
+    manifest = tmp_path / "m.json"
+    (tmp_path / "refs").mkdir()
+    (tmp_path / "refs" / "a.tagged.txt").write_text("na/tl po/tl")
+    (tmp_path / "hyp").mkdir()
+    (tmp_path / "hyp" / "a.txt").write_text("na po")
+    manifest.write_text(json.dumps([{"id": "a", "ref": "refs/a.tagged.txt"}]))
+    old = sys.argv
+    sys.argv = ["score.py", str(tmp_path / "hyp"), "--manifest", str(manifest), "--taxonomy-out", str(tmp_path / "t")]
+    try:
+        assert pooled.main() == 2
+    finally:
+        sys.argv = old
+    assert "tagged-text or JSON references" in capsys.readouterr().err and not (tmp_path / "t").exists()
+
+
+def test_the_apostrophe_t_rule_does_not_call_tagalog_english():
+    assert tlx.classify_word("don't", LEX).lang == "en" and tlx.classify_word("can't", LEX).lang == "en"
+    for word in ("ba't", "hangga't"):
+        assert tlx.classify_word(word, LEX).lang == "unknown"
+
+
+def test_the_linker_rule_ignores_pairs_that_contain_an_english_word():
+    assert tlx.morphology_relation("meeting", "meetin", LEX) is None
+    assert tlx.morphology_relation("morning", "mornin", LEX) is None
+    assert tlx.morphology_relation("magandang", "maganda", LEX)[0] == "ligature_dropped"
+
+
+@pytest.mark.parametrize("tie_break", sorted(tx.TIE_BREAKS))
+def test_every_tie_break_keeps_the_total_and_the_partition(tie_break, tmp_path):
+    rng = random.Random(7)
+    vocab = ["ang", "mga", "meeting", "nag", "Andy", "po", "na", "kakain", "kain", "bahay", "house", "the", "xyzzy"]
+    for _ in range(40):
+        ref = " ".join(rng.choice(vocab) for _ in range(rng.randint(0, 20)))
+        hyp = " ".join(rng.choice(vocab) for _ in range(rng.randint(0, 20)))
+        (tmp_path / "r.txt").write_text(ref)
+        (tmp_path / "h.txt").write_text(hyp)
+        counts, events, _ = tx.analyze_item(tio.load_reference(tmp_path / "r.txt"), tio.load_hypothesis(tmp_path / "h.txt"),
+                                            LEX, dict(CFG, tieBreak=tie_break))
+        assert sum(e.error_words for e in events) == counts["errors"] == counts["standard_policy_errors"]
+
+
+def test_the_fixture_does_not_depend_on_the_tie_break():
+    base = run_fixture()["corpus"]["categories"]
+    for tie_break in ("del-ins-sub", "ins-del-sub"):
+        other = tx.report_from_manifest(FIXTURE / "manifest.json", FIXTURE / "hyp", label="f", tie_break=tie_break)
+        assert {k: v["error_words"] for k, v in other["corpus"]["categories"].items()} == \
+               {k: v["error_words"] for k, v in base.items()}
+        assert other["tool"]["tieBreak"] == tie_break

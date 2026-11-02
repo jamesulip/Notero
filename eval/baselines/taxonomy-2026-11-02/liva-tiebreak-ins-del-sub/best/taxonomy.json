@@ -1,0 +1,933 @@
+{
+  "categories": {
+    "boundary_error": "a word at a code-switch point (first word after a switch, or last before one) deleted or replaced",
+    "deleted_speech": "a run of deleted reference words (3 or more), speech that produced no output",
+    "en_to_tl_substitution": "an English reference word replaced by a Tagalog word or Tagalog spelling of it",
+    "enclitic_particle": "an enclitic or particle (po, naman, lang, na, pa, ...) deleted, inserted or replaced",
+    "hallucination": "a run of inserted words (3 or more), with no reference word behind it",
+    "mixed_word_error": "a Tagalog affix + English stem word (nag-meeting, i-share, naka-mute) deleted or mangled",
+    "morphology_error": "the right Tagalog root with the wrong or missing affix, reduplication or linker (-ng / -g)",
+    "other_deletion": "an isolated deleted word (fewer than 3 in a row) that no rule above explains",
+    "other_insertion": "an isolated inserted word (fewer than 3 in a row) that no rule above explains",
+    "other_substitution": "a substitution that no rule above explains",
+    "proper_noun_error": "a reference proper name deleted or replaced",
+    "spelling_variant": "the same word with another spelling or spacing; arguably not a recognition error",
+    "tl_to_en_substitution": "a Tagalog reference word replaced by an English word (by the output word's language, not the intent)"
+  },
+  "caveats": [
+    "No reference token carries a word-level language tag, so every language label in this report is a heuristic guess from small hand-written word lists. Read the heuristic counts as indications, not as measurements of the speech.",
+    "The category counts depend on which of several equal-cost alignments is chosen (this tool uses the same tie-break as eval/langscore.py). The total never changes, but a category of a few dozen words can move by tens of words under another tie-break: do not read a difference of less than about 40 words in one category.",
+    "Hypothesis words are never tagged by a person, so tl_to_en / en_to_tl substitutions rest on a heuristic label for the hypothesis word even when the reference word is verified.",
+    "The word lists are small and were written by an AI model (Claude) without a native speaker's review: `unknown` is the largest honest answer for words they do not cover, and the ambiguous/unknown shares are reported rather than hidden.",
+    "Categories partition the word errors by a first-match rule list; a word that fits two rules is counted under the earlier one. Which rule fired is a design choice, not a linguistic finding.",
+    "When a reference interleaves speakers (overlapping speech) the words do not follow one time order, so some substitutions, deletions and insertions are ordering artefacts, not recognition errors.",
+    "Utterance-level `language` fields (for example \"mixed\") are ignored as token labels: only word-level tags count."
+  ],
+  "config": {
+    "contextResolution": true,
+    "deletionRunMinWords": 3,
+    "fingerprintSha256": "c8c8b62b3ae438b1f19d1b5ca21e051465077eea730ac5a9c0208eecbde49896",
+    "hallucinationMinWords": 3,
+    "id": "notero-taxonomy-v1",
+    "maxAlignmentCells": 40000000,
+    "nearMissSimilarity": 0.6,
+    "nonSpeechPaddingMs": 200,
+    "outsideSpeechFraction": 0.8,
+    "repetitionLoop": {
+      "maxDistinctShare": 0.34,
+      "minIdenticalRun": 3,
+      "minLength": 6
+    },
+    "schemaVersion": 1,
+    "tieBreak": "ins-del-sub",
+    "timestampBucketsMs": [
+      0,
+      1000,
+      2000,
+      5000
+    ],
+    "timestampToleranceMs": 1000
+  },
+  "corpus": {
+    "adjudication_keys_used": 0,
+    "adjudications_applied": 0,
+    "by_reference_label": {
+      "heuristic|ambiguous": {
+        "deletions": 64,
+        "substitutions": 49,
+        "words": 188
+      },
+      "heuristic|en": {
+        "deletions": 232,
+        "substitutions": 156,
+        "words": 642
+      },
+      "heuristic|mix": {
+        "deletions": 15,
+        "substitutions": 15,
+        "words": 50
+      },
+      "heuristic|name": {
+        "deletions": 30,
+        "substitutions": 28,
+        "words": 95
+      },
+      "heuristic|other": {
+        "deletions": 114,
+        "substitutions": 103,
+        "words": 299
+      },
+      "heuristic|tl": {
+        "deletions": 879,
+        "substitutions": 779,
+        "words": 2964
+      },
+      "heuristic|unknown": {
+        "deletions": 462,
+        "substitutions": 493,
+        "words": 1299
+      }
+    },
+    "categories": {
+      "boundary_error": {
+        "basis": {
+          "heuristic": {
+            "error_words": 136,
+            "events": 136
+          }
+        },
+        "error_words": 136,
+        "events": 136,
+        "flags": {
+          "at_boundary": {
+            "basis": {
+              "heuristic": 136
+            },
+            "error_words": 136,
+            "events": 136
+          },
+          "short_reference_word": {
+            "basis": {
+              "heuristic": 98
+            },
+            "error_words": 98,
+            "events": 98
+          }
+        },
+        "subtypes": {
+          "anticipation": {
+            "basis": {
+              "heuristic": 13
+            },
+            "error_words": 13,
+            "events": 13
+          },
+          "carry_over": {
+            "basis": {
+              "heuristic": 18
+            },
+            "error_words": 18,
+            "events": 18
+          },
+          "deleted": {
+            "basis": {
+              "heuristic": 28
+            },
+            "error_words": 28,
+            "events": 28
+          },
+          "same_language": {
+            "basis": {
+              "heuristic": 28
+            },
+            "error_words": 28,
+            "events": 28
+          },
+          "unresolved": {
+            "basis": {
+              "heuristic": 49
+            },
+            "error_words": 49,
+            "events": 49
+          }
+        }
+      },
+      "deleted_speech": {
+        "basis": {
+          "structural": {
+            "error_words": 1403,
+            "events": 221
+          }
+        },
+        "error_words": 1403,
+        "events": 221,
+        "flags": {
+          "at_boundary": {
+            "basis": {
+              "structural": 404
+            },
+            "error_words": 404,
+            "events": 52
+          }
+        },
+        "subtypes": {
+          "run": {
+            "basis": {
+              "structural": 1403
+            },
+            "error_words": 1403,
+            "events": 221
+          }
+        }
+      },
+      "en_to_tl_substitution": {
+        "basis": {
+          "heuristic": {
+            "error_words": 23,
+            "events": 23
+          }
+        },
+        "error_words": 23,
+        "events": 23,
+        "flags": {
+          "short_reference_word": {
+            "basis": {
+              "heuristic": 20
+            },
+            "error_words": 20,
+            "events": 20
+          }
+        },
+        "subtypes": {
+          "heuristic-hypothesis-language": {
+            "basis": {
+              "heuristic": 23
+            },
+            "error_words": 23,
+            "events": 23
+          }
+        }
+      },
+      "enclitic_particle": {
+        "basis": {
+          "heuristic": {
+            "error_words": 151,
+            "events": 151
+          }
+        },
+        "error_words": 151,
+        "events": 151,
+        "flags": {
+          "at_boundary": {
+            "basis": {
+              "heuristic": 11
+            },
+            "error_words": 11,
+            "events": 11
+          }
+        },
+        "subtypes": {
+          "deleted": {
+            "basis": {
+              "heuristic": 32
+            },
+            "error_words": 32,
+            "events": 32
+          },
+          "inserted": {
+            "basis": {
+              "heuristic": 10
+            },
+            "error_words": 10,
+            "events": 10
+          },
+          "substituted": {
+            "basis": {
+              "heuristic": 109
+            },
+            "error_words": 109,
+            "events": 109
+          }
+        }
+      },
+      "hallucination": {
+        "basis": {
+          "structural": {
+            "error_words": 54,
+            "events": 4
+          }
+        },
+        "error_words": 54,
+        "events": 4,
+        "flags": {
+          "inside_reference_speech": {
+            "basis": {
+              "structural": 36
+            },
+            "error_words": 36,
+            "events": 3
+          },
+          "outside_reference_speech": {
+            "basis": {
+              "structural": 18
+            },
+            "error_words": 18,
+            "events": 1
+          }
+        },
+        "subtypes": {
+          "repetition_loop": {
+            "basis": {
+              "structural": 51
+            },
+            "error_words": 51,
+            "events": 3
+          },
+          "run": {
+            "basis": {
+              "structural": 3
+            },
+            "error_words": 3,
+            "events": 1
+          }
+        }
+      },
+      "mixed_word_error": {
+        "basis": {
+          "heuristic": {
+            "error_words": 19,
+            "events": 13
+          }
+        },
+        "error_words": 19,
+        "events": 13,
+        "flags": {},
+        "subtypes": {
+          "affix_changed": {
+            "basis": {
+              "heuristic": 3
+            },
+            "error_words": 3,
+            "events": 3
+          },
+          "affix_dropped": {
+            "basis": {
+              "heuristic": 2
+            },
+            "error_words": 2,
+            "events": 2
+          },
+          "both_wrong": {
+            "basis": {
+              "heuristic": 12
+            },
+            "error_words": 12,
+            "events": 6
+          },
+          "stem_changed": {
+            "basis": {
+              "heuristic": 2
+            },
+            "error_words": 2,
+            "events": 2
+          }
+        }
+      },
+      "morphology_error": {
+        "basis": {
+          "heuristic": {
+            "error_words": 28,
+            "events": 28
+          }
+        },
+        "error_words": 28,
+        "events": 28,
+        "flags": {
+          "root_unlisted": {
+            "basis": {
+              "heuristic": 12
+            },
+            "error_words": 12,
+            "events": 12
+          }
+        },
+        "subtypes": {
+          "affix_added": {
+            "basis": {
+              "heuristic": 5
+            },
+            "error_words": 5,
+            "events": 5
+          },
+          "affix_changed": {
+            "basis": {
+              "heuristic": 6
+            },
+            "error_words": 6,
+            "events": 6
+          },
+          "affix_missing": {
+            "basis": {
+              "heuristic": 2
+            },
+            "error_words": 2,
+            "events": 2
+          },
+          "ligature_added": {
+            "basis": {
+              "heuristic": 6
+            },
+            "error_words": 6,
+            "events": 6
+          },
+          "ligature_dropped": {
+            "basis": {
+              "heuristic": 6
+            },
+            "error_words": 6,
+            "events": 6
+          },
+          "reduplication_added": {
+            "basis": {
+              "heuristic": 2
+            },
+            "error_words": 2,
+            "events": 2
+          },
+          "reduplication_dropped": {
+            "basis": {
+              "heuristic": 1
+            },
+            "error_words": 1,
+            "events": 1
+          }
+        }
+      },
+      "other_deletion": {
+        "basis": {
+          "structural": {
+            "error_words": 305,
+            "events": 305
+          }
+        },
+        "error_words": 305,
+        "events": 305,
+        "flags": {},
+        "subtypes": {
+          "isolated": {
+            "basis": {
+              "structural": 305
+            },
+            "error_words": 305,
+            "events": 305
+          }
+        }
+      },
+      "other_insertion": {
+        "basis": {
+          "structural": {
+            "error_words": 106,
+            "events": 106
+          }
+        },
+        "error_words": 106,
+        "events": 106,
+        "flags": {},
+        "subtypes": {
+          "isolated": {
+            "basis": {
+              "structural": 106
+            },
+            "error_words": 106,
+            "events": 106
+          }
+        }
+      },
+      "other_substitution": {
+        "basis": {
+          "heuristic": {
+            "error_words": 1215,
+            "events": 1215
+          }
+        },
+        "error_words": 1215,
+        "events": 1215,
+        "flags": {
+          "language_unresolved": {
+            "basis": {
+              "heuristic": 914
+            },
+            "error_words": 914,
+            "events": 914
+          },
+          "short_reference_word": {
+            "basis": {
+              "heuristic": 789
+            },
+            "error_words": 789,
+            "events": 789
+          }
+        },
+        "subtypes": {
+          "near_miss": {
+            "basis": {
+              "heuristic": 178
+            },
+            "error_words": 178,
+            "events": 178
+          },
+          "unrelated": {
+            "basis": {
+              "heuristic": 1037
+            },
+            "error_words": 1037,
+            "events": 1037
+          }
+        }
+      },
+      "proper_noun_error": {
+        "basis": {
+          "heuristic": {
+            "error_words": 33,
+            "events": 33
+          }
+        },
+        "error_words": 33,
+        "events": 33,
+        "flags": {},
+        "subtypes": {
+          "deleted": {
+            "basis": {
+              "heuristic": 5
+            },
+            "error_words": 5,
+            "events": 5
+          },
+          "different_word": {
+            "basis": {
+              "heuristic": 16
+            },
+            "error_words": 16,
+            "events": 16
+          },
+          "near_spelling": {
+            "basis": {
+              "heuristic": 12
+            },
+            "error_words": 12,
+            "events": 12
+          }
+        }
+      },
+      "spelling_variant": {
+        "basis": {
+          "heuristic": {
+            "error_words": 61,
+            "events": 38
+          }
+        },
+        "error_words": 61,
+        "events": 38,
+        "flags": {
+          "at_boundary": {
+            "basis": {
+              "heuristic": 13
+            },
+            "error_words": 13,
+            "events": 7
+          }
+        },
+        "subtypes": {
+          "spacing": {
+            "basis": {
+              "heuristic": 43
+            },
+            "error_words": 43,
+            "events": 20
+          },
+          "variant-table": {
+            "basis": {
+              "heuristic": 18
+            },
+            "error_words": 18,
+            "events": 18
+          }
+        }
+      },
+      "tl_to_en_substitution": {
+        "basis": {
+          "heuristic": {
+            "error_words": 58,
+            "events": 58
+          }
+        },
+        "error_words": 58,
+        "events": 58,
+        "flags": {
+          "short_reference_word": {
+            "basis": {
+              "heuristic": 45
+            },
+            "error_words": 45,
+            "events": 45
+          }
+        },
+        "subtypes": {
+          "heuristic-hypothesis-language": {
+            "basis": {
+              "heuristic": 58
+            },
+            "error_words": 58,
+            "events": 58
+          }
+        }
+      }
+    },
+    "code_switch": {
+      "boundary_errors": {
+        "heuristic": 276
+      },
+      "boundary_words": {
+        "heuristic": 498
+      },
+      "labelled_other_errors": {
+        "heuristic": 1770
+      },
+      "labelled_other_words": {
+        "heuristic": 3108
+      },
+      "other_errors": 3143,
+      "other_words": 5039,
+      "switch_points": {
+        "heuristic": 276
+      }
+    },
+    "del": 1796,
+    "errors": 3592,
+    "hyp_words": 3914,
+    "ins": 173,
+    "inserted_by_hypothesis_language": {
+      "ambiguous": 1,
+      "en": 27,
+      "mix": 1,
+      "other": 12,
+      "tl": 92,
+      "unknown": 40
+    },
+    "items": 4,
+    "labels": {
+      "hypothesis": {
+        "heuristic": {
+          "ambiguous": 101,
+          "en": 490,
+          "mix": 28,
+          "other": 146,
+          "tl": 2097,
+          "unknown": 1052
+        }
+      },
+      "hypothesis_why": {
+        "ambiguous": {
+          "homograph-list": 101
+        },
+        "en": {
+          "context": 5,
+          "en-inflection": 43,
+          "english-contraction": 5,
+          "lexicon-en": 437
+        },
+        "mix": {
+          "affix+english-stem": 28
+        },
+        "other": {
+          "alphanumeric": 7,
+          "digits": 39,
+          "filler-or-laughter": 100
+        },
+        "tl": {
+          "affix+tagalog-stem": 4,
+          "context": 46,
+          "lexicon-tl": 1945,
+          "tl-affix-analysis": 54,
+          "tl-ligature": 48
+        },
+        "unknown": {
+          "affix+unlisted-stem": 62,
+          "apostrophe-no-match": 13,
+          "no-match": 977
+        }
+      },
+      "reference": {
+        "heuristic": {
+          "ambiguous": 188,
+          "en": 642,
+          "mix": 50,
+          "name": 95,
+          "other": 299,
+          "tl": 2964,
+          "unknown": 1299
+        }
+      },
+      "reference_why": {
+        "ambiguous": {
+          "homograph-list": 188
+        },
+        "en": {
+          "context": 5,
+          "en-inflection": 48,
+          "english-contraction": 14,
+          "lexicon-en": 575
+        },
+        "mix": {
+          "affix+english-stem": 50
+        },
+        "name": {
+          "capitalised-mid-sentence": 94,
+          "names-lexicon": 1
+        },
+        "other": {
+          "acronym": 23,
+          "alphanumeric": 6,
+          "digits": 37,
+          "filler-or-laughter": 233
+        },
+        "tl": {
+          "affix+tagalog-stem": 30,
+          "context": 44,
+          "lexicon-tl": 2747,
+          "tagalog-clitic-y": 5,
+          "tl-affix-analysis": 71,
+          "tl-ligature": 67
+        },
+        "unknown": {
+          "affix+unlisted-stem": 150,
+          "apostrophe-no-match": 20,
+          "no-match": 1129
+        }
+      }
+    },
+    "ref_words": 5537,
+    "standard_policy_errors": 3592,
+    "sub": 1623,
+    "substitution_matrix": {
+      "heuristic": {
+        "ambiguous": {
+          "ambiguous": 1,
+          "en": 7,
+          "mix": 1,
+          "other": 3,
+          "tl": 21,
+          "unknown": 16
+        },
+        "en": {
+          "ambiguous": 3,
+          "en": 38,
+          "other": 8,
+          "tl": 45,
+          "unknown": 62
+        },
+        "mix": {
+          "en": 4,
+          "mix": 2,
+          "tl": 3,
+          "unknown": 6
+        },
+        "name": {
+          "en": 3,
+          "other": 1,
+          "tl": 5,
+          "unknown": 19
+        },
+        "other": {
+          "en": 9,
+          "other": 8,
+          "tl": 50,
+          "unknown": 36
+        },
+        "tl": {
+          "ambiguous": 22,
+          "en": 78,
+          "mix": 4,
+          "other": 27,
+          "tl": 384,
+          "unknown": 264
+        },
+        "unknown": {
+          "ambiguous": 10,
+          "en": 66,
+          "mix": 4,
+          "other": 17,
+          "tl": 177,
+          "unknown": 219
+        }
+      }
+    },
+    "timestamps": {
+      "items_checked": 4,
+      "items_unavailable": {},
+      "max_offset_ms": 33245,
+      "misaligned": 433,
+      "offset_buckets": {
+        "<=1000ms": 400,
+        "<=2000ms": 132,
+        "<=5000ms": 163,
+        ">5000ms": 138,
+        "inside": 2899
+      },
+      "pairs": 3732
+    }
+  },
+  "inputs": {
+    "adjudications_given": 0,
+    "adjudications_unused": 0,
+    "annotators": [],
+    "corpusId": "liva-en-tl-overlapping-51b5d0b",
+    "hypotheses": "best",
+    "hypothesis_formats": {
+      "json": 4
+    },
+    "items_failed": {},
+    "items_missing_hypothesis_or_reference": [],
+    "items_scored": 4,
+    "items_with_word_tags": 0,
+    "language_spans_that_did_not_match_text": 0,
+    "manifestSha256": "9c088855bbb9b42bff45c251c5e0d027fff4806228acdd0681a81b8d57e0621d",
+    "reference_formats": {
+      "json": 4
+    },
+    "tagged_words_with_an_unrecognised_tag": 0,
+    "word_tagged_reference_tokens": 0
+  },
+  "items": {
+    "liva-en-tl-C_001_007": {
+      "categories": {
+        "boundary_error": 41,
+        "deleted_speech": 101,
+        "en_to_tl_substitution": 3,
+        "enclitic_particle": 41,
+        "hallucination": 36,
+        "mixed_word_error": 7,
+        "morphology_error": 10,
+        "other_deletion": 61,
+        "other_insertion": 27,
+        "other_substitution": 250,
+        "proper_noun_error": 5,
+        "spelling_variant": 10,
+        "tl_to_en_substitution": 41
+      },
+      "del": 173,
+      "errors": 633,
+      "ins": 66,
+      "ref_words": 1017,
+      "sub": 394
+    },
+    "liva-en-tl-C_001_009": {
+      "categories": {
+        "boundary_error": 33,
+        "deleted_speech": 335,
+        "en_to_tl_substitution": 5,
+        "enclitic_particle": 32,
+        "mixed_word_error": 4,
+        "morphology_error": 4,
+        "other_deletion": 94,
+        "other_insertion": 36,
+        "other_substitution": 290,
+        "proper_noun_error": 7,
+        "spelling_variant": 26,
+        "tl_to_en_substitution": 12
+      },
+      "del": 459,
+      "errors": 878,
+      "ins": 38,
+      "ref_words": 1474,
+      "sub": 381
+    },
+    "liva-en-tl-C_001_015": {
+      "categories": {
+        "boundary_error": 24,
+        "deleted_speech": 432,
+        "en_to_tl_substitution": 9,
+        "enclitic_particle": 33,
+        "morphology_error": 6,
+        "other_deletion": 66,
+        "other_insertion": 28,
+        "other_substitution": 365,
+        "proper_noun_error": 12,
+        "spelling_variant": 8,
+        "tl_to_en_substitution": 3
+      },
+      "del": 514,
+      "errors": 986,
+      "ins": 33,
+      "ref_words": 1405,
+      "sub": 439
+    },
+    "liva-en-tl-C_001_016": {
+      "categories": {
+        "boundary_error": 38,
+        "deleted_speech": 535,
+        "en_to_tl_substitution": 6,
+        "enclitic_particle": 45,
+        "hallucination": 18,
+        "mixed_word_error": 8,
+        "morphology_error": 8,
+        "other_deletion": 84,
+        "other_insertion": 15,
+        "other_substitution": 310,
+        "proper_noun_error": 9,
+        "spelling_variant": 17,
+        "tl_to_en_substitution": 2
+      },
+      "del": 650,
+      "errors": 1095,
+      "ins": 36,
+      "ref_words": 1641,
+      "sub": 409
+    }
+  },
+  "label": "best",
+  "lexicons": {
+    "homographs.txt": {
+      "entries": 20,
+      "sha256": "02d81f142166f744e3817360af928fc437a61c1666285af37dd6dd7667ddc5bd",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    },
+    "lexicon-en.txt": {
+      "entries": 936,
+      "sha256": "94d7a2d550d7cdb87116745a40594c6dbe22bcdc31b8f51a722a114b8f059eba",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    },
+    "lexicon-names.txt": {
+      "entries": 151,
+      "sha256": "ad2db326e05585a0172376483a162b25c46304218c25219f05d1de04fad1a4cf",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    },
+    "lexicon-other.txt": {
+      "entries": 27,
+      "sha256": "c0d26a392188743216a18196a6b464836d89120060fc1ce39a6ca33faff3472c",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    },
+    "lexicon-tl.txt": {
+      "entries": 990,
+      "sha256": "41be2dd9202ef91fad86a39eea847ccc08dcbbb117952ecf3ba9fa5d6d8881df",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    },
+    "particles.txt": {
+      "entries": 21,
+      "sha256": "78a6ec018a5c49693c099eb84e276f5262b4caebe2441336fe346d881287399b",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    },
+    "spelling-variants.txt": {
+      "entries": 28,
+      "sha256": "858d299ae209ef081cbbec835b4e2c9c553724bf19df91fcecd649cb17dd082d",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    }
+  },
+  "schema": "notero-taxonomy-report/1",
+  "tool": {
+    "name": "eval/taxonomy.py",
+    "tieBreak": "ins-del-sub",
+    "tokenPolicy": "notero-standard (score.normalize)",
+    "version": 1
+  }
+}

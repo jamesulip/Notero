@@ -52,7 +52,7 @@ TAG_LANG = {"tl": "tl", "en": "en", "mix": "mix", "ne": "name", "oth": "other"}
 SPAN_LANG = {"tl": "tl", "fil": "tl", "tagalog": "tl", "filipino": "tl", "en": "en", "english": "en",
              "mix": "mix", "mixed": "mix", "ne": "name", "name": "name", "oth": "other", "other": "other"}
 
-_TAG_RE = re.compile(r"^(?P<word>.+?)/(?P<tag>tl|en|mix|ne|oth)(?P<tail>[^\w/]*)$")
+_TAG_RE = re.compile(r"^(?P<word>.+?)/(?P<tag>[A-Za-z]+)(?P<tail>[^\w/]*)$")
 _HEADER_RE = re.compile(r"^\[(?P<attrs>[^\]]*)\]\s*(?P<text>.*)$")
 _SENTENCE_END = re.compile(r"[.?!…][\"'”’)\]]*$")
 _HYPHEN_IN_WORD = re.compile(r"(?<=\w)-(?=\w)")
@@ -96,6 +96,7 @@ class Reference:
     tokens: list[Token]
     annotation: dict = field(default_factory=dict)
     skipped_spans: int = 0           # utterances whose languageSpans did not match their text
+    odd_tags: int = 0                # tagged-text words that end in "/letters" that is not a tag
     cased: bool = False              # the text has both upper- and lower-case letters
 
     @property
@@ -167,26 +168,30 @@ def is_cased(text: str) -> bool:
 
 # ------------------------------------------------------------------ references
 
-def parse_tagged_line(line: str) -> tuple[dict, str, list[str | None]]:
-    """(header attributes, text without tags, one tag per whitespace chunk)."""
+def parse_tagged_line(line: str) -> tuple[dict, str, list[str | None], int]:
+    """(header attributes, text without tags, one tag per whitespace chunk, odd-tag count).
+
+    A leading `[...]` is a header only when every part of it is `key=value`; "[laughing]" is
+    text. A tag is matched without regard to case. A word ending in `/letters` that is not a
+    tag ("and/or") stays in the text and is counted, so a mistyped tag is reported."""
     attrs: dict[str, str] = {}
     m = _HEADER_RE.match(line)
-    if m:
+    if m and m.group("attrs").split() and all("=" in p for p in m.group("attrs").split()):
         for part in m.group("attrs").split():
-            if "=" in part:
-                k, v = part.split("=", 1)
-                attrs[k] = v
+            k, v = part.split("=", 1)
+            attrs[k] = v
         line = m.group("text")
-    words, tags = [], []
+    words, tags, odd = [], [], 0
     for chunk in line.split():
         tm = _TAG_RE.match(chunk)
-        if tm:
+        if tm and tm.group("tag").lower() in TAG_LANG:
             words.append(tm.group("word") + tm.group("tail"))
-            tags.append(tm.group("tag"))
+            tags.append(tm.group("tag").lower())
         else:
+            odd += 1 if tm else 0
             words.append(chunk)
             tags.append(None)
-    return attrs, " ".join(words), tags
+    return attrs, " ".join(words), tags, odd
 
 
 def _times(spec: str | None) -> tuple[int | None, int | None]:
@@ -226,7 +231,7 @@ def _load_plain_reference(path: Path, text: str) -> Reference:
 def _load_tagged_reference(path: Path, text: str) -> Reference:
     annotation: dict[str, str] = {}
     utts, tokens = [], []
-    n = 0
+    n = odd_total = 0
     for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -236,13 +241,14 @@ def _load_tagged_reference(path: Path, text: str) -> Reference:
             annotation[key.strip()] = value.strip()
             continue
         n += 1
-        attrs, clean, tags = parse_tagged_line(line)
+        attrs, clean, tags, odd = parse_tagged_line(line)
+        odd_total += odd
         start, end = _times(attrs.get("t"))
         utts.append(Utterance(id=attrs.get("id", f"line-{n}"), speaker=attrs.get("spk"), start_ms=start,
                               end_ms=end, overlap=(attrs.get("overlap") == "1") if "overlap" in attrs else None,
                               text=clean))
         tokens.extend(tokenize(clean, len(utts) - 1, group_base=len(tokens) * 1000, chunk_tags=tags))
-    return _finish(Reference(str(path), "tagged", utts, tokens, annotation))
+    return _finish(Reference(str(path), "tagged", utts, tokens, annotation, odd_tags=odd_total))
 
 
 def _load_json_reference(path: Path, text: str) -> Reference:

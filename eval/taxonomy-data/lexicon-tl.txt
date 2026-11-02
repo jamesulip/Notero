@@ -1,8 +1,8 @@
 # Tagalog / Filipino word list used by eval/taxonomy_lex.py.
 #
 # Written by Claude (the AI model that made this change) from
-# its general knowledge of Tagalog, for this project. It is NOT copied or derived from any dictionary, corpus, frequency list or other
-# lexicon, so it carries no third-party licence (it is MIT, like the repository). It is small
+# its general knowledge of Tagalog, for this project. To the writer's knowledge it was not copied from any dictionary, corpus, frequency list or
+# other lexicon (that cannot be proved); it is offered under the repository's MIT licence. It is small
 # and incomplete on purpose: a word that is missing here is reported as "unknown", never
 # guessed. It has not been reviewed by a native speaker; treat entries as a working list.
 #

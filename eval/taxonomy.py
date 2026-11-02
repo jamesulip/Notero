@@ -8,21 +8,25 @@ the headline WER (`score.normalize`, `langscore.align`), so **the categories par
 errors: their error words add up to substitutions + deletions + insertions, exactly**. Nothing
 here changes an existing number; it is an optional report on top of them.
 
-Categories (a word error belongs to exactly one; first match wins, in this order)::
+Categories (a word error belongs to exactly one; first match wins; eval/TAXONOMY.md has the
+exact order and the subtypes)::
 
+    spelling_variant      a join/split of the same letters ("nagmeeting" / "nag meeting")
     deleted_speech        a run of >= 3 reference words with no hypothesis word
     hallucination         a run of >= 3 inserted words (repetition loops flagged; flagged
                           `outside_reference_speech` when the reference has times)
-    spelling_variant      the same word spelled another way (a listed variant, or a
-                          join/split of the same letters: "nagmeeting" / "nag meeting")
-    proper_noun_error     a reference name deleted or replaced
     mixed_word_error      a Tagalog affix + English stem ("nag-meeting", "i-share", "naka-mute")
+    proper_noun_error     a reference name deleted or replaced
+    spelling_variant      the same word spelled another way (a listed variant)
     morphology_error      same Tagalog root, wrong or missing affix, reduplication or linker
     enclitic_particle     po, naman, lang, na, pa, ... deleted, inserted or replaced
     boundary_error        a word at a code-switch point deleted or replaced
     tl_to_en_substitution / en_to_tl_substitution
                           a Tagalog word replaced by an English one, or the reverse
     other_substitution / other_deletion / other_insertion
+
+(A name, a mixed word and a listed variant are mutually exclusive in practice, so their relative
+order does not change a count.)
 
 `timestamp_misalignment` is not a category: it is an overlay on words that were recognised
 (a correct or substituted word whose hypothesis time lies outside its reference utterance)
@@ -86,7 +90,7 @@ FLAG_MEANING = {
     "at_boundary": "the reference word is next to a code-switch point (any category)",
     "short_reference_word": f"the reference word has at most {4} letters (substitution categories)",
     "outside_reference_speech": "at least 80% of the timed inserted words fall outside every padded reference utterance",
-    "inside_reference_speech": "the inserted words fall inside reference speech",
+    "inside_reference_speech": "fewer than 80% of the timed inserted words fall outside reference speech",
     "time_unknown": "the reference has no times, or the hypothesis has no word times",
     "language_unresolved": "the reference or hypothesis word is ambiguous, unknown, other, a name or a mixed word",
     "root_unlisted": "the shared Tagalog root is not on the word list (a 4+ letter root between two non-English words)",
@@ -101,6 +105,51 @@ BASES = ("verified", "heuristic", "structural")
 
 class TooLarge(Exception):
     pass
+
+
+#: Which of several equal-cost alignments the backtrace takes. The total never changes; the split into
+#: substitutions, deletions and insertions, and therefore some category counts, does. "default" is
+#: `langscore.align` (the order sub, del, ins), the aligner of the older tools.
+TIE_BREAKS = {"default": ("sub", "del", "ins"), "del-ins-sub": ("del", "ins", "sub"),
+              "ins-del-sub": ("ins", "del", "sub")}
+
+
+def align(ref: list[str], hyp: list[str], tie_break: str = "default") -> list[tuple]:
+    if tie_break == "default":
+        return langscore.align(ref, hyp)
+    order = TIE_BREAKS[tie_break]
+    n, m = len(ref), len(hyp)
+    dist = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        dist[i][0] = i
+    for j in range(1, m + 1):
+        dist[0][j] = j
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            dist[i][j] = dist[i - 1][j - 1] if ref[i - 1] == hyp[j - 1] else 1 + min(
+                dist[i - 1][j - 1], dist[i - 1][j], dist[i][j - 1])
+    ops: list[tuple] = []
+    i, j = n, m
+    while i > 0 or j > 0:
+        if i > 0 and j > 0 and ref[i - 1] == hyp[j - 1] and dist[i][j] == dist[i - 1][j - 1]:
+            ops.append(("eq", i - 1, j - 1))
+            i, j = i - 1, j - 1
+            continue
+        for kind in order:
+            if kind == "sub" and i > 0 and j > 0 and dist[i][j] == dist[i - 1][j - 1] + 1:
+                ops.append(("sub", i - 1, j - 1))
+                i, j = i - 1, j - 1
+                break
+            if kind == "del" and i > 0 and dist[i][j] == dist[i - 1][j] + 1:
+                ops.append(("del", i - 1, None))
+                i -= 1
+                break
+            if kind == "ins" and j > 0 and dist[i][j] == dist[i][j - 1] + 1:
+                ops.append(("ins", None, j - 1))
+                j -= 1
+                break
+    ops.reverse()
+    return ops
 
 
 # ------------------------------------------------------------------ configuration
@@ -230,7 +279,7 @@ def analyze_item(ref: tio.Reference, hyp: tio.Hypothesis, lex: tlx.Lexicon, cfg:
     if len(R) * len(H) > cfg["maxAlignmentCells"]:
         raise TooLarge(f"{len(R)} reference x {len(H)} hypothesis words is more than "
                        f"{cfg['maxAlignmentCells']} alignment cells; split the item by utterance")
-    ops = langscore.align(R, H)
+    ops = align(R, H, cfg.get("tieBreak", "default"))
     rl = tlx.label_tokens(ref.tokens, lex, cased=ref.cased, context=cfg["contextResolution"])
     # A hypothesis word's capital letter is the model's choice, not evidence about the word, so
     # the capitalisation rule (names, acronyms) is applied to references only.
@@ -342,17 +391,19 @@ def analyze_item(ref: tio.Reference, hyp: tio.Hypothesis, lex: tlx.Lexicon, cfg:
     events.sort(key=lambda e: (e.ref_idx[0] if e.ref_idx else 10**9, e.hyp_idx[0] if e.hyp_idx else 10**9,
                                e.category))
     applied = 0
+    keys_used: set[str] = set()
     if adjudications:
-        item_adj = adjudications
         for e in events:
             keys = [f"r{i}" for i in e.ref_idx] + [f"h{j}" for j in e.hyp_idx]
-            hit = next((item_adj[k] for k in keys if k in item_adj), None)
-            if hit:
+            matched = [k for k in keys if k in adjudications]
+            keys_used.update(matched)
+            if matched:
+                hit = adjudications[matched[0]]
                 e.adjudicated_from = e.category
                 e.category, e.subtype, e.basis = hit[0], hit[1] or "adjudicated", "verified"
                 applied += 1
 
-    counts = _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, applied)
+    counts = _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, applied, len(keys_used))
     return counts, events, {"ops": ops, "ref_labels": rl, "hyp_labels": hl}
 
 
@@ -402,7 +453,9 @@ def classify(op, ri, hj, ref, hyp, rl, hl, bound, lex, cfg):
             subtype = "same_language"
         else:
             subtype = "unresolved"
-        return "boundary_error", subtype, _boundary_basis(bound[ri]), flags
+        # The category (a switch point next to this word) rests on the reference tags, but the
+        # subtype reads the hypothesis word's language, which no person tagged.
+        return "boundary_error", subtype, "heuristic", flags
     if lab.lang in ("tl", "en") and hlab.lang in ("tl", "en") and lab.lang != hlab.lang:
         return f"{lab.lang}_to_{hlab.lang}_substitution", "heuristic-hypothesis-language", "heuristic", flags
     near = char_similarity(r.text, h.text) >= cfg["nearMissSimilarity"]
@@ -432,7 +485,7 @@ def _mixed_subtype(ref_word: str, hyp_word: str, lex: tlx.Lexicon) -> str:
 
 # ------------------------------------------------------------------ counting
 
-def _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, adjudicated) -> dict:
+def _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, adjudicated, keys_used=0) -> dict:
     n = len(ref.tokens)
     s = sum(1 for op, _, _ in ops if op == "sub")
     d = sum(1 for op, _, _ in ops if op == "del")
@@ -440,7 +493,7 @@ def _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, ad
     pooled_s, pooled_d, pooled_i = pooled.levenshtein([t.text for t in ref.tokens], [t.text for t in hyp.tokens])
     c: dict = {"items": 1, "ref_words": n, "hyp_words": len(hyp.tokens), "sub": s, "del": d, "ins": i,
                "errors": s + d + i, "standard_policy_errors": pooled_s + pooled_d + pooled_i,
-               "adjudications_applied": adjudicated, "categories": {}}
+               "adjudications_applied": adjudicated, "adjudication_keys_used": keys_used, "categories": {}}
     for e in events:
         cat = c["categories"].setdefault(e.category, {"events": 0, "error_words": 0, "basis": {}, "subtypes": {},
                                                       "flags": {}})
@@ -450,9 +503,11 @@ def _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, ad
         bump(cat, "basis", e.basis, "error_words", by=e.error_words)
         bump(cat, "subtypes", e.subtype, "events")
         bump(cat, "subtypes", e.subtype, "error_words", by=e.error_words)
+        bump(cat, "subtypes", e.subtype, "basis", e.basis, by=e.error_words)
         for f in e.flags:
             bump(cat, "flags", f, "events")
             bump(cat, "flags", f, "error_words", by=e.error_words)
+            bump(cat, "flags", f, "basis", e.basis, by=e.error_words)
 
     # language labels
     labels: dict = {"reference": {}, "reference_why": {}, "hypothesis": {}, "hypothesis_why": {}}
@@ -489,7 +544,7 @@ def _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, ad
 
     # code-switch points
     cs: dict = {"switch_points": {}, "boundary_words": {}, "boundary_errors": {}, "other_words": 0,
-                "other_errors": 0}
+                "other_errors": 0, "labelled_other_words": {}, "labelled_other_errors": {}}
     for _, _, basis in points:
         bump(cs["switch_points"], basis)
     for idx in range(n):
@@ -501,6 +556,10 @@ def _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, ad
         else:
             cs["other_words"] += 1
             cs["other_errors"] += idx in wrong_at
+            if rl[idx].lang in ("tl", "en"):      # the matched control: words a switch point could have been
+                bump(cs["labelled_other_words"], rl[idx].basis)
+                if idx in wrong_at:
+                    bump(cs["labelled_other_errors"], rl[idx].basis)
     c["code_switch"] = cs
 
     # timestamps
@@ -574,7 +633,14 @@ def run_items(items: list[dict], base: Path, hyp_dir: Path, lex, cfg, adjudicati
     tagged_items = tagged_tokens = skipped_spans = 0
     annotators: set[str] = set()
     hyp_formats: dict[str, int] = {}
-    adj_unused = 0
+    ids = [e["id"] for e in items]
+    if len(set(ids)) != len(ids):
+        dup = sorted({i for i in ids if ids.count(i) > 1})
+        raise SystemExit(f"duplicate item ids in the manifest: {dup[:5]}")
+    failed: dict[str, str] = {}
+    adj_given = sum(len(v) for v in (adjudications or {}).values())
+    adj_used = 0
+    odd_tags = 0
     for entry in sorted(items, key=lambda e: e["id"]):
         item_id = entry["id"]
         ref_path = ref_path_of(entry) if ref_path_of else base / entry["ref"]
@@ -582,11 +648,15 @@ def run_items(items: list[dict], base: Path, hyp_dir: Path, lex, cfg, adjudicati
         if not ref_path.exists() or hyp_path is None:
             missing.append(item_id)
             continue
-        ref = tio.load_reference(ref_path)
-        hyp = tio.load_hypothesis(hyp_path)
-        counts, events, side = analyze_item(ref, hyp, lex, cfg, (adjudications or {}).get(item_id))
-        if adjudications and item_id in adjudications:
-            adj_unused += len(adjudications[item_id]) - counts["adjudications_applied"]
+        try:
+            ref = tio.load_reference(ref_path)
+            hyp = tio.load_hypothesis(hyp_path)
+            counts, events, side = analyze_item(ref, hyp, lex, cfg, (adjudications or {}).get(item_id))
+        except (KeyError, TypeError, ValueError, OSError, IndexError, TooLarge) as exc:
+            failed[item_id] = f"{type(exc).__name__}: {exc}"
+            continue
+        adj_used += counts["adjudication_keys_used"]
+        odd_tags += ref.odd_tags
         formats[ref.format] = formats.get(ref.format, 0) + 1
         hyp_formats[hyp_path.suffix.lstrip(".")] = hyp_formats.get(hyp_path.suffix.lstrip("."), 0) + 1
         if ref.tagged_tokens:
@@ -598,7 +668,10 @@ def run_items(items: list[dict], base: Path, hyp_dir: Path, lex, cfg, adjudicati
         merge(corpus, counts)
         per_item[item_id] = counts
         events_by_item[item_id] = (ref, hyp, events, side)
+    adj_unused = adj_given - adj_used
     meta = {"items_scored": len(per_item), "items_missing_hypothesis_or_reference": sorted(missing),
+            "items_failed": dict(sorted(failed.items())), "tagged_words_with_an_unrecognised_tag": odd_tags,
+            "adjudications_given": adj_given,
             "reference_formats": dict(sorted(formats.items())), "hypothesis_formats": dict(sorted(hyp_formats.items())),
             "items_with_word_tags": tagged_items, "word_tagged_reference_tokens": tagged_tokens,
             "annotators": sorted(annotators), "language_spans_that_did_not_match_text": skipped_spans,
@@ -621,7 +694,8 @@ def build_report(run: dict, *, label: str, lex, cfg, manifest_sha: str | None, c
     report = {
         "schema": SCHEMA,
         "label": label,
-        "tool": {"name": "eval/taxonomy.py", "version": TOOL_VERSION, "tokenPolicy": "notero-standard (score.normalize)"},
+        "tool": {"name": "eval/taxonomy.py", "version": TOOL_VERSION, "tokenPolicy": "notero-standard (score.normalize)",
+                 "tieBreak": cfg.get("tieBreak", "default")},
         "config": {k: v for k, v in sorted(cfg.items())},
         "lexicons": lex.describe(),
         "inputs": {"corpusId": corpus_id, "manifestSha256": manifest_sha, "hypotheses": hyp_source, **meta},
@@ -653,6 +727,20 @@ def caveats(corpus: dict, meta: dict, cfg: dict) -> list[str]:
         out.append(f"{n_verified} of {n_ref} reference tokens carry a word-level tag supplied by the reference "
                    "annotation (the tool does not check the annotator). The remaining tokens, and every "
                    "hypothesis token, are heuristic. The two are kept apart in every table.")
+    if meta.get("items_failed"):
+        out.append(f"{len(meta['items_failed'])} item(s) could not be read and are not in any count: "
+                   + "; ".join(f"{k} ({v})" for k, v in list(meta["items_failed"].items())[:3]) + ".")
+    if meta.get("tagged_words_with_an_unrecognised_tag"):
+        out.append(f"{meta['tagged_words_with_an_unrecognised_tag']} word(s) in tagged references end in "
+                   "`/letters` that is not a tag (tl, en, mix, ne, oth). They stayed in the text as words, "
+                   "which changes the reference length. Check for a mistyped tag.")
+    if meta.get("adjudications_unused"):
+        out.append(f"{meta['adjudications_unused']} of {meta['adjudications_given']} adjudication line(s) matched "
+                   "no event (wrong item, index or a second line for an event that was already decided).")
+    out.append("The category counts depend on which of several equal-cost alignments is chosen (this tool "
+               "uses the same tie-break as eval/langscore.py). The total never changes, but a category of a "
+               "few dozen words can move by tens of words under another tie-break: do not read a "
+               "difference of less than about 40 words in one category.")
     out.append("Hypothesis words are never tagged by a person, so tl_to_en / en_to_tl substitutions rest on a "
                "heuristic label for the hypothesis word even when the reference word is verified.")
     out.append("The word lists are small and were written by an AI model (Claude) without a native "
@@ -757,14 +845,15 @@ def render_markdown(report: dict) -> str:
     w("")
     w("### Subtypes")
     w("")
-    w("| category | subtype | events | error words |")
-    w("| --- | --- | ---: | ---: |")
+    w("| category | subtype | events | error words | verified | heuristic | structural |")
+    w("| --- | --- | ---: | ---: | ---: | ---: | ---: |")
     for name in CATEGORIES:
         v = cats.get(name)
         if not v:
             continue
         for sub, sv in sorted(v["subtypes"].items()):
-            w(f"| `{name}` | `{sub}` | {sv['events']} | {sv['error_words']} |")
+            w(f"| `{name}` | `{sub}` | {sv['events']} | {sv['error_words']} | "
+              + " | ".join(str(sv.get("basis", {}).get(x, 0)) for x in BASES) + " |")
     w("")
     flagged = [(name, f, fv) for name in CATEGORIES for f, fv in sorted(cats.get(name, {}).get("flags", {}).items())]
     if flagged:
@@ -772,10 +861,11 @@ def render_markdown(report: dict) -> str:
         w("")
         w("; ".join(f"`{k}`: {v}" for k, v in FLAG_MEANING.items() if any(f == k for _, f, _ in flagged)) + ".")
         w("")
-        w("| category | flag | events | error words |")
-        w("| --- | --- | ---: | ---: |")
+        w("| category | flag | events | error words | verified | heuristic | structural |")
+        w("| --- | --- | ---: | ---: | ---: | ---: | ---: |")
         for name, f, fv in flagged:
-            w(f"| `{name}` | `{f}` | {fv['events']} | {fv['error_words']} |")
+            w(f"| `{name}` | `{f}` | {fv['events']} | {fv['error_words']} | "
+              + " | ".join(str(fv.get("basis", {}).get(x, 0)) for x in BASES) + " |")
         w("")
     lab = c.get("labels", {})
     w("## Language labels")
@@ -852,8 +942,16 @@ def render_markdown(report: dict) -> str:
         bw, be = cs.get("boundary_words", {}).get(basis, 0), cs.get("boundary_errors", {}).get(basis, 0)
         if bw:
             w(f"| at a {basis} switch point | {bw} | {be} | {pct(ratio(be, bw))} |")
-    w(f"| elsewhere | {cs.get('other_words', 0)} | {cs.get('other_errors', 0)} | "
+    for basis in ("verified", "heuristic"):
+        lw, le = cs.get("labelled_other_words", {}).get(basis, 0), cs.get("labelled_other_errors", {}).get(basis, 0)
+        if lw:
+            w(f"| elsewhere, labelled `tl` or `en` ({basis}) | {lw} | {le} | {pct(ratio(le, lw))} |")
+    w(f"| elsewhere, any label | {cs.get('other_words', 0)} | {cs.get('other_errors', 0)} | "
       f"{pct(ratio(cs.get('other_errors', 0), cs.get('other_words', 0)))} |")
+    w("")
+    w("A switch point needs two words that are clearly Tagalog and English, so the fair comparison is "
+      "with other words that carry such a label (the first rows). \"Any label\" includes `unknown`, "
+      "`ambiguous`, `other` and `name` words, which are wrong more often.")
     w("")
     ts = c.get("timestamps", {})
     w("## Timestamp misalignment (overlay on recognised words)")
@@ -918,8 +1016,9 @@ def render_table(reports: list[dict]) -> str:
 def report_from_manifest(manifest: Path, hyp_dir: Path, *, label: str, out_dir: Path | None = None,
                          include_text: int = 0, adjudications: Path | None = None,
                          english_wordlist: Path | None = None, events_path: Path | None = None,
-                         config: Path | None = None, stem: str = "taxonomy") -> dict:
+                         config: Path | None = None, stem: str = "taxonomy", tie_break: str = "default") -> dict:
     cfg = load_config(config)
+    cfg["tieBreak"] = tie_break
     lex = tlx.Lexicon(english_wordlist=english_wordlist)
     items, info = load_manifest(manifest)
     run = run_items(items, Path(manifest).parent, Path(hyp_dir), lex, cfg, load_adjudications(adjudications))
@@ -936,7 +1035,7 @@ def command_report(args) -> int:
     report = report_from_manifest(args.manifest, args.hyp_dir, label=args.label, out_dir=args.out_dir,
                                   include_text=args.include_text, adjudications=args.adjudications,
                                   english_wordlist=args.english_wordlist, events_path=args.events_tsv,
-                                  config=args.config)
+                                  config=args.config, tie_break=args.tie_break)
     c = report["corpus"]
     print(f"{args.label}: {c.get('errors', 0)} errors over {c.get('ref_words', 0)} reference words "
           f"-> {args.out_dir}/taxonomy.json, taxonomy.md")
@@ -945,12 +1044,14 @@ def command_report(args) -> int:
 
 def command_pair(args) -> int:
     cfg = load_config(args.config)
+    cfg["tieBreak"] = args.tie_break
     lex = tlx.Lexicon(english_wordlist=args.english_wordlist)
     ref, hyp = tio.load_reference(args.reference), tio.load_hypothesis(args.hypothesis)
     counts, events, _ = analyze_item(ref, hyp, lex, cfg)
     run = {"corpus": dict(counts), "items": {"pair": counts}, "events": {"pair": (ref, hyp, events, {})},
            "meta": {"items_scored": 1, "items_missing_hypothesis_or_reference": [],
                     "reference_formats": {ref.format: 1}, "hypothesis_formats": {Path(args.hypothesis).suffix.lstrip("."): 1},
+                    "items_failed": {}, "tagged_words_with_an_unrecognised_tag": ref.odd_tags, "adjudications_given": 0,
                     "items_with_word_tags": 1 if ref.tagged_tokens else 0,
                     "word_tagged_reference_tokens": ref.tagged_tokens, "annotators": [],
                     "language_spans_that_did_not_match_text": ref.skipped_spans, "adjudications_unused": 0}}
@@ -978,6 +1079,7 @@ def command_plan(args) -> int:
         label = tier if args.repeat == 0 else f"{tier} (repeat {args.repeat})"
         reports.append(report_from_manifest(manifest, hyp_dir, label=label, out_dir=Path(args.out_dir) / tier,
                                             include_text=args.include_text, english_wordlist=args.english_wordlist,
+                                            tie_break=args.tie_break,
                                             events_path=(Path(args.out_dir) / tier / "events.tsv") if args.events_tsv else None))
     if reports:
         (Path(args.out_dir) / "tiers.md").write_text(render_table(reports), encoding="utf-8")
@@ -998,6 +1100,8 @@ def main(argv: list[str] | None = None) -> int:
     def common(p):
         p.add_argument("--english-wordlist", type=Path, default=None,
                        help="extra English words (one per line), e.g. /usr/share/dict/words; its hash is recorded")
+        p.add_argument("--tie-break", choices=sorted(TIE_BREAKS), default="default",
+                       help="which equal-cost alignment to take; the total is the same, some category counts move")
         p.add_argument("--include-text", type=int, default=0, metavar="N",
                        help="add up to N example events per category WITH corpus text (never commit third-party text)")
 

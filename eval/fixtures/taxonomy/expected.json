@@ -2,7 +2,8 @@
   "categories": {
     "boundary_error": {
       "basis": {
-        "verified": 2
+        "heuristic": 1,
+        "verified": 1
       },
       "error_words": 2,
       "events": 2

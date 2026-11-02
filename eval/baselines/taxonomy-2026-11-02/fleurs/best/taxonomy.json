@@ -16,6 +16,7 @@
   },
   "caveats": [
     "No reference token carries a word-level language tag, so every language label in this report is a heuristic guess from small hand-written word lists. Read the heuristic counts as indications, not as measurements of the speech.",
+    "The category counts depend on which of several equal-cost alignments is chosen (this tool uses the same tie-break as eval/langscore.py). The total never changes, but a category of a few dozen words can move by tens of words under another tie-break: do not read a difference of less than about 40 words in one category.",
     "Hypothesis words are never tagged by a person, so tl_to_en / en_to_tl substitutions rest on a heuristic label for the hypothesis word even when the reference word is verified.",
     "The word lists are small and were written by an AI model (Claude) without a native speaker's review: `unknown` is the largest honest answer for words they do not cover, and the ambiguous/unknown shares are reported rather than hidden.",
     "Categories partition the word errors by a first-match rule list; a word that fits two rules is counted under the earlier one. Which rule fired is a design choice, not a linguistic finding.",
@@ -37,6 +38,7 @@
       "minLength": 6
     },
     "schemaVersion": 1,
+    "tieBreak": "default",
     "timestampBucketsMs": [
       0,
       1000,
@@ -46,6 +48,7 @@
     "timestampToleranceMs": 1000
   },
   "corpus": {
+    "adjudication_keys_used": 0,
     "adjudications_applied": 0,
     "by_reference_label": {
       "heuristic|ambiguous": {
@@ -54,9 +57,9 @@
         "words": 260
       },
       "heuristic|en": {
-        "deletions": 3,
-        "substitutions": 27,
-        "words": 73
+        "deletions": 2,
+        "substitutions": 1,
+        "words": 38
       },
       "heuristic|mix": {
         "words": 2
@@ -77,51 +80,44 @@
         "words": 6013
       },
       "heuristic|unknown": {
-        "deletions": 42,
-        "substitutions": 481,
-        "words": 2539
+        "deletions": 43,
+        "substitutions": 507,
+        "words": 2574
       }
     },
     "categories": {
       "boundary_error": {
         "basis": {
           "heuristic": {
-            "error_words": 30,
-            "events": 30
+            "error_words": 1,
+            "events": 1
           }
         },
-        "error_words": 30,
-        "events": 30,
+        "error_words": 1,
+        "events": 1,
         "flags": {
           "at_boundary": {
-            "error_words": 30,
-            "events": 30
+            "basis": {
+              "heuristic": 1
+            },
+            "error_words": 1,
+            "events": 1
           },
           "short_reference_word": {
-            "error_words": 3,
-            "events": 3
+            "basis": {
+              "heuristic": 1
+            },
+            "error_words": 1,
+            "events": 1
           }
         },
         "subtypes": {
           "anticipation": {
-            "error_words": 8,
-            "events": 8
-          },
-          "carry_over": {
-            "error_words": 14,
-            "events": 14
-          },
-          "deleted": {
+            "basis": {
+              "heuristic": 1
+            },
             "error_words": 1,
             "events": 1
-          },
-          "same_language": {
-            "error_words": 1,
-            "events": 1
-          },
-          "unresolved": {
-            "error_words": 6,
-            "events": 6
           }
         }
       },
@@ -136,31 +132,20 @@
         "events": 5,
         "flags": {
           "at_boundary": {
+            "basis": {
+              "structural": 4
+            },
             "error_words": 4,
             "events": 1
           }
         },
         "subtypes": {
           "run": {
+            "basis": {
+              "structural": 30
+            },
             "error_words": 30,
             "events": 5
-          }
-        }
-      },
-      "en_to_tl_substitution": {
-        "basis": {
-          "heuristic": {
-            "error_words": 2,
-            "events": 2
-          }
-        },
-        "error_words": 2,
-        "events": 2,
-        "flags": {},
-        "subtypes": {
-          "heuristic-hypothesis-language": {
-            "error_words": 2,
-            "events": 2
           }
         }
       },
@@ -176,14 +161,23 @@
         "flags": {},
         "subtypes": {
           "deleted": {
+            "basis": {
+              "heuristic": 5
+            },
             "error_words": 5,
             "events": 5
           },
           "inserted": {
+            "basis": {
+              "heuristic": 9
+            },
             "error_words": 9,
             "events": 9
           },
           "substituted": {
+            "basis": {
+              "heuristic": 15
+            },
             "error_words": 15,
             "events": 15
           }
@@ -200,12 +194,18 @@
         "events": 1,
         "flags": {
           "time_unknown": {
+            "basis": {
+              "structural": 3
+            },
             "error_words": 3,
             "events": 1
           }
         },
         "subtypes": {
           "run": {
+            "basis": {
+              "structural": 3
+            },
             "error_words": 3,
             "events": 1
           }
@@ -221,41 +221,61 @@
         "error_words": 98,
         "events": 98,
         "flags": {
-          "at_boundary": {
-            "error_words": 2,
-            "events": 2
-          },
           "root_unlisted": {
+            "basis": {
+              "heuristic": 72
+            },
             "error_words": 72,
             "events": 72
           }
         },
         "subtypes": {
           "affix_added": {
+            "basis": {
+              "heuristic": 6
+            },
             "error_words": 6,
             "events": 6
           },
           "affix_changed": {
+            "basis": {
+              "heuristic": 19
+            },
             "error_words": 19,
             "events": 19
           },
           "affix_missing": {
+            "basis": {
+              "heuristic": 19
+            },
             "error_words": 19,
             "events": 19
           },
           "ligature_added": {
+            "basis": {
+              "heuristic": 4
+            },
             "error_words": 4,
             "events": 4
           },
           "ligature_dropped": {
+            "basis": {
+              "heuristic": 24
+            },
             "error_words": 24,
             "events": 24
           },
           "reduplication_added": {
+            "basis": {
+              "heuristic": 11
+            },
             "error_words": 11,
             "events": 11
           },
           "reduplication_dropped": {
+            "basis": {
+              "heuristic": 15
+            },
             "error_words": 15,
             "events": 15
           }
@@ -264,17 +284,20 @@
       "other_deletion": {
         "basis": {
           "structural": {
-            "error_words": 42,
-            "events": 42
+            "error_words": 43,
+            "events": 43
           }
         },
-        "error_words": 42,
-        "events": 42,
+        "error_words": 43,
+        "events": 43,
         "flags": {},
         "subtypes": {
           "isolated": {
-            "error_words": 42,
-            "events": 42
+            "basis": {
+              "structural": 43
+            },
+            "error_words": 43,
+            "events": 43
           }
         }
       },
@@ -290,6 +313,9 @@
         "flags": {},
         "subtypes": {
           "isolated": {
+            "basis": {
+              "structural": 89
+            },
             "error_words": 89,
             "events": 89
           }
@@ -298,30 +324,42 @@
       "other_substitution": {
         "basis": {
           "heuristic": {
-            "error_words": 517,
-            "events": 517
+            "error_words": 547,
+            "events": 547
           }
         },
-        "error_words": 517,
-        "events": 517,
+        "error_words": 547,
+        "events": 547,
         "flags": {
           "language_unresolved": {
-            "error_words": 446,
-            "events": 446
+            "basis": {
+              "heuristic": 475
+            },
+            "error_words": 475,
+            "events": 475
           },
           "short_reference_word": {
-            "error_words": 132,
-            "events": 132
+            "basis": {
+              "heuristic": 134
+            },
+            "error_words": 134,
+            "events": 134
           }
         },
         "subtypes": {
           "near_miss": {
-            "error_words": 355,
-            "events": 355
+            "basis": {
+              "heuristic": 382
+            },
+            "error_words": 382,
+            "events": 382
           },
           "unrelated": {
-            "error_words": 162,
-            "events": 162
+            "basis": {
+              "heuristic": 165
+            },
+            "error_words": 165,
+            "events": 165
           }
         }
       },
@@ -337,14 +375,23 @@
         "flags": {},
         "subtypes": {
           "deleted": {
+            "basis": {
+              "heuristic": 3
+            },
             "error_words": 3,
             "events": 3
           },
           "different_word": {
+            "basis": {
+              "heuristic": 17
+            },
             "error_words": 17,
             "events": 17
           },
           "near_spelling": {
+            "basis": {
+              "heuristic": 91
+            },
             "error_words": 91,
             "events": 91
           }
@@ -362,10 +409,16 @@
         "flags": {},
         "subtypes": {
           "spacing": {
+            "basis": {
+              "heuristic": 134
+            },
             "error_words": 134,
             "events": 66
           },
           "variant-table": {
+            "basis": {
+              "heuristic": 5
+            },
             "error_words": 5,
             "events": 5
           }
@@ -382,12 +435,18 @@
         "events": 1,
         "flags": {
           "short_reference_word": {
+            "basis": {
+              "heuristic": 1
+            },
             "error_words": 1,
             "events": 1
           }
         },
         "subtypes": {
           "heuristic-hypothesis-language": {
+            "basis": {
+              "heuristic": 1
+            },
             "error_words": 1,
             "events": 1
           }
@@ -396,15 +455,21 @@
     },
     "code_switch": {
       "boundary_errors": {
-        "heuristic": 33
+        "heuristic": 2
       },
       "boundary_words": {
-        "heuristic": 144
+        "heuristic": 60
       },
-      "other_errors": 933,
-      "other_words": 9469,
+      "labelled_other_errors": {
+        "heuristic": 246
+      },
+      "labelled_other_words": {
+        "heuristic": 5991
+      },
+      "other_errors": 964,
+      "other_words": 9553,
       "switch_points": {
-        "heuristic": 87
+        "heuristic": 36
       }
     },
     "del": 124,
@@ -424,12 +489,12 @@
       "hypothesis": {
         "heuristic": {
           "ambiguous": 262,
-          "en": 68,
+          "en": 60,
           "mix": 6,
           "name": 17,
           "other": 108,
           "tl": 6086,
-          "unknown": 3067
+          "unknown": 3075
         }
       },
       "hypothesis_why": {
@@ -439,7 +504,7 @@
         },
         "en": {
           "en-inflection": 4,
-          "english-contraction": 11,
+          "english-contraction": 3,
           "lexicon-en": 53
         },
         "mix": {
@@ -455,26 +520,27 @@
         },
         "tl": {
           "affix+tagalog-stem": 52,
-          "context": 82,
+          "context": 81,
           "lexicon-tl": 5253,
           "tagalog-clitic-y": 1,
           "tl-affix-analysis": 316,
-          "tl-ligature": 382
+          "tl-ligature": 383
         },
         "unknown": {
           "affix+unlisted-stem": 40,
+          "apostrophe-no-match": 8,
           "no-match": 3027
         }
       },
       "reference": {
         "heuristic": {
           "ambiguous": 260,
-          "en": 73,
+          "en": 38,
           "mix": 2,
           "name": 572,
           "other": 154,
           "tl": 6013,
-          "unknown": 2539
+          "unknown": 2574
         }
       },
       "reference_why": {
@@ -484,7 +550,7 @@
         },
         "en": {
           "en-inflection": 1,
-          "english-contraction": 36,
+          "english-contraction": 1,
           "lexicon-en": 36
         },
         "mix": {
@@ -502,14 +568,15 @@
         },
         "tl": {
           "affix+tagalog-stem": 62,
-          "context": 77,
+          "context": 76,
           "lexicon-tl": 5195,
           "tagalog-clitic-y": 1,
           "tl-affix-analysis": 299,
-          "tl-ligature": 379
+          "tl-ligature": 380
         },
         "unknown": {
           "affix+unlisted-stem": 68,
+          "apostrophe-no-match": 35,
           "no-match": 2471
         }
       }
@@ -524,8 +591,7 @@
           "unknown": 1
         },
         "en": {
-          "tl": 24,
-          "unknown": 3
+          "tl": 1
         },
         "name": {
           "en": 2,
@@ -551,8 +617,8 @@
           "en": 13,
           "mix": 2,
           "other": 5,
-          "tl": 72,
-          "unknown": 385
+          "tl": 95,
+          "unknown": 388
         }
       }
     },
@@ -567,6 +633,7 @@
     }
   },
   "inputs": {
+    "adjudications_given": 0,
     "adjudications_unused": 0,
     "annotators": [],
     "corpusId": "fleurs-fil_ph-test-onepersentence-seed7",
@@ -574,6 +641,7 @@
     "hypothesis_formats": {
       "json": 349
     },
+    "items_failed": {},
     "items_missing_hypothesis_or_reference": [],
     "items_scored": 349,
     "items_with_word_tags": 0,
@@ -582,6 +650,7 @@
     "reference_formats": {
       "txt": 349
     },
+    "tagged_words_with_an_unrecognised_tag": 0,
     "word_tagged_reference_tokens": 0
   },
   "items": {
@@ -649,8 +718,8 @@
     },
     "fleurs-1666": {
       "categories": {
-        "boundary_error": 1,
         "morphology_error": 1,
+        "other_substitution": 1,
         "spelling_variant": 2
       },
       "del": 1,
@@ -802,9 +871,8 @@
     },
     "fleurs-1680": {
       "categories": {
-        "boundary_error": 2,
         "morphology_error": 1,
-        "other_substitution": 3
+        "other_substitution": 5
       },
       "del": 0,
       "errors": 6,
@@ -1229,7 +1297,7 @@
     },
     "fleurs-1720": {
       "categories": {
-        "boundary_error": 2
+        "other_substitution": 2
       },
       "del": 0,
       "errors": 2,
@@ -1294,8 +1362,7 @@
     },
     "fleurs-1726": {
       "categories": {
-        "boundary_error": 1,
-        "other_substitution": 3
+        "other_substitution": 4
       },
       "del": 0,
       "errors": 4,
@@ -1325,9 +1392,8 @@
     },
     "fleurs-1729": {
       "categories": {
-        "boundary_error": 3,
         "morphology_error": 1,
-        "other_substitution": 2,
+        "other_substitution": 5,
         "proper_noun_error": 1
       },
       "del": 0,
@@ -1719,8 +1785,8 @@
     },
     "fleurs-1767": {
       "categories": {
-        "boundary_error": 2,
-        "other_substitution": 2
+        "other_deletion": 1,
+        "other_substitution": 3
       },
       "del": 1,
       "errors": 4,
@@ -1958,12 +2024,11 @@
     },
     "fleurs-1790": {
       "categories": {
-        "boundary_error": 1,
         "enclitic_particle": 2,
         "morphology_error": 1,
         "other_deletion": 1,
         "other_insertion": 1,
-        "other_substitution": 3
+        "other_substitution": 4
       },
       "del": 1,
       "errors": 9,
@@ -2335,10 +2400,9 @@
     },
     "fleurs-1826": {
       "categories": {
-        "boundary_error": 1,
         "morphology_error": 1,
         "other_insertion": 1,
-        "other_substitution": 1
+        "other_substitution": 2
       },
       "del": 0,
       "errors": 4,
@@ -2505,9 +2569,8 @@
     },
     "fleurs-1842": {
       "categories": {
-        "boundary_error": 1,
         "other_insertion": 1,
-        "other_substitution": 3
+        "other_substitution": 4
       },
       "del": 0,
       "errors": 5,
@@ -2861,8 +2924,8 @@
     },
     "fleurs-1874": {
       "categories": {
-        "boundary_error": 1,
-        "morphology_error": 2
+        "morphology_error": 2,
+        "other_substitution": 1
       },
       "del": 0,
       "errors": 3,
@@ -3086,11 +3149,10 @@
     },
     "fleurs-1896": {
       "categories": {
-        "boundary_error": 1,
         "enclitic_particle": 1,
         "morphology_error": 1,
         "other_deletion": 1,
-        "other_substitution": 4
+        "other_substitution": 5
       },
       "del": 1,
       "errors": 8,
@@ -3186,8 +3248,7 @@
     },
     "fleurs-1905": {
       "categories": {
-        "en_to_tl_substitution": 1,
-        "other_substitution": 1,
+        "other_substitution": 2,
         "proper_noun_error": 2
       },
       "del": 0,
@@ -3231,8 +3292,7 @@
     },
     "fleurs-1909": {
       "categories": {
-        "en_to_tl_substitution": 1,
-        "other_substitution": 1
+        "other_substitution": 2
       },
       "del": 0,
       "errors": 2,
@@ -3271,7 +3331,7 @@
     },
     "fleurs-1913": {
       "categories": {
-        "boundary_error": 1
+        "other_substitution": 1
       },
       "del": 0,
       "errors": 1,
@@ -3372,8 +3432,7 @@
     },
     "fleurs-1922": {
       "categories": {
-        "boundary_error": 1,
-        "other_substitution": 5,
+        "other_substitution": 6,
         "proper_noun_error": 1,
         "spelling_variant": 1
       },
@@ -3410,10 +3469,9 @@
     },
     "fleurs-1925": {
       "categories": {
-        "boundary_error": 1,
         "morphology_error": 1,
         "other_insertion": 1,
-        "other_substitution": 2
+        "other_substitution": 3
       },
       "del": 0,
       "errors": 5,
@@ -3482,8 +3540,7 @@
     },
     "fleurs-1932": {
       "categories": {
-        "boundary_error": 1,
-        "other_substitution": 3,
+        "other_substitution": 4,
         "spelling_variant": 2
       },
       "del": 1,
@@ -3512,9 +3569,8 @@
     },
     "fleurs-1935": {
       "categories": {
-        "boundary_error": 1,
         "other_deletion": 1,
-        "other_substitution": 1
+        "other_substitution": 2
       },
       "del": 1,
       "errors": 3,
@@ -3524,8 +3580,8 @@
     },
     "fleurs-1936": {
       "categories": {
-        "boundary_error": 2,
-        "other_insertion": 1
+        "other_insertion": 1,
+        "other_substitution": 2
       },
       "del": 0,
       "errors": 3,
@@ -3535,9 +3591,8 @@
     },
     "fleurs-1937": {
       "categories": {
-        "boundary_error": 1,
         "other_deletion": 1,
-        "other_substitution": 2,
+        "other_substitution": 3,
         "proper_noun_error": 4
       },
       "del": 1,
@@ -3601,9 +3656,8 @@
     },
     "fleurs-1943": {
       "categories": {
-        "boundary_error": 1,
         "morphology_error": 1,
-        "other_substitution": 1
+        "other_substitution": 2
       },
       "del": 0,
       "errors": 3,
@@ -3879,8 +3933,7 @@
     },
     "fleurs-1970": {
       "categories": {
-        "boundary_error": 1,
-        "other_substitution": 2,
+        "other_substitution": 3,
         "spelling_variant": 2
       },
       "del": 1,
@@ -3987,9 +4040,8 @@
     },
     "fleurs-1980": {
       "categories": {
-        "boundary_error": 1,
         "other_deletion": 1,
-        "other_substitution": 3
+        "other_substitution": 4
       },
       "del": 1,
       "errors": 5,
@@ -4044,8 +4096,7 @@
     },
     "fleurs-1985": {
       "categories": {
-        "boundary_error": 1,
-        "other_substitution": 1
+        "other_substitution": 2
       },
       "del": 0,
       "errors": 2,
@@ -4294,8 +4345,7 @@
     },
     "fleurs-2009": {
       "categories": {
-        "boundary_error": 1,
-        "other_substitution": 1
+        "other_substitution": 2
       },
       "del": 0,
       "errors": 2,
@@ -4312,8 +4362,8 @@
       "source": "written for this project by Claude (an AI model); no native-speaker review"
     },
     "lexicon-en.txt": {
-      "entries": 942,
-      "sha256": "828faab1f6c4ae15e24586c444d9b65052b7b3487f699ebcda30c9d98427233c",
+      "entries": 936,
+      "sha256": "94d7a2d550d7cdb87116745a40594c6dbe22bcdc31b8f51a722a114b8f059eba",
       "source": "written for this project by Claude (an AI model); no native-speaker review"
     },
     "lexicon-names.txt": {
@@ -4328,7 +4378,7 @@
     },
     "lexicon-tl.txt": {
       "entries": 990,
-      "sha256": "c3666725b18e58225fed07946d3ba2eeb3ceedd24d7b490c64880cabdea79e86",
+      "sha256": "41be2dd9202ef91fad86a39eea847ccc08dcbbb117952ecf3ba9fa5d6d8881df",
       "source": "written for this project by Claude (an AI model); no native-speaker review"
     },
     "particles.txt": {
@@ -4345,6 +4395,7 @@
   "schema": "notero-taxonomy-report/1",
   "tool": {
     "name": "eval/taxonomy.py",
+    "tieBreak": "default",
     "tokenPolicy": "notero-standard (score.normalize)",
     "version": 1
   }
