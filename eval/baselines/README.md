@@ -11,7 +11,7 @@ numbers), and nothing here is a claim about real Taglish: the fixture is synthet
 | `p6-lead-ab-main-vs-p6-branch.json` | The lead's pre-P6 `main` (addf5f8) against the P6 branch, offline, 6 runs each: main collapsed 4 of 6 runs, the P6 branch gave 24.2% six times | 3 KB |
 | `aa-calibration.json` | The measured false-positive rate of the decision rule on A/A comparisons: resampling from the P6 runs, and real runs where a stream exists | ~10 KB |
 | `import_p6.py` | One-off: how the two `p6-*` files were produced from `/tmp/notero-team/baseline` and `/tmp/notero-team/lead-ab` | |
-| `live-latency-2026-11-02/` | The live-latency experiment (FINDINGS 38): the plans written before each session, the numbers of every run (per-word commit latencies, counters, invariant checks; no audio, no words), the analysis, the report of each session and the decision. Real public audio (Liva AI, AMI, FLEURS), real-time replays under the bench lock | ~1.5 MB |
+| `live-latency-2026-11-02/` | The live-latency experiment (FINDINGS 38): the plans written before each session, the numbers of every run (per-word commit latencies, counters, invariant checks; no audio, no words), the analysis, the report of each session and the decision. Real public audio (Liva AI, AMI, FLEURS), real-time replays under the bench lock | ~1 MB |
 | `sessions/` | `report.md` and `report.json` of the regression sessions this cycle ran (the validation of `eval/regress.py`) | |
 
 ## Provenance of `p6-f022c6e-synthetic-taglish.json`

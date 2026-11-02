@@ -29,8 +29,8 @@
   reason and the CPU used, to the JSON report (numbers only). `LiveReplayRecorder` records them.
 - **`--realtime` now follows one absolute clock** and hands each 100 ms chunk over when its last sample
   would have been captured. It no longer drifts by the cost of each chunk.
-- **Tests:** 21 Swift tests (the invariant monitor, the recorder, and a property test that runs the
-  invariant over every variant on random scripted sessions) and 66 Python tests for the experiment's
+- **Tests:** 22 Swift tests (the invariant monitor, the recorder, and a property test that runs the
+  invariant over every variant on random scripted sessions) and 67 Python tests for the experiment's
   metrics, statistics and gate.
 
 ### Evaluation framework

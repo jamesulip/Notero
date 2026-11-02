@@ -1505,7 +1505,7 @@ reference speech. No decode result was used.
   blocks. A pooled median of all words is not used. It sits in a low-density stretch between the
   short clips (3 s) and the Liva clips (17 s), so a few percent of words that cross it move it by
   seconds. **Read it anyway:** pooled that way, `ADA` would be 35.1% and 28.1% faster in the two sessions
-  and `HT` 32.8% and 24.0%, which are over 20%. The pooled controls were 3.6% and 6.7% apart at session
+  and `HT` 32.8% and 24.0%, which are over 20%. The pooled controls were 3.6% and 6.5% apart at session
   level, and 14% to 23% apart round by round in session 2. The plan fixed the per-block statistic before the
   first run. A reader who prefers the pooled median reaches a different latency verdict, and then the
   decision rests on the safety gates below.

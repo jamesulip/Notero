@@ -1535,7 +1535,7 @@ session 1 and the held-out clips").
 **The statistic matters.** The plan fixed the geometric mean over blocks of per-run median ratios. Pooled over
 all words instead, ADA would read 35.1% and 28.1% faster and HT 32.8% and 24.0%, over 20% in both sessions: the
 pooled median sits in a low-density stretch between the 3 s clips and the 17 s Liva clips, so a few percent of words
-crossing it move it by seconds (the pooled controls were 3.6% and 6.7% apart in a session, and 14% to 23% apart
+crossing it move it by seconds (the pooled controls were 3.6% and 6.5% apart in a session, and 14% to 23% apart
 round by round in session 2). The per-block reading is the more honest one about a typical clip (ADA 17%), and it
 was fixed before the first run; but the latency verdict depends on that choice, and then on the safety gates.
 

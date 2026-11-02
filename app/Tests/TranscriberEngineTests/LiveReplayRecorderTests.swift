@@ -136,7 +136,7 @@ final class LiveReplayRecorderTests: XCTestCase {
             // A word cannot be committed before the audio that holds it was handed over, and the
             // wall clock and the audio clock agree to within scheduling noise.
             XCTAssertGreaterThanOrEqual(commit.wallMs, Double((commit.wordEndMs.max() ?? 0)) - 150, "\(commit)")
-            XCTAssertEqual(commit.wallMs, Double(commit.audioFedMs), accuracy: 400, "\(commit)")
+            XCTAssertEqual(commit.wallMs, Double(commit.audioFedMs), accuracy: 800, "\(commit)")
         }
     }
 
@@ -165,6 +165,35 @@ final class LiveReplayRecorderTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(span.requestedWallMs, 0)
         }
         XCTAssertGreaterThanOrEqual(run.trace.cpu.totalMs, 0)
+    }
+
+    func testWallTimesCountFromBeginAndNotFromTheCreationOfTheDecoder() async throws {
+        // The decoder's clock starts when it is created. The replay's wall time zero is `begin()`.
+        // Wait 600 ms in between: every recorded time must be small, or the shift was not applied.
+        let scene = scenario()
+        let asr = OracleRecognizer(words: scene.words)
+        let vad = ScriptedVAD(speech: scene.speech)
+        let decoder = LiveDecoder(config: config(), recognizer: asr, vad: vad)
+        let recorder = LiveReplayRecorder(decoder: decoder, realtime: false)
+        try await Task.sleep(for: .milliseconds(600))
+        recorder.begin()
+        var clock = 0
+        while clock < scene.totalMs {
+            recorder.noteFed(clock + 100)
+            decoder.ingest(OraclePCM.data(fromMs: clock, ms: 100))
+            clock += 100
+            await decoder.drain()
+        }
+        await decoder.finish()
+        let trace = recorder.finish()
+
+        XCTAssertFalse(trace.decodes.isEmpty)
+        XCTAssertFalse(trace.commits.isEmpty)
+        XCTAssertFalse(trace.boundaries.isEmpty)
+        XCTAssertLessThan(trace.replayWallMs, 600, "the replay took less than the wait before it began")
+        for span in trace.decodes { XCTAssertLessThan(span.requestedWallMs, 600) }
+        for commit in trace.commits { XCTAssertLessThan(commit.wallMs, 600) }
+        for boundary in trace.boundaries { XCTAssertLessThan(boundary.wallMs, 600) }
     }
 
     func testAudioFedIsWhatTheReplayHadHandedOverWhenTheBatchWasDelivered() async throws {

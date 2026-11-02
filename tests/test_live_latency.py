@@ -426,10 +426,10 @@ def test_the_gate_is_the_one_in_the_brief():
     assert g["latency"]["tailGuard"]["minReduction"] < 0 and g["latency"]["perClipGuard"]["minReduction"] < 0
 
 
-def test_the_variant_defaults_in_the_swift_app_are_the_control(tmp_path):
-    # The control is "no flags": it can only be the production configuration if the CLI's
-    # defaults are SessionConfig()'s. Pinned on the Swift side by SessionConfigDefaultsTests;
-    # here, that the flags the experiment varies are all ones the CLI documents.
+def test_every_flag_an_arm_uses_is_one_the_cli_documents(tmp_path):
+    # The control is "no flags": it is the production configuration only because the CLI's
+    # defaults are SessionConfig()'s, which SessionConfigDefaultsTests pins on the Swift side.
+    # Here: every flag an arm sets is one the CLI parses.
     cli = (EVAL.parent / "app/Sources/TranscriberCLI/main.swift").read_text()
     for arm in lat.ARMS.values():
         for flag in arm["flags"]:
@@ -803,3 +803,32 @@ def test_rttm_segments_are_kept_apart_and_merged_only_when_asking_where_speech_i
         segments = lat.parse_rttm(p)
         assert segments == [(1000, 3000), (2500, 3500), (9000, 9500)]
         assert ll.merge_spans(segments) == [(1000, 3500), (9000, 9500)]
+
+
+# ---- the committed evidence -------------------------------------------------
+
+BASELINE = EVAL / "baselines" / "live-latency-2026-11-02"
+
+
+def test_the_committed_analysis_and_decision_follow_from_the_committed_results():
+    if not (BASELINE / "decision.json").exists():
+        pytest.skip("the experiment has not been run")
+    for number in (1, 2):
+        plan = json.loads((BASELINE / f"plan-session-{number}.json").read_text())
+        results = json.loads((BASELINE / f"results-session-{number}.json").read_text())
+        analysis = json.loads((BASELINE / f"analysis-session-{number}.json").read_text())
+        blocks, excluded = lat.blocks_of(plan, results)
+        assert not excluded and analysis["blocks"] == len(blocks)
+        for variant in plan["variants"]:
+            words = lat.block_words(blocks, ["C0", "C1", variant])
+            for name, q in (("median", 0.5), ("p90", 0.9), ("p95", 0.95)):
+                interval = ll.block_reduction_interval(words, 2, q)
+                stored = analysis["variants"][variant]["latency"][name]
+                assert interval["reduction"] == pytest.approx(stored["reduction"], abs=1e-9)
+                assert interval["ci95"] == pytest.approx(stored["interval"]["ci95"], abs=1e-9)
+        aa = ll.block_reduction_interval(lat.block_words(blocks, ["C0", "C1"]), 1, 0.5)
+        assert aa["reduction"] == pytest.approx(analysis["aa"]["median"]["reduction"], abs=1e-9)
+        assert sum(r["metrics"]["invariant_violations"] for r in results["runs"] if r["ok"]) == 0
+    decision = json.loads((BASELINE / "decision.json").read_text())
+    assert decision["productionConfigurationChanged"] is False and decision["changeDefaultTo"] == []
+    assert all(not v["meets_every_gate"] for v in decision["verdicts"].values())
