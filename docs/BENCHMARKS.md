@@ -55,11 +55,14 @@ test harness. [CLI.md](CLI.md) gives the options.
 
 - **RTF** is the wall-clock decode time divided by the audio duration. Lower is
   faster. 0.10 means 10 times faster than real time.
-- **WER** is the word error rate against the reference file. Two scorers exist.
+- **WER** is the word error rate against the reference file. Two scorers exist
+  for the tables in this file.
   The WER of the command-line tool splits an intra-word hyphen.
   `eval/langscore.py` keeps it, thus "i-send" stays one Filipino word there.
   The two therefore report different numbers for the same transcript, and each
-  table below says which one produced it.
+  table below says which one produced it. For new numbers, use
+  [the evaluation framework](#the-evaluation-framework). It records its scoring
+  policy in each report.
 - **"Peak memory"** is what the older numbers in this file call it, and it is
   neither a peak nor a model's memory. `transcribe` printed `phys_footprint`,
   read once at exit: the footprint of one process at that instant. It leaves
@@ -103,6 +106,387 @@ not look. Compare footprints only between stages of one build, and quote the
 Neural Engine figure beside them. `eval/residency.py` measures the same stages
 from outside the process, with `footprint(1)`, as an independent check on the
 in-process figures.
+
+## The evaluation framework
+
+`transcribe --score` and the `Evaluation` module of `TranscriberCore` score
+transcripts against references with one written method. Use it for new accuracy
+numbers. This section is the method. [CLI.md](CLI.md#score-saved-transcripts)
+gives the commands.
+
+**The framework has produced no benchmark result yet.** It was added on
+2026-11-02 and tested on synthetic text only. No table in this file comes from
+it. The older tables keep the scorer that each one names.
+
+### What the framework guarantees
+
+1. **The same inputs give the same bytes.** The reports contain no clock, no
+   random value without a seed, and no absolute path. Two runs on one corpus
+   give identical JSON and Markdown files.
+2. **The raw text stays unchanged.** The report keeps the reference and the
+   hypothesis exactly as supplied, byte for byte. The scorer normalizes a copy.
+3. **A metric without ground truth is "unavailable", with a reason.** The
+   framework never reports 0, 1 or a blank for a missing value. A WER over an
+   empty reference is unavailable. A WER over an empty hypothesis is 100%, and
+   it is a real measurement.
+4. **Scoring uses no network and no model.** `--score` reads files and writes
+   files. It stops before the tool opens an audio device or loads a model.
+
+### The inputs
+
+| Input | Form |
+| --- | --- |
+| Manifest | The array that `eval/manifest.json` and the corrections export already use, `[{"id", "audio", "ref", "category"}]`. Or the versioned form `{"schemaVersion": 1, "corpusId": "...", "items": [...]}`. Paths are relative to the manifest. |
+| Corpus ID | The `corpusId` of a versioned manifest, or `--corpus-id`. An array manifest gets `manifest-sha256:` and the first 16 hex digits of the SHA-256 of its bytes. |
+| Reference, plain text | One utterance on each line that is not empty. It has no times, no speakers and no language. The manifest `category` (`tagalog`, `english` or `mixed`) becomes the language of each line. |
+| Reference, JSON | `{"schemaVersion": 1, "itemId", "utterances": [...]}`. Each utterance has `id` and `text`. It can also have `startMs`, `endMs`, `speaker`, `overlap`, `language` and `languageSpans`. |
+| Hypothesis | `<id>.json`, the `--json` report of a `transcribe` run, or `<id>.txt`, plain text from any system. Only the JSON form has word times and run measurements. |
+| Configuration | `eval/evaluation-config.v1.json` is the default. `transcribe --print-eval-config` writes it. A file with an unknown `schemaVersion` is refused. |
+
+`languageSpans` marks the language word by word. The spans of an utterance,
+in sequence, must join to its `text` exactly, or the reference is refused. Put
+each span boundary between two words. `eval/fixtures/scoring/refs/standup.json`
+is an example.
+
+### The scoring policy
+
+A policy changes text into the units that the framework counts. A policy has an
+`id`, a `version` and a SHA-256 fingerprint. Each report records all three.
+The steps always run in this sequence:
+
+1. Unicode normalization: none, NFC, NFD, NFKC or NFKD.
+2. U+2019, U+2018, U+02BC, U+0060 and U+00B4 become the apostrophe U+0027.
+3. Case folding, if set.
+4. Contraction expansion, if set, from table version 1.
+5. Diacritic removal, if set.
+6. Tokenization. Letters, combining marks and digits make words. Apostrophes
+   and hyphens follow their own settings. All other characters are
+   punctuation. Punctuation is removed or kept as separate tokens.
+
+| Policy | Rules | Use |
+| --- | --- | --- |
+| `notero-standard` | NFKC, case folded, punctuation removed, hyphens split, apostrophes kept inside a word, diacritics kept. | **The default.** It gives the same tokens and the same counts as `eval/score.py`, which produced the 2026-11-01 tables. |
+| `notero-keep-hyphens` | As `notero-standard`, but "i-send" stays one word. | Close to `eval/langscore.py`. It is not identical: the two scorers treat en dashes and U+2010 differently. |
+| `notero-legacy-cli` | No normalization, case folded, diacritics removed, every character that is not a letter or a digit splits words. | The same tokens as `WordErrorRate`, the scorer of `--reference` in builds before this one. |
+| `notero-expand-contractions` | As `notero-standard`, with contractions expanded on both sides. | Compare transcripts that write "ako'y" and "ako ay", or "don't" and "do not", in different ways. |
+
+`notero-standard` and `eval/score.py` differ on four rare inputs. The framework
+splits words at an underscore, keeps a combining mark in its word, changes
+U+02BC and the backtick to an apostrophe, and lower-cases final sigma as "σ".
+The tests record each difference.
+
+Contraction table version 1 expands the English negations ("don't"), the
+English pronoun and verb forms ("I'm", "we're", "it's", "I'll", "I've"), the
+Tagalog enclitic "'y" ("ako'y" to "ako ay"), and the clipped Tagalog forms
+"di", "wag", "yan", "yun", "yon" and "yung", with or without an apostrophe.
+It does not expand "'to", because "to" is also an English word. It does not
+expand "'d" or "'s", because each has more than one meaning.
+
+### The metrics
+
+- **WER** is (S + D + I) / N, where N is the number of reference words. One
+  word alignment covers the whole recording. At each cell the alignment takes
+  a match if the two words are equal. Otherwise it takes the first minimum of
+  substitution, deletion and insertion, in that sequence. This rule gives the
+  same split into S, D and I as `eval/score.py`.
+- **The corpus WER** is the sum of the errors of all scored recordings divided
+  by the sum of their reference words. It is not a mean of the WER values of
+  the recordings.
+- **Utterance results** come from the alignment of the recording. A matched or
+  substituted word belongs to the utterance of its reference word. An inserted
+  word belongs to the utterance of the nearest reference word before it. If no
+  reference word comes before it, it belongs to the utterance of the first
+  reference word after it. The results of the utterances add up exactly to the
+  result of the recording.
+- **CER** is the character error rate. For each utterance, the framework aligns
+  the characters of its normalized words, joined by single spaces, against the
+  characters of the hypothesis words that belong to it. The CER of a recording
+  is the sum over its utterances. A character is a grapheme cluster, thus "ñ"
+  is one character in NFC and in NFD.
+- **By utterance language** gives WER and CER for each language class:
+  `tagalog`, `english`, `code-switched`, `other` and `unannotated`. The class
+  comes from the language spans, or from the `language` of the utterance, or
+  from the manifest category.
+- **By word language** needs `languageSpans`, or an utterance that has one
+  language. For each language it gives (S + D) / N. An insertion has no
+  reference word, thus it has no language and is counted apart. A
+  **code-switch point** is a reference word whose language is different from
+  the language of the word before it in the same utterance.
+- **By speaker overlap** gives the strata `overlap`, `no-overlap` and
+  `unknown`. An `overlap` mark in the reference has priority. Without a mark,
+  an utterance overlaps if its time intersects the time of an utterance of a
+  different speaker. An utterance without a mark, without times or without a
+  speaker is `unknown`. The three strata add up to the recording.
+- **Deletion bursts** are runs of 3 or more consecutive deleted reference
+  words, with the utterance and the time where each run starts. A window that
+  did not decode makes this shape.
+- **Missing speech** needs reference times and hypothesis word times. The
+  framework merges the reference utterances into speech regions. It widens
+  each hypothesis word by 200 ms on each side. It checks each region of
+  1 second or more. A region is missing if hypothesis words cover less than
+  20% of it. The report gives the missing regions, their total duration and
+  their share of the checked speech.
+
+A breakdown that needs an annotation covers only the recordings that have the
+annotation. The report lists those recordings and adds a warning.
+
+### Confidence intervals
+
+The interval of a corpus WER or CER is a **percentile bootstrap** of the
+pooled rate.
+
+- The unit of the resample is the utterance (the default) or the recording.
+- The default is 2000 resamples at a 95% level, with seed 20261102.
+- The resamples are stratified. With utterance units, the strata are the
+  utterance language classes. With recording units, the strata are the
+  manifest categories. Each resample keeps the mix of the corpus.
+- The generator is SplitMix64. Index draws use rejection sampling. The
+  quantiles are type 7, the default of numpy and R. The sequence of draws is
+  part of the method, thus the same seed gives the same interval on each Mac
+  and with each Swift version.
+- **A comparison is paired.** Each resample uses the same units for the
+  baseline and the candidate. The report gives the difference (candidate minus
+  baseline) and its interval. It also gives the share of resamples in which
+  the candidate had the lower rate. That share describes the resamples. It is
+  not a p-value.
+- The framework refuses a comparison of two reports that have a different
+  corpus ID, a different configuration, a different set of scored recordings or
+  different references.
+
+**Read the warnings with an interval.** With fewer than 30 units the interval
+is rough and too narrow. Utterances of one recording share the speaker, the
+room and the microphone. When you resample them as if they were independent,
+the interval does not show the variation between recordings. Below 5
+recordings the report says so. With fewer than 2 units there is no interval.
+
+### What each report records
+
+| Field | Source |
+| --- | --- |
+| Corpus ID | The manifest or `--corpus-id`. |
+| Configuration | The complete configuration, its `id`, its schema version and its fingerprint. |
+| Scoring policy | `id`, `version` and fingerprint. |
+| Model | `--model`, or the `model` that all hypothesis reports agree on. |
+| Model revision | `--model-revision`, or the Hugging Face commit in the local download cache of the model. The cache keeps it in the first line of each `.metadata` file. The tool reads the file and does not connect to the network. |
+| Hardware | The Mac model, the core count, the macOS version and the installed memory. |
+| Inference settings | The mode, the language, the prompt, the speaker mode, room mode and the live hop, context and pre-roll. |
+| Build | `--build`, for example a commit. |
+
+A field that the inputs do not give is "unavailable", with a reason. The
+framework does not guess it. A plain-text hypothesis has no model, no settings
+and no measurements.
+
+The **performance** part keeps four figures apart.
+[Which number is which](#which-number-is-which) defines them.
+
+| Figure | When the report has it |
+| --- | --- |
+| Whole-file RTF | Offline runs only. The corpus figure is the total decode time divided by the total audio, and only when each scored recording has both. |
+| Live commit latency | Live replays only. With `--realtime` it uses the wall clock. Otherwise it uses the audio fed so far. |
+| Process peak footprint | The highest `phys_footprint` of the decoding process. It does not include the model. |
+| Model residency | The Neural Engine memory that the model load added. |
+
+### The outputs
+
+`report.json` is the machine-readable report, with sorted keys. Each value that
+can be absent has the form `{"status": "available", "value": ...}` or
+`{"status": "unavailable", "reason": "..."}`. `report.md` gives the same
+results as tables. With `--compare`, the tool writes `baseline`, `candidate` and
+`comparison`, each as `.json` and `.md`.
+
+`--score` exits with 0 when it scored at least one recording of each system.
+It exits with 3 when a system has no scored recording, with 2 for an input
+error and with 1 for an output error or a refused comparison.
+
+### Limitations of the framework
+
+1. **No result yet.** The framework was tested on synthetic fixtures only.
+   No real Taglish, Tagalog or English corpus was scored with it.
+2. **The language of a word comes from the annotation.** Without
+   `languageSpans` or a one-language utterance there is no word-language
+   breakdown. `eval/langscore.py` guesses the language from a word list; the
+   framework does not.
+3. **The utterance of a word is one choice among equal alignments.** When two
+   alignments have the same cost, the fixed rule chooses one. A repeated word
+   at an utterance boundary can then count against the neighbouring
+   utterance. The totals of the recording do not change.
+4. **A very long recording has no utterance results and no CER.** Above
+   120 million alignment cells (about 11,000 by 11,000 words), the framework
+   counts the WER in linear memory. It then reports utterance results, CER,
+   breakdowns and deletion bursts as unavailable.
+5. **Missing speech depends on the word times of the model.** Whisper word
+   times are approximate. The 200 ms padding and the 20% threshold are
+   settings. The framework did not calibrate them on real audio.
+6. **Corrections references lean toward the model.** The cautions of
+   [Corrections exported from the app](#corrections-exported-from-the-app)
+   apply without change.
+
+## Tier comparison, 2026-11-02
+
+`eval/tier_benchmark.py` compares the Fast, Balanced and Best tiers on one corpus, under one
+plan. The plan is written before the first decode, and it contains the decision gate.
+[eval/TIER-RESULTS.md](../eval/TIER-RESULTS.md) gives the conditions, the data, the results and the
+error analysis.
+
+**Decision: keep Balanced.** No tier met the gate on either corpus.
+
+| Corpus | Fast | Balanced | Best |
+| --- | ---: | ---: | ---: |
+| FLEURS `fil_ph`, read Tagalog, 349 sentences, WER | 12.16% | 11.66% | 11.35% |
+| Liva AI `en-tl`, conversational Taglish, 40 min, WER (two decodes) | 70.5% / 69.0% | 68.3% / 69.6% | 64.8% / 65.6% |
+| Median whole-file RTF (FLEURS / Liva) | 0.086 / 0.258 | 0.067 / 0.153 | 0.247 / 0.606 |
+| Neural Engine residency of the model | 878 MB | 1,580 MB | 3,000 MB |
+
+The gate requires all of these:
+
+- at least 10% relative WER improvement over Balanced;
+- a 95% interval of the difference below zero;
+- a tier that can run live;
+- a median whole-file RTF of 0.6 or less;
+- a model residency of 3,500 MB or less;
+- no more failed decodes than Balanced;
+- a difference that holds in a second decode when the decodes are not repeatable.
+
+Read the conditions before you use these numbers:
+
+- **One Mac.** Every number is from the Mac mini M2 Pro, 16 GB.
+- **Read speech.** FLEURS is read speech.
+- **Not a meeting.** The Liva sample is a gaming voice chat of one group of friends. It is not a meeting, and no transcript of it was identical between two decodes.
+- **Meetings are unmeasured.** Real meeting accuracy is unmeasured. No public Filipino meeting speech was found. The small public Taglish sets with a permissive licence (Liva `en-tl`, 40 minutes; CEnTaCS, 5.4 hours of monologue) are not meetings. [TAGLISH-CORPORA.md](TAGLISH-CORPORA.md) gives the research and corrects an earlier statement about licences.
+
+## Error taxonomy of the tier decodes, 2026-11-02
+
+`eval/taxonomy.py` sorts each word error into one kind. It is an optional report. It reads the
+transcripts that the tier comparison already saved, decodes nothing, and changes no number above.
+[eval/TAXONOMY.md](../eval/TAXONOMY.md) gives the categories, the label rules and the file formats.
+
+**Read this first.**
+
+- **No language label is verified.** No reference in these two corpora has word-level language tags.
+  Every language label below is a heuristic from small word lists that an AI model (Claude) wrote.
+  No native speaker has reviewed the lists. The `verified` count is zero.
+- **The counts show how the decodes fail. They do not measure the speech.**
+- **Do not read a difference of less than about 70 words in one category.** The categories partition
+  the errors, and the total never changes. But when two alignments have the same cost, the choice
+  between them moves words from one category to another. On the Liva first decode, two other
+  tie-breaks (`--tie-break`, folders `liva-tiebreak-*` in the baselines) move
+  `morphology_error` of Best from 44 to 28 words, `other_insertion` of Best from 52 to 106 words,
+  and `boundary_error` of Best from 168 to 140 words. The largest move of any category is 67 words (Balanced `other_substitution`). The `tl_to_en_substitution` gap between
+  Balanced and Best moves little: 98 words with the default tie-break, 91 and 89 with the others.
+- The totals match the published WER: Liva 3,784 / 3,592 / 3,903 errors for Balanced, Best and
+  Fast over 5,537 words; FLEURS 1,121 / 1,091 / 1,169 over 9,613 words. The FLEURS S/D/I of
+  Balanced (869 / 123 / 129) equals the `transcribe --score` figures.
+- Liva Best differs from the published WER by 0.07 points in the first decode (64.87%) and by 0.08
+  in the second (65.69%). The cause is the two backticks that
+  [TIER-RESULTS.md](../eval/TIER-RESULTS.md) names.
+
+### Liva AI `en-tl`, error words by category (first decode)
+
+| Category | Fast | Balanced | Best |
+| --- | ---: | ---: | ---: |
+| `deleted_speech` (runs of 3 or more) | 1,654 | 1,467 | 1,359 |
+| `other_substitution` | 1,251 | 1,258 | 1,257 |
+| `other_deletion` (isolated) | 272 | 305 | 308 |
+| `enclitic_particle` | 201 | 211 | 171 |
+| `boundary_error` | 164 | 156 | 168 |
+| `tl_to_en_substitution` (heuristic) | 165 | 159 | 61 |
+| `proper_noun_error` | 39 | 42 | 35 |
+| `morphology_error` | 33 | 37 | 44 |
+| `hallucination` | 17 | 40 | 54 |
+| `en_to_tl_substitution` (heuristic) | 29 | 16 | 22 |
+| `other_insertion` | 30 | 45 | 52 |
+| `spelling_variant` | 30 | 30 | 40 |
+| `mixed_word_error` | 18 | 18 | 21 |
+| **Errors** (reference words 5,537) | **3,903** | **3,784** | **3,592** |
+
+Every row is heuristic or structural. None is verified.
+
+- **Most errors are speech that produced no words.** Runs of three or more deleted words are 38.8% of
+  the Balanced errors (230 runs, 1,467 words), and isolated deletions add 8.1%. Insertions are 2.5%
+  (93 words; 3.2% and 3.4% with the other two tie-breaks). This agrees with the overlap finding in TIER-RESULTS: the model writes one speaker when
+  two talk.
+- **Best has fewer errors than Balanced by 192 words (first decode) and 216 (second decode).** Two
+  categories hold most of the difference. `tl_to_en_substitution` is 98 words lower in the first
+  decode and 95 lower in the second (91 and 89 lower with the other two tie-breaks). Words in deleted
+  runs are 108 lower and 50 lower (127 and 127 lower with the other tie-breaks in the first decode).
+  The smaller differences are inside the spread and should not be read: `hallucination` words are
+  higher for Best (14 and 43 more) and particle errors are lower (40 and 44 fewer). Best has one run of 18 words in the
+  first decode and one of 102 words in the second decode that lie outside every reference
+  utterance. They are the only two of the 25 inserted runs in the six Liva decodes that the report
+  places outside reference speech. The 102-word run matches the longest loop in TIER-RESULTS.
+- **The Tagalog-to-English substitutions are short words.** 123 of the 159 Balanced reference words
+  have four letters or fewer. They are mostly function words that became short English words
+  ("I", "hello", "okay" and similar). The category counts the language of the output word, so it
+  cannot tell a mishearing from a translation. No translation was found by hand in TIER-RESULTS.
+- **No evidence that code-switch points are worse than other words.** 58.0% of the 495 words at 274
+  heuristic switch points are wrong (287 words). The fair comparison is with the other words that
+  have a `tl` or `en` label, because a switch point needs two such words: 63.3% of those 3,109 words
+  are wrong. The gap is 5.3 points for Balanced, 1.9 for Best (56.4% against 58.3%) and 4.0 for
+  Fast. The 274 points are in four recordings of one friend group, and the labels are heuristic. The comparison
+  with all other words (67.5%) is biased, because it includes the `unknown`, `ambiguous`, `other`
+  and `name` words, which are wrong more often.
+- **Word timestamps.** 17.1% of 3,683 aligned word pairs (Balanced) and 12.9% of 3,788 (Best) have a time
+  more than one second outside the reference utterance. The reference times belong to whole
+  utterances, and the overlapped speech reorders the reference. Read this as an upper bound.
+- **Label coverage.** 26.9% of the Balanced reference tokens are `unknown` or `ambiguous`, and 65.1%
+  are `tl` or `en`. The word lists do not cover the rest. 50 reference tokens are `mix`
+  (Tagalog affix with English stem), so the 18 `mixed_word_error` words are too few to compare.
+- **Names are probably over-counted.** 94 of the 95 `name` reference tokens come from the capital-letter
+  rule, and many capitalised words in these vendor transcripts are not names (ordinary English words
+  that the lists do not contain). Read `proper_noun_error` (42 words) as an upper bound.
+- **Second decode.** The same table for the second decode is in
+  `eval/baselines/taxonomy-2026-11-02/liva-repeat1/`. The `tl_to_en` gap between Balanced (162) and
+  Best (67) repeats. The Fast value does not repeat (165, then 92). The two decodes of one tier
+  differ by up to about 70 words in some categories, so a gap of less than about 70 words in one
+  category is inside the spread between two decodes of one tier.
+
+### FLEURS `fil_ph`, error words by category (first decode)
+
+| Category | Fast | Balanced | Best |
+| --- | ---: | ---: | ---: |
+| `other_substitution` | 575 | 561 | 547 |
+| `spelling_variant` | 145 | 144 | 139 |
+| `proper_noun_error` | 124 | 116 | 111 |
+| `morphology_error` | 109 | 97 | 98 |
+| `other_insertion` | 84 | 84 | 89 |
+| `hallucination` | 33 | 15 | 3 |
+| `deleted_speech` | 27 | 30 | 30 |
+| `enclitic_particle` | 27 | 29 | 29 |
+| `other_deletion` | 42 | 42 | 43 |
+| `boundary_error` | 2 | 2 | 1 |
+| `tl_to_en_substitution`, `en_to_tl_substitution` | 1 | 1 | 1 |
+| **Errors** (reference words 9,613) | **1,169** | **1,121** | **1,091** |
+
+- **This is read Tagalog, and most errors are spelling.** 403 of the 561 Balanced
+  `other_substitution` words are near misses (character similarity of 0.6 or more). 138 of the 144
+  `spelling_variant` words are words that the model joined or split ("kahalin tulad"). The standard
+  WER counts each of these as an error.
+- **Names are 10.3% of the errors,** and 98 of the 116 are a near spelling of the right name. The
+  name labels come from capital letters in a cased reference, so a capitalised word that is not on
+  the word lists is also called a name.
+- **Morphology is 8.7%.** The largest subtype is a dropped linker (`ligature_dropped`, 32 words:
+  "magandang" written "maganda"). Reduplication is wrong in 24 words (13 dropped, 11 added). For 64
+  of the 97 words the shared root is not on the word list (`root_unlisted`), so this category rests
+  on the affix rules more than on the lists.
+- **Language swaps are almost absent** (1 word per tier), as expected for read Tagalog. The older
+  `langscore` heuristic called 608 tokens in these references English (REAL-TAGLISH-PROTOCOL, with its
+  own tokenizer). This tool labels 38 of the 9,613 reference tokens `en` and 2,574 `unknown`, because it
+  does not guess that an unlisted word is Filipino or English. The two numbers do not count the
+  same tokens.
+- 29.5% of the Balanced reference tokens are `unknown` or `ambiguous`. There are no reference times,
+  so no hallucination is placed in silence and no timestamp is checked.
+
+Reproduce, from the saved decodes:
+
+```bash
+python3 -I eval/taxonomy.py plan --plan /tmp/notero-data/tiers/liva-run1/plan.json --out-dir /tmp/tax/liva
+python3 -I eval/taxonomy.py plan --plan /tmp/notero-data/tiers/run1/plan.json --out-dir /tmp/tax/fleurs
+python3 -I eval/taxonomy.py plan --plan /tmp/notero-data/tiers/liva-run1/plan.json --out-dir /tmp/tax/liva-r1 --repeat 1
+python3 -I eval/taxonomy.py plan --plan /tmp/notero-data/tiers/liva-run1/plan.json --out-dir /tmp/tax/liva-t1 --tie-break del-ins-sub
+```
+
+The reports contain counts and no corpus text. They are in `eval/baselines/taxonomy-2026-11-02/`.
+An independent review recomputed every total and the byte-identity of the reports.
 
 ## 2026-11-01 baseline: f022c6e on the Mac mini M2 Pro
 
@@ -877,12 +1261,16 @@ suspects and does not confirm; this matches the lead's own n = 6 offline A/B.
 | `synthetic-taglish` | `eval/audio/synthetic-taglish.wav`, 57 s, in the maintainer's checkout. `eval/audio/` is git-ignored, so a fresh clone has no audio. `eval/make-synthetic.sh` rebuilds it. | `eval/synthetic-taglish.txt`, tracked | 123 words by whitespace, **128 after `score.py` splits hyphens** ("i-send" is two words). Synthetic, Indonesian voice, starts at full amplitude. |
 | `meeting01` | **absent** | **absent** (`eval/refs/` holds only `.gitkeep`) | `eval/manifest.json` references it, so `compare_language.py` prints "skipping clips with no audio or reference on disk: meeting01" and scores one clip. The 25 s excerpt behind the older tables is not on this Mac. |
 | the paused clip (87 s) | **absent** | derived from the synthetic text | `eval/make_paused.py` rebuilds it. Not generated here. |
-| multi-speaker fixtures | not in this branch | RTTM, exact boundaries | The diarization work owns `eval/make_multispeaker.py`. Synthetic text-to-speech voices. |
+| multi-speaker fixtures | `eval/make_multispeaker.py` rebuilds them (`--set tuning`, `holdout`, `speakers`) | RTTM, exact boundaries | Synthetic text-to-speech voices, 2 to 6 speakers. |
+| taxonomy fixture | `eval/fixtures/taxonomy/`, tracked | tagged and plain text, one JSON with times | Synthetic text written for the repository, with expected counts that were worked out from the text. No audio. Exercises every category of `eval/taxonomy.py`. |
+| AMI test set, Liva AI en-tl sample | fetched into `/tmp`, not in git | RTTM (AMI manual and forced-alignment references; Liva speaker-labelled transcripts) | Public, CC BY 4.0. Used for the [diarization comparison](#diarization-comparison-2026-11-02). |
 
-There is **no real Taglish recording with a clean reference, and no real
-diarization ground truth, on any machine that this project has measured on.**
-Every accuracy figure in this file is a comparison on a synthetic clip. None is a
-claim about real Taglish.
+There is **no real Taglish meeting recording with a clean reference on any machine
+that this project has measured on.** The public sets used since then are read
+Tagalog (FLEURS), a Taglish voice chat (Liva AI) and English meetings (AMI). See
+[`eval/TIER-RESULTS.md`](../eval/TIER-RESULTS.md) and [DIARIZATION.md](DIARIZATION.md).
+The figures above the dated sections are comparisons on a synthetic clip, not claims
+about real Taglish.
 
 ## What real data is needed
 
@@ -987,7 +1375,9 @@ in its own worktree, and this repository's benchmark files do not duplicate it:
 `make_multispeaker.py` have been merged here, and `eval/regress.py` uses them: its DER series
 runs the whole `transcribe` path on the synthetic multi-speaker clips and scores the raw spans
 with `der.py`; see [the regression command](#regression-comparison-in-one-command-evalregresspy).
-`diarbench` and `run_diarization_ab.py` are still not in this branch.)
+`diarbench` and `run_diarization_ab.py` have been merged since then, and
+`eval/diarization_eval.py` with `eval/diarization_metrics.py` implements this protocol for
+whole corpora: see [the comparison of 2026-11-02](#diarization-comparison-2026-11-02).)
 
 **The metric.** Diarization error rate is
 
@@ -1043,6 +1433,28 @@ memory of the speaker models**. Quote the footprint and the Neural Engine figure
 together (`transcribe`'s `memory` stages or `eval/residency.py`), and never read a
 smaller footprint as smaller models.
 
+## Diarization comparison, 2026-11-02
+
+The shipping speaker backend (pyannote with WeSpeaker, FluidAudio 0.15.6) against an experimental
+NVIDIA Nemotron 3 backend (FluidAudio 0.18.0, `experimental/nemotron3/`) on the Mac mini M2 Pro.
+[DIARIZATION.md](DIARIZATION.md) has the method, every table and the limits. In short (measured,
+pass 1, collar 0.25 s, overlap scored):
+
+| Corpus | pyannote DER | Nemotron 3 DER | Confusion, pyannote / Nemotron 3 | Merged speakers, pyannote / Nemotron 3 |
+| --- | ---: | ---: | --- | --- |
+| AMI test, 16 meetings, manual references | 23.70% | 24.13% | 9.45% / 0.40% | 19 / 2 |
+| Liva AI en-tl, Taglish voice chat, 4 files | 58.13% | 16.07% | 32.12% / 1.73% | 16 / 2 |
+
+- **Decision: the default does not change.** The gate needed 15% on each real corpus, and AMI
+  gave none. Nemotron 3 also merged one synthetic voice pair that pyannote kept apart.
+- **The AMI result depends on the reference.** Against the forced-alignment AMI references, the
+  same outputs score 24.86% and 3.49%.
+- Both backends gave identical output in both passes on all 37 files.
+- **Memory:** the shipping speaker pass's process footprint grew to 1.68 GB on a 50-minute
+  meeting, about 27 MB per minute of audio.
+
+Evidence: [`eval/baselines/diarization-2026-11-02/`](../eval/baselines/diarization-2026-11-02/).
+
 ## Limitations
 
 1. **One machine at a time.** The tables above the dated baseline come from one
@@ -1059,9 +1471,8 @@ smaller footprint as smaller models.
    hardest case to reproduce without private data.
 5. **Two scorers report different WER for the same transcript.** Check which
    one a number came from before you compare it to another number.
-6. **Each accuracy number is the Balanced tier.** No measurement compares one
-   model against another model. Therefore this file cannot tell you if the
-   Best tier or the Fast tier gives a better or a worse transcript.
+6. **Most accuracy numbers here are the Balanced tier.** The
+   [tier comparison](#tier-comparison-2026-11-02) is the only measurement of all three tiers.
    [MODELS.md](MODELS.md) lists which tier promises this project measured,
    and which ones it infers.
 7. **One run is not a measurement.** The same build gives a different
@@ -1089,7 +1500,10 @@ smaller footprint as smaller models.
 11. **Memory figures describe one process.** None describes the whole machine, and
     none of the footprints contains the model. [Which number is which](#which-number-is-which)
     says what each figure is.
-12. **The findings are engineering results and not product guarantees.** The
+12. **The evaluation framework has no results yet.** It exists since
+   2026-11-02. [Limitations of the framework](#limitations-of-the-framework)
+   gives its own limits.
+13. **The findings are engineering results and not product guarantees.** The
    caveat section of [FINDINGS.md](FINDINGS.md) says which findings are
    structural, and which ones must be derived again against your own
    recordings.

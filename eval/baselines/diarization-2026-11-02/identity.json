@@ -1,0 +1,5622 @@
+{
+ "failures": 0,
+ "planSha256": "48f938630efe977a0750ee4b126e64b374fa5d34847b9316a4aa8b5fa7ab946d",
+ "rows": [
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 54.94,
+    "seconds": 254.33,
+    "wrong": 45.06
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_007",
+   "label": {
+    "default": 0.0,
+    "right": 54.94,
+    "seconds": 254.33,
+    "wrong": 45.06
+   },
+   "renumbered": [],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 256.6,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_007",
+   "label": {
+    "default": 0.0,
+    "right": 44.45,
+    "seconds": 256.6,
+    "wrong": 55.55
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker3",
+    "Speaker5",
+    "Speaker6"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 4,
+   "voices_renumbered": 4
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 29.58,
+    "right": 34.44,
+    "seconds": 261.74,
+    "wrong": 35.97
+   },
+   "carry_inherited": {
+    "S1": "S1"
+   },
+   "carry_kept": [
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_007",
+   "label": {
+    "default": 4.69,
+    "right": 56.53,
+    "seconds": 261.74,
+    "wrong": 38.78
+   },
+   "renumbered": [
+    "Speaker5",
+    "Speaker6"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 12.72,
+    "right": 34.12,
+    "seconds": 268.28,
+    "wrong": 53.15
+   },
+   "carry_inherited": {
+    "S1": "S1"
+   },
+   "carry_kept": [
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_007",
+   "label": {
+    "default": 0.0,
+    "right": 44.0,
+    "seconds": 268.28,
+    "wrong": 56.0
+   },
+   "renumbered": [
+    "Speaker5",
+    "Speaker6"
+   ],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 91.45,
+    "seconds": 267.32,
+    "wrong": 8.55
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S3",
+    "S3": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_007",
+   "label": {
+    "default": 0.0,
+    "right": 48.7,
+    "seconds": 267.32,
+    "wrong": 51.3
+   },
+   "renumbered": [
+    "Speaker3",
+    "Speaker5"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 267.4,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_007",
+   "label": {
+    "default": 0.0,
+    "right": 49.06,
+    "seconds": 267.4,
+    "wrong": 50.94
+   },
+   "renumbered": [
+    "Speaker3",
+    "Speaker5"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 93.25,
+    "seconds": 274.07,
+    "wrong": 6.75
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S3",
+    "S3": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_007",
+   "label": {
+    "default": 0.0,
+    "right": 49.81,
+    "seconds": 274.07,
+    "wrong": 50.19
+   },
+   "renumbered": [
+    "Speaker3",
+    "Speaker5"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 90.9,
+    "seconds": 270.45,
+    "wrong": 9.1
+   },
+   "carry_inherited": {
+    "S1": "S3",
+    "S2": "S1",
+    "S3": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_007",
+   "label": {
+    "default": 0.0,
+    "right": 3.41,
+    "seconds": 270.45,
+    "wrong": 96.59
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker3",
+    "Speaker5"
+   ],
+   "variant": "aac64",
+   "voices_in_both": 3,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 90.45,
+    "seconds": 267.75,
+    "wrong": 9.55
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_007",
+   "label": {
+    "default": 0.0,
+    "right": 29.95,
+    "seconds": 267.75,
+    "wrong": 70.05
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker5"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 267.97,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_007",
+   "label": {
+    "default": 0.0,
+    "right": 29.73,
+    "seconds": 267.97,
+    "wrong": 70.27
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker5"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 92.22,
+    "seconds": 269.68,
+    "wrong": 7.78
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_007",
+   "label": {
+    "default": 0.0,
+    "right": 32.08,
+    "seconds": 269.68,
+    "wrong": 67.92
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker5"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 88.26,
+    "seconds": 269.68,
+    "wrong": 11.74
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_007",
+   "label": {
+    "default": 0.0,
+    "right": 88.26,
+    "seconds": 269.68,
+    "wrong": 11.74
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 47.15,
+    "seconds": 348.67,
+    "wrong": 52.85
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_009",
+   "label": {
+    "default": 0.0,
+    "right": 47.15,
+    "seconds": 348.67,
+    "wrong": 52.85
+   },
+   "renumbered": [],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 14.63,
+    "right": 40.3,
+    "seconds": 357.03,
+    "wrong": 45.07
+   },
+   "carry_inherited": {
+    "S1": "S1"
+   },
+   "carry_kept": [
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_009",
+   "label": {
+    "default": 0.0,
+    "right": 48.22,
+    "seconds": 357.03,
+    "wrong": 51.78
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 9.93,
+    "right": 40.43,
+    "seconds": 361.33,
+    "wrong": 49.64
+   },
+   "carry_inherited": {
+    "S2": "S1"
+   },
+   "carry_kept": [
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_009",
+   "label": {
+    "default": 0.8,
+    "right": 9.55,
+    "seconds": 361.33,
+    "wrong": 89.65
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker3",
+    "Speaker5"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 9.13,
+    "right": 45.53,
+    "seconds": 359.84,
+    "wrong": 45.34
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S4": "S4"
+   },
+   "carry_kept": [
+    "S3"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_009",
+   "label": {
+    "default": 0.0,
+    "right": 47.56,
+    "seconds": 359.84,
+    "wrong": 52.44
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 87.48,
+    "seconds": 374.32,
+    "wrong": 12.52
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4",
+    "S5": "S5"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_009",
+   "label": {
+    "default": 0.0,
+    "right": 87.48,
+    "seconds": 374.32,
+    "wrong": 12.52
+   },
+   "renumbered": [],
+   "variant": "mute-opener",
+   "voices_in_both": 5,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 374.67,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_009",
+   "label": {
+    "default": 0.0,
+    "right": 23.45,
+    "seconds": 374.67,
+    "wrong": 76.55
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker3"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 5,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 16.48,
+    "right": 71.93,
+    "seconds": 363.8,
+    "wrong": 11.59
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S3": "S4"
+   },
+   "carry_kept": [
+    "S2",
+    "S3",
+    "S5"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_009",
+   "label": {
+    "default": 0.0,
+    "right": 35.97,
+    "seconds": 363.8,
+    "wrong": 64.03
+   },
+   "renumbered": [
+    "Speaker3",
+    "Speaker5"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 89.65,
+    "seconds": 376.65,
+    "wrong": 10.35
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S4",
+    "S3": "S2",
+    "S4": "S3",
+    "S5": "S5"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_009",
+   "label": {
+    "default": 0.0,
+    "right": 40.57,
+    "seconds": 376.65,
+    "wrong": 59.43
+   },
+   "renumbered": [
+    "Speaker3",
+    "Speaker5",
+    "Speaker6"
+   ],
+   "variant": "aac64",
+   "voices_in_both": 5,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 28.25,
+    "right": 51.65,
+    "seconds": 344.5,
+    "wrong": 20.1
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S3",
+    "S3": "S4",
+    "S5": "S5"
+   },
+   "carry_kept": [
+    "S2"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_009",
+   "label": {
+    "default": 0.0,
+    "right": 37.92,
+    "seconds": 344.5,
+    "wrong": 62.08
+   },
+   "renumbered": [
+    "Speaker3",
+    "Speaker5",
+    "Speaker6"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 5,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 370.5,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_009",
+   "label": {
+    "default": 0.0,
+    "right": 10.45,
+    "seconds": 370.5,
+    "wrong": 89.55
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker3",
+    "Speaker5",
+    "Speaker6"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 5,
+   "voices_renumbered": 4
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 14.96,
+    "right": 70.73,
+    "seconds": 358.44,
+    "wrong": 14.31
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_009",
+   "label": {
+    "default": 0.0,
+    "right": 78.75,
+    "seconds": 358.44,
+    "wrong": 21.25
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 89.17,
+    "seconds": 375.61,
+    "wrong": 10.83
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4",
+    "S5": "S5"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_009",
+   "label": {
+    "default": 0.0,
+    "right": 89.17,
+    "seconds": 375.61,
+    "wrong": 10.83
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 5,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 51.97,
+    "seconds": 372.8,
+    "wrong": 48.03
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4",
+    "S5": "S5"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_015",
+   "label": {
+    "default": 0.0,
+    "right": 51.97,
+    "seconds": 372.8,
+    "wrong": 48.03
+   },
+   "renumbered": [],
+   "variant": "mute-opener",
+   "voices_in_both": 5,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 15.08,
+    "right": 44.03,
+    "seconds": 371.25,
+    "wrong": 40.9
+   },
+   "carry_inherited": {
+    "S2": "S2"
+   },
+   "carry_kept": [
+    "S1",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_015",
+   "label": {
+    "default": 0.0,
+    "right": 47.14,
+    "seconds": 371.25,
+    "wrong": 52.86
+   },
+   "renumbered": [
+    "Speaker2",
+    "Speaker5",
+    "Speaker6"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 5,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 9.33,
+    "right": 45.5,
+    "seconds": 392.69,
+    "wrong": 45.17
+   },
+   "carry_inherited": {
+    "S2": "S2"
+   },
+   "carry_kept": [
+    "S1",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_015",
+   "label": {
+    "default": 0.0,
+    "right": 47.23,
+    "seconds": 392.69,
+    "wrong": 52.77
+   },
+   "renumbered": [
+    "Speaker2",
+    "Speaker6"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 12.59,
+    "right": 47.31,
+    "seconds": 391.51,
+    "wrong": 40.1
+   },
+   "carry_inherited": {
+    "S2": "S2",
+    "S4": "S4",
+    "S6": "S5"
+   },
+   "carry_kept": [
+    "S1",
+    "S3"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_015",
+   "label": {
+    "default": 0.85,
+    "right": 48.99,
+    "seconds": 391.51,
+    "wrong": 50.16
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker2",
+    "Speaker6"
+   ],
+   "variant": "aac64",
+   "voices_in_both": 5,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 84.27,
+    "seconds": 358.56,
+    "wrong": 15.73
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_015",
+   "label": {
+    "default": 0.0,
+    "right": 28.44,
+    "seconds": 358.56,
+    "wrong": 71.56
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker3"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 360.84,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_015",
+   "label": {
+    "default": 0.0,
+    "right": 27.92,
+    "seconds": 360.84,
+    "wrong": 72.08
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker3"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 73.92,
+    "seconds": 321.27,
+    "wrong": 26.08
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S4"
+   },
+   "carry_kept": [
+    "S3"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_015",
+   "label": {
+    "default": 0.0,
+    "right": 68.74,
+    "seconds": 321.27,
+    "wrong": 31.26
+   },
+   "renumbered": [
+    "Speaker5"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 3,
+   "voices_renumbered": 1
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 81.97,
+    "seconds": 363.04,
+    "wrong": 18.03
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_015",
+   "label": {
+    "default": 0.0,
+    "right": 81.97,
+    "seconds": 363.04,
+    "wrong": 18.03
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 80.39,
+    "seconds": 357.96,
+    "wrong": 19.61
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_015",
+   "label": {
+    "default": 0.0,
+    "right": 29.8,
+    "seconds": 357.96,
+    "wrong": 70.2
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker3"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 354.72,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_015",
+   "label": {
+    "default": 0.0,
+    "right": 28.86,
+    "seconds": 354.72,
+    "wrong": 71.14
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker3"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.56,
+    "right": 74.74,
+    "seconds": 302.13,
+    "wrong": 24.7
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S4"
+   },
+   "carry_kept": [
+    "S3"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_015",
+   "label": {
+    "default": 0.0,
+    "right": 71.24,
+    "seconds": 302.13,
+    "wrong": 28.76
+   },
+   "renumbered": [
+    "Speaker2",
+    "Speaker5"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 81.81,
+    "seconds": 359.99,
+    "wrong": 18.19
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_015",
+   "label": {
+    "default": 0.0,
+    "right": 81.81,
+    "seconds": 359.99,
+    "wrong": 18.19
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 21.37,
+    "right": 27.73,
+    "seconds": 408.55,
+    "wrong": 50.9
+   },
+   "carry_inherited": {
+    "S2": "S1",
+    "S3": "S4"
+   },
+   "carry_kept": [
+    "S2",
+    "S3"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_016",
+   "label": {
+    "default": 0.0,
+    "right": 18.58,
+    "seconds": 408.55,
+    "wrong": 81.42
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker5"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 16.84,
+    "right": 27.89,
+    "seconds": 420.68,
+    "wrong": 55.27
+   },
+   "carry_inherited": {
+    "S1": "S1"
+   },
+   "carry_kept": [
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_016",
+   "label": {
+    "default": 1.04,
+    "right": 31.37,
+    "seconds": 420.68,
+    "wrong": 67.59
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 9.07,
+    "right": 33.64,
+    "seconds": 423.26,
+    "wrong": 57.28
+   },
+   "carry_inherited": {
+    "S1": "S1"
+   },
+   "carry_kept": [
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_016",
+   "label": {
+    "default": 1.55,
+    "right": 34.66,
+    "seconds": 423.26,
+    "wrong": 63.78
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker2",
+    "Speaker5"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 16.93,
+    "right": 30.11,
+    "seconds": 417.07,
+    "wrong": 52.96
+   },
+   "carry_inherited": {
+    "S1": "S1"
+   },
+   "carry_kept": [
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_016",
+   "label": {
+    "default": 1.91,
+    "right": 32.18,
+    "seconds": 417.07,
+    "wrong": 65.91
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker2",
+    "Speaker5"
+   ],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 83.65,
+    "seconds": 444.23,
+    "wrong": 16.35
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1",
+    "S3": "S3",
+    "S4": "S4",
+    "S5": "S5"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_016",
+   "label": {
+    "default": 0.0,
+    "right": 42.81,
+    "seconds": 444.23,
+    "wrong": 57.19
+   },
+   "renumbered": [
+    "Speaker2",
+    "Speaker3"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 5,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 443.4,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_016",
+   "label": {
+    "default": 0.0,
+    "right": 84.33,
+    "seconds": 443.4,
+    "wrong": 15.67
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 5,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 79.34,
+    "seconds": 426.09,
+    "wrong": 20.66
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S3",
+    "S3": "S2",
+    "S4": "S4"
+   },
+   "carry_kept": [
+    "S5"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_016",
+   "label": {
+    "default": 0.0,
+    "right": 46.4,
+    "seconds": 426.09,
+    "wrong": 53.6
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker2"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.04,
+    "right": 80.16,
+    "seconds": 450.17,
+    "wrong": 19.8
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [
+    "S5"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_016",
+   "label": {
+    "default": 0.0,
+    "right": 80.2,
+    "seconds": 450.17,
+    "wrong": 19.8
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 5,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 1.24,
+    "right": 80.69,
+    "seconds": 444.18,
+    "wrong": 18.07
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1",
+    "S3": "S4",
+    "S4": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_016",
+   "label": {
+    "default": 1.24,
+    "right": 4.99,
+    "seconds": 444.18,
+    "wrong": 93.77
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker2",
+    "Speaker3",
+    "Speaker5"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 4
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 443.98,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "liva",
+   "item": "liva-C_001_016",
+   "label": {
+    "default": 0.0,
+    "right": 46.3,
+    "seconds": 443.98,
+    "wrong": 53.7
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker5"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 76.66,
+    "seconds": 397.24,
+    "wrong": 23.34
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S3",
+    "S3": "S2",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_016",
+   "label": {
+    "default": 0.0,
+    "right": 49.66,
+    "seconds": 397.24,
+    "wrong": 50.34
+   },
+   "renumbered": [
+    "Speaker1",
+    "Speaker2"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 81.83,
+    "seconds": 452.78,
+    "wrong": 18.17
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "liva",
+   "item": "liva-C_001_016",
+   "label": {
+    "default": 0.0,
+    "right": 81.83,
+    "seconds": 452.78,
+    "wrong": 18.17
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 51.51,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-chunk-fusion",
+   "label": {
+    "default": 0.0,
+    "right": 0.0,
+    "seconds": 51.51,
+    "wrong": 100.0
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 2,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 53.76,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-chunk-fusion",
+   "label": {
+    "default": 0.0,
+    "right": 99.05,
+    "seconds": 53.76,
+    "wrong": 0.95
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 54.06,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-chunk-fusion",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 54.06,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 56.33,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-chunk-fusion",
+   "label": {
+    "default": 0.0,
+    "right": 51.98,
+    "seconds": 56.33,
+    "wrong": 48.02
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 1,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 53.09,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-chunk-fusion",
+   "label": {
+    "default": 0.0,
+    "right": 0.0,
+    "seconds": 53.09,
+    "wrong": 100.0
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 2,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 60.28,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-chunk-fusion",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 60.28,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 64.75,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-chunk-fusion",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 64.75,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 65.19,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-chunk-fusion",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 65.19,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 60.6,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-chunk-fusion",
+   "label": {
+    "default": 0.0,
+    "right": 0.0,
+    "seconds": 60.6,
+    "wrong": 100.0
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 2,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 60.1,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-chunk-fusion",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 60.1,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 64.74,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-chunk-fusion",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 64.74,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 65.21,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-chunk-fusion",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 65.21,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 118.31,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S3",
+    "S2": "S2",
+    "S3": "S4",
+    "S4": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-four-voices",
+   "label": {
+    "default": 0.0,
+    "right": 25.65,
+    "seconds": 118.31,
+    "wrong": 74.35
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk4"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 118.49,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-four-voices",
+   "label": {
+    "default": 0.0,
+    "right": 0.0,
+    "seconds": 118.49,
+    "wrong": 100.0
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk3",
+    "spk4"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 4,
+   "voices_renumbered": 4
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 96.19,
+    "seconds": 126.77,
+    "wrong": 3.81
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S3",
+    "S3": "S2",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-four-voices",
+   "label": {
+    "default": 0.0,
+    "right": 51.58,
+    "seconds": 126.77,
+    "wrong": 48.42
+   },
+   "renumbered": [
+    "spk3",
+    "spk4"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 93.98,
+    "seconds": 134.66,
+    "wrong": 6.02
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-four-voices",
+   "label": {
+    "default": 0.0,
+    "right": 93.98,
+    "seconds": 134.66,
+    "wrong": 6.02
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 94.78,
+    "seconds": 133.15,
+    "wrong": 5.22
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S3",
+    "S3": "S1",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-four-voices",
+   "label": {
+    "default": 0.0,
+    "right": 26.64,
+    "seconds": 133.15,
+    "wrong": 73.36
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk4"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 131.5,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-four-voices",
+   "label": {
+    "default": 0.0,
+    "right": 7.46,
+    "seconds": 131.5,
+    "wrong": 92.54
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk3"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 133.97,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-four-voices",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 133.97,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 133.32,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-four-voices",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 133.32,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 94.65,
+    "seconds": 129.67,
+    "wrong": 5.35
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S3",
+    "S3": "S1",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-four-voices",
+   "label": {
+    "default": 0.0,
+    "right": 22.38,
+    "seconds": 129.67,
+    "wrong": 77.62
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk4"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 124.84,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-four-voices",
+   "label": {
+    "default": 0.0,
+    "right": 24.35,
+    "seconds": 124.84,
+    "wrong": 75.65
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk4"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 4,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 96.48,
+    "seconds": 131.32,
+    "wrong": 3.52
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-four-voices",
+   "label": {
+    "default": 0.0,
+    "right": 96.48,
+    "seconds": 131.32,
+    "wrong": 3.52
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 96.94,
+    "seconds": 138.1,
+    "wrong": 3.06
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-four-voices",
+   "label": {
+    "default": 0.0,
+    "right": 96.94,
+    "seconds": 138.1,
+    "wrong": 3.06
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 98.46,
+    "seconds": 67.9,
+    "wrong": 1.54
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-overlap",
+   "label": {
+    "default": 0.0,
+    "right": 98.46,
+    "seconds": 67.9,
+    "wrong": 1.54
+   },
+   "renumbered": [],
+   "variant": "mute-opener",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 44.72,
+    "right": 55.28,
+    "seconds": 71.29,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S3": "S3"
+   },
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-overlap",
+   "label": {
+    "default": 0.0,
+    "right": 93.62,
+    "seconds": 71.29,
+    "wrong": 6.38
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 97.48,
+    "seconds": 55.57,
+    "wrong": 2.52
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S3",
+    "S3": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-overlap",
+   "label": {
+    "default": 0.0,
+    "right": 32.64,
+    "seconds": 55.57,
+    "wrong": 67.36
+   },
+   "renumbered": [
+    "spk1",
+    "spk3"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 97.67,
+    "seconds": 71.52,
+    "wrong": 2.33
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-overlap",
+   "label": {
+    "default": 0.0,
+    "right": 97.67,
+    "seconds": 71.52,
+    "wrong": 2.33
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 32.58,
+    "right": 67.42,
+    "seconds": 76.2,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S2"
+   },
+   "carry_kept": [
+    "S1",
+    "S3"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-overlap",
+   "label": {
+    "default": 0.0,
+    "right": 0.0,
+    "seconds": 76.2,
+    "wrong": 100.0
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk3"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 3,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 36.16,
+    "right": 63.84,
+    "seconds": 77.93,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S3": "S2"
+   },
+   "carry_kept": [
+    "S1",
+    "S3"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-overlap",
+   "label": {
+    "default": 0.0,
+    "right": 0.0,
+    "seconds": 77.93,
+    "wrong": 100.0
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk3"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.67,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-overlap",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.67,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.27,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-overlap",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.27,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 93.56,
+    "seconds": 77.27,
+    "wrong": 6.44
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S3",
+    "S3": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-overlap",
+   "label": {
+    "default": 0.0,
+    "right": 4.22,
+    "seconds": 77.27,
+    "wrong": 95.78
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk3"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 3,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 36.13,
+    "right": 63.87,
+    "seconds": 77.9,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S3": "S2"
+   },
+   "carry_kept": [
+    "S1",
+    "S3"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-overlap",
+   "label": {
+    "default": 0.0,
+    "right": 0.0,
+    "seconds": 77.9,
+    "wrong": 100.0
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk3"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.71,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-overlap",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.71,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.0,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-overlap",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.0,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 81.64,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-voices",
+   "label": {
+    "default": 0.0,
+    "right": 24.49,
+    "seconds": 81.64,
+    "wrong": 75.51
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 85.38,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-voices",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 85.38,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 99.46,
+    "seconds": 76.6,
+    "wrong": 0.54
+   },
+   "carry_inherited": {
+    "S1": "S3",
+    "S2": "S2",
+    "S3": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-voices",
+   "label": {
+    "default": 0.0,
+    "right": 49.67,
+    "seconds": 76.6,
+    "wrong": 50.33
+   },
+   "renumbered": [
+    "spk2",
+    "spk3"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 74.62,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-voices",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 74.62,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 96.77,
+    "seconds": 106.51,
+    "wrong": 3.23
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-voices",
+   "label": {
+    "default": 0.0,
+    "right": 18.62,
+    "seconds": 106.52,
+    "wrong": 81.38
+   },
+   "renumbered": [
+    "spk1",
+    "spk3"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 22.14,
+    "right": 77.86,
+    "seconds": 105.36,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S3": "S2"
+   },
+   "carry_kept": [
+    "S3"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-voices",
+   "label": {
+    "default": 0.0,
+    "right": 38.76,
+    "seconds": 105.36,
+    "wrong": 61.24
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 109.09,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-voices",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 109.09,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 109.7,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-voices",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 109.7,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 104.74,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-voices",
+   "label": {
+    "default": 0.0,
+    "right": 20.4,
+    "seconds": 104.74,
+    "wrong": 79.6
+   },
+   "renumbered": [
+    "spk1",
+    "spk3"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 22.11,
+    "right": 77.89,
+    "seconds": 105.43,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S3": "S2"
+   },
+   "carry_kept": [
+    "S3"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-voices",
+   "label": {
+    "default": 0.0,
+    "right": 38.8,
+    "seconds": 105.43,
+    "wrong": 61.2
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 109.08,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-voices",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 109.08,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 109.72,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-three-voices",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 109.72,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 78.43,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-distinct",
+   "label": {
+    "default": 0.0,
+    "right": 0.0,
+    "seconds": 78.43,
+    "wrong": 100.0
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 2,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 73.35,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-distinct",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 73.35,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 80.3,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-distinct",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 80.3,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 94.36,
+    "seconds": 83.73,
+    "wrong": 5.64
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-distinct",
+   "label": {
+    "default": 0.0,
+    "right": 94.36,
+    "seconds": 83.73,
+    "wrong": 5.64
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 81.96,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-distinct",
+   "label": {
+    "default": 0.0,
+    "right": 0.0,
+    "seconds": 81.96,
+    "wrong": 100.0
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 2,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 79.29,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-distinct",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 79.29,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 85.78,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-distinct",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 85.78,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 86.09,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-distinct",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 86.09,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 81.96,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-distinct",
+   "label": {
+    "default": 0.0,
+    "right": 0.0,
+    "seconds": 81.96,
+    "wrong": 100.0
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 2,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 79.28,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-distinct",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 79.28,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 85.78,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-distinct",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 85.78,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 86.08,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-distinct",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 86.08,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 98.16,
+    "seconds": 67.01,
+    "wrong": 1.84
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-short-turns",
+   "label": {
+    "default": 0.0,
+    "right": 98.16,
+    "seconds": 67.01,
+    "wrong": 1.84
+   },
+   "renumbered": [],
+   "variant": "mute-opener",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 64.15,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-short-turns",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 64.15,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 97.74,
+    "seconds": 70.24,
+    "wrong": 2.26
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-short-turns",
+   "label": {
+    "default": 0.0,
+    "right": 97.74,
+    "seconds": 70.24,
+    "wrong": 2.26
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 98.29,
+    "seconds": 72.12,
+    "wrong": 1.71
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-short-turns",
+   "label": {
+    "default": 0.0,
+    "right": 98.29,
+    "seconds": 72.12,
+    "wrong": 1.71
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 75.39,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-short-turns",
+   "label": {
+    "default": 0.0,
+    "right": 37.37,
+    "seconds": 75.39,
+    "wrong": 62.63
+   },
+   "renumbered": [
+    "spk1"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 1,
+   "voices_renumbered": 1
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 74.77,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-short-turns",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 74.77,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 78.61,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-short-turns",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 78.61,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 79.05,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-short-turns",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 79.05,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 75.05,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-short-turns",
+   "label": {
+    "default": 0.0,
+    "right": 37.12,
+    "seconds": 75.05,
+    "wrong": 62.88
+   },
+   "renumbered": [
+    "spk1"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 1,
+   "voices_renumbered": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 74.79,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-short-turns",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 74.79,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 78.6,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-short-turns",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 78.6,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 79.02,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-short-turns",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 79.02,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 61.88,
+    "seconds": 74.84,
+    "wrong": 38.12
+   },
+   "carry_inherited": {
+    "S1": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-similar",
+   "label": {
+    "default": 0.0,
+    "right": 61.88,
+    "seconds": 74.84,
+    "wrong": 38.12
+   },
+   "renumbered": [],
+   "variant": "mute-opener",
+   "voices_in_both": 1,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 64.21,
+    "seconds": 74.95,
+    "wrong": 35.79
+   },
+   "carry_inherited": {
+    "S1": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-similar",
+   "label": {
+    "default": 0.0,
+    "right": 64.21,
+    "seconds": 74.95,
+    "wrong": 35.79
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 1,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 61.69,
+    "seconds": 76.8,
+    "wrong": 38.31
+   },
+   "carry_inherited": {
+    "S1": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-similar",
+   "label": {
+    "default": 0.0,
+    "right": 61.69,
+    "seconds": 76.8,
+    "wrong": 38.31
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 1,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 62.38,
+    "seconds": 77.37,
+    "wrong": 37.62
+   },
+   "carry_inherited": {
+    "S1": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-similar",
+   "label": {
+    "default": 0.0,
+    "right": 62.38,
+    "seconds": 77.37,
+    "wrong": 37.62
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 1,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 78.45,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-similar",
+   "label": {
+    "default": 0.0,
+    "right": 0.0,
+    "seconds": 78.45,
+    "wrong": 100.0
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 2,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 78.82,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-similar",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 78.82,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.37,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-similar",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.37,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.02,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-similar",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.02,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 95.75,
+    "seconds": 77.87,
+    "wrong": 4.25
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-similar",
+   "label": {
+    "default": 0.0,
+    "right": 4.25,
+    "seconds": 77.87,
+    "wrong": 95.75
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 2,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 78.79,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2"
+   ],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-similar",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 78.79,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.36,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-similar",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.36,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.17,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-tuning",
+   "item": "synth-tuning-two-similar",
+   "label": {
+    "default": 0.0,
+    "right": 100.0,
+    "seconds": 83.17,
+    "wrong": 0.0
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 97.35,
+    "seconds": 96.37,
+    "wrong": 2.65
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n2",
+   "label": {
+    "default": 0.0,
+    "right": 97.35,
+    "seconds": 96.37,
+    "wrong": 2.65
+   },
+   "renumbered": [],
+   "variant": "mute-opener",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 24.86,
+    "right": 72.71,
+    "seconds": 92.32,
+    "wrong": 2.43
+   },
+   "carry_inherited": {
+    "S2": "S1"
+   },
+   "carry_kept": [
+    "S2"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n2",
+   "label": {
+    "default": 0.0,
+    "right": 2.43,
+    "seconds": 92.32,
+    "wrong": 97.57
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 97.28,
+    "seconds": 98.3,
+    "wrong": 2.72
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n2",
+   "label": {
+    "default": 0.0,
+    "right": 97.28,
+    "seconds": 98.3,
+    "wrong": 2.72
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 97.32,
+    "seconds": 98.54,
+    "wrong": 2.68
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n2",
+   "label": {
+    "default": 0.0,
+    "right": 97.32,
+    "seconds": 98.54,
+    "wrong": 2.68
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 95.97,
+    "seconds": 104.09,
+    "wrong": 4.03
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n2",
+   "label": {
+    "default": 0.0,
+    "right": 4.03,
+    "seconds": 104.09,
+    "wrong": 95.97
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 2,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 28.2,
+    "right": 71.32,
+    "seconds": 100.89,
+    "wrong": 0.48
+   },
+   "carry_inherited": {
+    "S2": "S2"
+   },
+   "carry_kept": [
+    "S1"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n2",
+   "label": {
+    "default": 0.0,
+    "right": 99.52,
+    "seconds": 100.89,
+    "wrong": 0.48
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 99.54,
+    "seconds": 104.78,
+    "wrong": 0.46
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n2",
+   "label": {
+    "default": 0.0,
+    "right": 99.54,
+    "seconds": 104.78,
+    "wrong": 0.46
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 99.54,
+    "seconds": 104.9,
+    "wrong": 0.46
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n2",
+   "label": {
+    "default": 0.0,
+    "right": 99.54,
+    "seconds": 104.9,
+    "wrong": 0.46
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 95.96,
+    "seconds": 103.32,
+    "wrong": 4.04
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n2",
+   "label": {
+    "default": 0.0,
+    "right": 4.04,
+    "seconds": 103.32,
+    "wrong": 95.96
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 2,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 28.19,
+    "right": 71.33,
+    "seconds": 100.88,
+    "wrong": 0.48
+   },
+   "carry_inherited": {
+    "S2": "S2"
+   },
+   "carry_kept": [
+    "S1"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n2",
+   "label": {
+    "default": 0.0,
+    "right": 99.52,
+    "seconds": 100.88,
+    "wrong": 0.48
+   },
+   "renumbered": [],
+   "variant": "trim-head",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 99.53,
+    "seconds": 104.69,
+    "wrong": 0.47
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n2",
+   "label": {
+    "default": 0.0,
+    "right": 99.53,
+    "seconds": 104.69,
+    "wrong": 0.47
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 99.54,
+    "seconds": 104.96,
+    "wrong": 0.46
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n2",
+   "label": {
+    "default": 0.0,
+    "right": 99.54,
+    "seconds": 104.96,
+    "wrong": 0.46
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 2,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 97.99,
+    "seconds": 102.09,
+    "wrong": 2.01
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S3",
+    "S3": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n3",
+   "label": {
+    "default": 0.0,
+    "right": 1.53,
+    "seconds": 102.09,
+    "wrong": 98.47
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk3"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 3,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 109.91,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n3",
+   "label": {
+    "default": 0.0,
+    "right": 1.91,
+    "seconds": 109.91,
+    "wrong": 98.09
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk3"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 96.79,
+    "seconds": 110.78,
+    "wrong": 3.21
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S3",
+    "S3": "S2"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n3",
+   "label": {
+    "default": 0.0,
+    "right": 36.55,
+    "seconds": 110.78,
+    "wrong": 63.45
+   },
+   "renumbered": [
+    "spk2",
+    "spk3"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 96.44,
+    "seconds": 120.48,
+    "wrong": 3.56
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n3",
+   "label": {
+    "default": 0.0,
+    "right": 96.44,
+    "seconds": 120.48,
+    "wrong": 3.56
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 99.59,
+    "seconds": 119.34,
+    "wrong": 0.41
+   },
+   "carry_inherited": {
+    "S1": "S3",
+    "S2": "S2",
+    "S3": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n3",
+   "label": {
+    "default": 0.0,
+    "right": 49.31,
+    "seconds": 119.34,
+    "wrong": 50.69
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 119.65,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n3",
+   "label": {
+    "default": 0.0,
+    "right": 49.45,
+    "seconds": 119.65,
+    "wrong": 50.55
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 99.64,
+    "seconds": 134.37,
+    "wrong": 0.36
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n3",
+   "label": {
+    "default": 0.0,
+    "right": 99.64,
+    "seconds": 134.37,
+    "wrong": 0.36
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 99.64,
+    "seconds": 134.15,
+    "wrong": 0.36
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n3",
+   "label": {
+    "default": 0.0,
+    "right": 99.64,
+    "seconds": 134.15,
+    "wrong": 0.36
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 99.59,
+    "seconds": 119.75,
+    "wrong": 0.41
+   },
+   "carry_inherited": {
+    "S1": "S3",
+    "S2": "S2",
+    "S3": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n3",
+   "label": {
+    "default": 0.0,
+    "right": 49.51,
+    "seconds": 119.75,
+    "wrong": 50.49
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 119.89,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n3",
+   "label": {
+    "default": 0.0,
+    "right": 49.43,
+    "seconds": 119.89,
+    "wrong": 50.57
+   },
+   "renumbered": [
+    "spk1",
+    "spk2"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 3,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 99.64,
+    "seconds": 134.26,
+    "wrong": 0.36
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n3",
+   "label": {
+    "default": 0.0,
+    "right": 99.64,
+    "seconds": 134.26,
+    "wrong": 0.36
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 99.08,
+    "seconds": 134.66,
+    "wrong": 0.92
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n3",
+   "label": {
+    "default": 0.0,
+    "right": 99.08,
+    "seconds": 134.66,
+    "wrong": 0.92
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 3,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 95.12,
+    "seconds": 134.16,
+    "wrong": 4.88
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n4",
+   "label": {
+    "default": 0.0,
+    "right": 45.49,
+    "seconds": 134.16,
+    "wrong": 54.51
+   },
+   "renumbered": [
+    "spk1",
+    "spk4"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 133.61,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n4",
+   "label": {
+    "default": 0.0,
+    "right": 46.44,
+    "seconds": 133.61,
+    "wrong": 53.56
+   },
+   "renumbered": [
+    "spk1",
+    "spk4"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 96.18,
+    "seconds": 148.76,
+    "wrong": 3.82
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n4",
+   "label": {
+    "default": 0.0,
+    "right": 96.18,
+    "seconds": 148.76,
+    "wrong": 3.82
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 92.9,
+    "seconds": 143.81,
+    "wrong": 7.1
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n4",
+   "label": {
+    "default": 0.0,
+    "right": 92.9,
+    "seconds": 143.81,
+    "wrong": 7.1
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 99.11,
+    "seconds": 139.92,
+    "wrong": 0.89
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1",
+    "S3": "S4",
+    "S4": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n4",
+   "label": {
+    "default": 0.0,
+    "right": 0.44,
+    "seconds": 139.92,
+    "wrong": 99.56
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk3",
+    "spk4"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 4
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 135.04,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n4",
+   "label": {
+    "default": 0.0,
+    "right": 51.74,
+    "seconds": 135.04,
+    "wrong": 48.26
+   },
+   "renumbered": [
+    "spk2",
+    "spk4"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 99.6,
+    "seconds": 166.21,
+    "wrong": 0.4
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S4",
+    "S4": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n4",
+   "label": {
+    "default": 0.0,
+    "right": 50.67,
+    "seconds": 166.21,
+    "wrong": 49.33
+   },
+   "renumbered": [
+    "spk2",
+    "spk3"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 99.6,
+    "seconds": 164.79,
+    "wrong": 0.4
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S4",
+    "S4": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n4",
+   "label": {
+    "default": 0.0,
+    "right": 50.9,
+    "seconds": 164.79,
+    "wrong": 49.1
+   },
+   "renumbered": [
+    "spk2",
+    "spk3"
+   ],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 99.15,
+    "seconds": 145.34,
+    "wrong": 0.85
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S1",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n4",
+   "label": {
+    "default": 0.0,
+    "right": 51.29,
+    "seconds": 145.34,
+    "wrong": 48.71
+   },
+   "renumbered": [
+    "spk1",
+    "spk4"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 140.38,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n4",
+   "label": {
+    "default": 0.0,
+    "right": 21.68,
+    "seconds": 140.38,
+    "wrong": 78.32
+   },
+   "renumbered": [
+    "spk2",
+    "spk3",
+    "spk4"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 4,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 99.24,
+    "seconds": 161.86,
+    "wrong": 0.76
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n4",
+   "label": {
+    "default": 0.0,
+    "right": 99.24,
+    "seconds": 161.86,
+    "wrong": 0.76
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 99.59,
+    "seconds": 165.42,
+    "wrong": 0.41
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n4",
+   "label": {
+    "default": 0.0,
+    "right": 99.59,
+    "seconds": 165.42,
+    "wrong": 0.41
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 90.86,
+    "seconds": 151.76,
+    "wrong": 9.14
+   },
+   "carry_inherited": {
+    "S1": "S3",
+    "S2": "S2",
+    "S3": "S4",
+    "S4": "S1"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n5",
+   "label": {
+    "default": 0.0,
+    "right": 23.0,
+    "seconds": 151.76,
+    "wrong": 77.0
+   },
+   "renumbered": [
+    "spk3",
+    "spk4",
+    "spk5"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 68.89,
+    "right": 31.11,
+    "seconds": 154.37,
+    "wrong": 0.0
+   },
+   "carry_inherited": {
+    "S5": "S1"
+   },
+   "carry_kept": [
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n5",
+   "label": {
+    "default": 31.11,
+    "right": 22.92,
+    "seconds": 154.37,
+    "wrong": 45.97
+   },
+   "renumbered": [
+    "spk3",
+    "spk4",
+    "spk5"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 4,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 87.71,
+    "seconds": 149.3,
+    "wrong": 12.29
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S4",
+    "S4": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n5",
+   "label": {
+    "default": 0.0,
+    "right": 46.97,
+    "seconds": 149.3,
+    "wrong": 53.03
+   },
+   "renumbered": [
+    "spk4",
+    "spk5"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 90.42,
+    "seconds": 157.37,
+    "wrong": 9.58
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n5",
+   "label": {
+    "default": 0.0,
+    "right": 90.42,
+    "seconds": 157.37,
+    "wrong": 9.58
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 4.84,
+    "right": 91.23,
+    "seconds": 167.67,
+    "wrong": 3.92
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S4",
+    "S3": "S1",
+    "S4": "S3"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n5",
+   "label": {
+    "default": 4.84,
+    "right": 2.74,
+    "seconds": 167.67,
+    "wrong": 92.42
+   },
+   "renumbered": [
+    "spk2",
+    "spk3",
+    "spk4",
+    "spk5"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 4,
+   "voices_renumbered": 4
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 170.32,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n5",
+   "label": {
+    "default": 16.13,
+    "right": 20.01,
+    "seconds": 170.32,
+    "wrong": 63.86
+   },
+   "renumbered": [
+    "spk2",
+    "spk3",
+    "spk5"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 4,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 93.42,
+    "seconds": 178.59,
+    "wrong": 6.58
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n5",
+   "label": {
+    "default": 0.0,
+    "right": 93.42,
+    "seconds": 178.59,
+    "wrong": 6.58
+   },
+   "renumbered": [],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 2.79,
+    "right": 90.85,
+    "seconds": 181.12,
+    "wrong": 6.37
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n5",
+   "label": {
+    "default": 2.79,
+    "right": 90.85,
+    "seconds": 181.12,
+    "wrong": 6.37
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 4,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 2.87,
+    "right": 89.45,
+    "seconds": 166.7,
+    "wrong": 7.68
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S5",
+    "S3": "S4",
+    "S4": "S1"
+   },
+   "carry_kept": [
+    "S3"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n5",
+   "label": {
+    "default": 0.0,
+    "right": 0.73,
+    "seconds": 166.7,
+    "wrong": 99.27
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk3",
+    "spk4",
+    "spk5"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 5,
+   "voices_renumbered": 5
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 168.41,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n5",
+   "label": {
+    "default": 0.0,
+    "right": 35.05,
+    "seconds": 168.41,
+    "wrong": 64.95
+   },
+   "renumbered": [
+    "spk1",
+    "spk2",
+    "spk3"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 5,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 20.39,
+    "right": 78.53,
+    "seconds": 174.55,
+    "wrong": 1.07
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S4": "S4"
+   },
+   "carry_kept": [
+    "S3",
+    "S5"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n5",
+   "label": {
+    "default": 0.0,
+    "right": 85.08,
+    "seconds": 174.55,
+    "wrong": 14.92
+   },
+   "renumbered": [
+    "spk5"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 97.94,
+    "seconds": 181.49,
+    "wrong": 2.06
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4",
+    "S5": "S5"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n5",
+   "label": {
+    "default": 0.0,
+    "right": 97.94,
+    "seconds": 181.49,
+    "wrong": 2.06
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 5,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 81.92,
+    "seconds": 181.94,
+    "wrong": 18.08
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S3",
+    "S3": "S1",
+    "S4": "S4",
+    "S5": "S5"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n6",
+   "label": {
+    "default": 0.0,
+    "right": 41.45,
+    "seconds": 181.94,
+    "wrong": 58.55
+   },
+   "renumbered": [
+    "spk3",
+    "spk4",
+    "spk5"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 5,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 167.51,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n6",
+   "label": {
+    "default": 0.0,
+    "right": 0.52,
+    "seconds": 167.51,
+    "wrong": 99.48
+   },
+   "renumbered": [
+    "spk1",
+    "spk3",
+    "spk4",
+    "spk5",
+    "spk6"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 5,
+   "voices_renumbered": 5
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 76.68,
+    "seconds": 183.25,
+    "wrong": 23.32
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S5",
+    "S3": "S3",
+    "S4": "S4"
+   },
+   "carry_kept": [
+    "S2"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n6",
+   "label": {
+    "default": 0.0,
+    "right": 65.81,
+    "seconds": 183.25,
+    "wrong": 34.19
+   },
+   "renumbered": [
+    "spk1"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 4,
+   "voices_renumbered": 1
+  },
+  {
+   "arm": "pyannote",
+   "carry": {
+    "default": 0.0,
+    "right": 81.31,
+    "seconds": 189.73,
+    "wrong": 18.69
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S4": "S4",
+    "S5": "S5"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n6",
+   "label": {
+    "default": 0.0,
+    "right": 81.31,
+    "seconds": 189.73,
+    "wrong": 18.69
+   },
+   "renumbered": [],
+   "variant": "aac64",
+   "voices_in_both": 5,
+   "voices_renumbered": 0
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 36.73,
+    "right": 46.47,
+    "seconds": 195.81,
+    "wrong": 16.8
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S4",
+    "S3": "S3"
+   },
+   "carry_kept": [
+    "S1",
+    "S5"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n6",
+   "label": {
+    "default": 0.0,
+    "right": 25.22,
+    "seconds": 195.81,
+    "wrong": 74.78
+   },
+   "renumbered": [
+    "spk1",
+    "spk3",
+    "spk4",
+    "spk5"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 5,
+   "voices_renumbered": 4
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 184.65,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n6",
+   "label": {
+    "default": 0.0,
+    "right": 0.44,
+    "seconds": 184.65,
+    "wrong": 99.56
+   },
+   "renumbered": [
+    "spk1",
+    "spk3",
+    "spk4",
+    "spk5",
+    "spk6"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 5,
+   "voices_renumbered": 5
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 18.32,
+    "right": 65.44,
+    "seconds": 203.03,
+    "wrong": 16.24
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S5": "S4"
+   },
+   "carry_kept": [
+    "S5"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n6",
+   "label": {
+    "default": 0.0,
+    "right": 50.89,
+    "seconds": 203.03,
+    "wrong": 49.11
+   },
+   "renumbered": [
+    "spk1",
+    "spk4"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 5,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3",
+   "carry": {
+    "default": 0.0,
+    "right": 79.8,
+    "seconds": 197.93,
+    "wrong": 20.2
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S4",
+    "S4": "S3",
+    "S5": "S5"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n6",
+   "label": {
+    "default": 0.0,
+    "right": 38.31,
+    "seconds": 197.93,
+    "wrong": 61.69
+   },
+   "renumbered": [
+    "spk1",
+    "spk6"
+   ],
+   "variant": "aac64",
+   "voices_in_both": 5,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 75.36,
+    "seconds": 192.29,
+    "wrong": 24.64
+   },
+   "carry_inherited": {
+    "S1": "S2",
+    "S2": "S4",
+    "S3": "S3",
+    "S4": "S1",
+    "S5": "S5"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n6",
+   "label": {
+    "default": 0.0,
+    "right": 34.89,
+    "seconds": 192.29,
+    "wrong": 65.11
+   },
+   "renumbered": [
+    "spk1",
+    "spk3",
+    "spk5"
+   ],
+   "variant": "mute-opener",
+   "voices_in_both": 5,
+   "voices_renumbered": 3
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 100.0,
+    "right": 0.0,
+    "seconds": 189.47,
+    "wrong": 0.0
+   },
+   "carry_inherited": {},
+   "carry_kept": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S5"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n6",
+   "label": {
+    "default": 0.0,
+    "right": 0.43,
+    "seconds": 189.47,
+    "wrong": 99.57
+   },
+   "renumbered": [
+    "spk1",
+    "spk3",
+    "spk4",
+    "spk5",
+    "spk6"
+   ],
+   "variant": "trim-head",
+   "voices_in_both": 5,
+   "voices_renumbered": 5
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 18.73,
+    "right": 65.21,
+    "seconds": 198.88,
+    "wrong": 16.06
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S3",
+    "S5": "S4"
+   },
+   "carry_kept": [
+    "S5"
+   ],
+   "corpus": "synth-n",
+   "item": "synth-n-n6",
+   "label": {
+    "default": 0.0,
+    "right": 51.6,
+    "seconds": 198.88,
+    "wrong": 48.4
+   },
+   "renumbered": [
+    "spk1",
+    "spk4"
+   ],
+   "variant": "noise40",
+   "voices_in_both": 5,
+   "voices_renumbered": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "carry": {
+    "default": 0.0,
+    "right": 77.65,
+    "seconds": 202.85,
+    "wrong": 22.35
+   },
+   "carry_inherited": {
+    "S1": "S1",
+    "S2": "S2",
+    "S3": "S4",
+    "S4": "S3",
+    "S5": "S5"
+   },
+   "carry_kept": [],
+   "corpus": "synth-n",
+   "item": "synth-n-n6",
+   "label": {
+    "default": 0.0,
+    "right": 37.15,
+    "seconds": 202.85,
+    "wrong": 62.85
+   },
+   "renumbered": [
+    "spk1",
+    "spk6"
+   ],
+   "variant": "aac64",
+   "voices_in_both": 5,
+   "voices_renumbered": 2
+  }
+ ]
+}

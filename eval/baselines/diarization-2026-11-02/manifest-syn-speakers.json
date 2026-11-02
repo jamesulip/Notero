@@ -1,0 +1,61 @@
+{
+ "card": {
+  "licence": "generated on this machine with macOS `say`",
+  "name": "SYNTHETIC: eval/make_multispeaker.py fixtures from /tmp/notero-data/diar/synthetic-speakers",
+  "speech": "text-to-speech voices on one timeline, exact boundaries. Not a claim about real meetings."
+ },
+ "corpus": "synth-n",
+ "items": [
+  {
+   "audio": "audio/n2.wav",
+   "audioSha256": "4c18df31b116c80327a7e3ae95de63d4a09c2f618d2016ef0f4ed8b39ef5d1b1",
+   "corpus": "synth-n",
+   "durationS": 129.014,
+   "id": "synth-n-n2",
+   "ref": "refs/n2.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 105.329
+  },
+  {
+   "audio": "audio/n3.wav",
+   "audioSha256": "bcc2a0a2c9b5e6f2f701c3fcfe90cb9551f47d43272add979e2501eab395c0b8",
+   "corpus": "synth-n",
+   "durationS": 154.001,
+   "id": "synth-n-n3",
+   "ref": "refs/n3.rttm",
+   "refSpeakers": 3,
+   "refSpeechS": 137.506
+  },
+  {
+   "audio": "audio/n4.wav",
+   "audioSha256": "ebf57b8437d11f02a2ce9e7a29d3748b6f697f41d08741f8fce5e2c8b0c80e85",
+   "corpus": "synth-n",
+   "durationS": 183.246,
+   "id": "synth-n-n4",
+   "ref": "refs/n4.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 170.583
+  },
+  {
+   "audio": "audio/n5.wav",
+   "audioSha256": "d6d40504c5c93efb14a7fe7f21dd58c0b4bdda2ee333d56918981d41e2ced9fb",
+   "corpus": "synth-n",
+   "durationS": 212.781,
+   "id": "synth-n-n5",
+   "ref": "refs/n5.rttm",
+   "refSpeakers": 5,
+   "refSpeechS": 185.469
+  },
+  {
+   "audio": "audio/n6.wav",
+   "audioSha256": "a9f0f2a3983d2b1a489df31d94698abed2db813001a1c47891f02b6c8540e818",
+   "corpus": "synth-n",
+   "durationS": 241.073,
+   "id": "synth-n-n6",
+   "ref": "refs/n6.rttm",
+   "refSpeakers": 6,
+   "refSpeechS": 207.636
+  }
+ ],
+ "schemaVersion": 1
+}

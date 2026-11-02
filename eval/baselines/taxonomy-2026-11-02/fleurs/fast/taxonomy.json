@@ -1,0 +1,4452 @@
+{
+  "categories": {
+    "boundary_error": "a word at a code-switch point (first word after a switch, or last before one) deleted or replaced",
+    "deleted_speech": "a run of deleted reference words (3 or more), speech that produced no output",
+    "en_to_tl_substitution": "an English reference word replaced by a Tagalog word or Tagalog spelling of it",
+    "enclitic_particle": "an enclitic or particle (po, naman, lang, na, pa, ...) deleted, inserted or replaced",
+    "hallucination": "a run of inserted words (3 or more), with no reference word behind it",
+    "mixed_word_error": "a Tagalog affix + English stem word (nag-meeting, i-share, naka-mute) deleted or mangled",
+    "morphology_error": "the right Tagalog root with the wrong or missing affix, reduplication or linker (-ng / -g)",
+    "other_deletion": "an isolated deleted word (fewer than 3 in a row) that no rule above explains",
+    "other_insertion": "an isolated inserted word (fewer than 3 in a row) that no rule above explains",
+    "other_substitution": "a substitution that no rule above explains",
+    "proper_noun_error": "a reference proper name deleted or replaced",
+    "spelling_variant": "the same word with another spelling or spacing; arguably not a recognition error",
+    "tl_to_en_substitution": "a Tagalog reference word replaced by an English word (by the output word's language, not the intent)"
+  },
+  "caveats": [
+    "No reference token carries a word-level language tag, so every language label in this report is a heuristic guess from small hand-written word lists. Read the heuristic counts as indications, not as measurements of the speech.",
+    "The category counts depend on which of several equal-cost alignments is chosen. This report used the `default` tie-break (the one of eval/langscore.py, which the older tools use). The total never changes, but a category can move by tens of words under another tie-break (`--tie-break`; 67 words at most in the Liva check): do not read a difference of less than about 70 words in one category.",
+    "Hypothesis words are never tagged by a person, so tl_to_en / en_to_tl substitutions rest on a heuristic label for the hypothesis word even when the reference word is verified.",
+    "The word lists are small and were written by an AI model (Claude) without a native speaker's review: `unknown` is the largest honest answer for words they do not cover, and the ambiguous/unknown shares are reported rather than hidden.",
+    "Categories partition the word errors by a first-match rule list; a word that fits two rules is counted under the earlier one. Which rule fired is a design choice, not a linguistic finding.",
+    "When a reference interleaves speakers (overlapping speech) the words do not follow one time order, so some substitutions, deletions and insertions are ordering artefacts, not recognition errors."
+  ],
+  "config": {
+    "contextResolution": true,
+    "deletionRunMinWords": 3,
+    "fingerprintSha256": "c8c8b62b3ae438b1f19d1b5ca21e051465077eea730ac5a9c0208eecbde49896",
+    "hallucinationMinWords": 3,
+    "id": "notero-taxonomy-v1",
+    "maxAlignmentCells": 40000000,
+    "nearMissSimilarity": 0.6,
+    "nonSpeechPaddingMs": 200,
+    "outsideSpeechFraction": 0.8,
+    "repetitionLoop": {
+      "maxDistinctShare": 0.34,
+      "minIdenticalRun": 3,
+      "minLength": 6
+    },
+    "schemaVersion": 1,
+    "tieBreak": "default",
+    "timestampBucketsMs": [
+      0,
+      1000,
+      2000,
+      5000
+    ],
+    "timestampToleranceMs": 1000
+  },
+  "corpus": {
+    "adjudication_conflicts": 0,
+    "adjudication_keys_used": 0,
+    "adjudications_applied": 0,
+    "by_reference_label": {
+      "heuristic|ambiguous": {
+        "deletions": 4,
+        "substitutions": 1,
+        "words": 260
+      },
+      "heuristic|en": {
+        "substitutions": 3,
+        "words": 38
+      },
+      "heuristic|mix": {
+        "words": 2
+      },
+      "heuristic|name": {
+        "deletions": 5,
+        "substitutions": 126,
+        "words": 572
+      },
+      "heuristic|other": {
+        "deletions": 10,
+        "substitutions": 42,
+        "words": 154
+      },
+      "heuristic|tl": {
+        "deletions": 53,
+        "substitutions": 210,
+        "words": 6013
+      },
+      "heuristic|unknown": {
+        "deletions": 48,
+        "substitutions": 518,
+        "words": 2574
+      }
+    },
+    "categories": {
+      "boundary_error": {
+        "basis": {
+          "heuristic": {
+            "error_words": 2,
+            "events": 2
+          }
+        },
+        "error_words": 2,
+        "events": 2,
+        "flags": {
+          "at_boundary": {
+            "basis": {
+              "heuristic": 2
+            },
+            "error_words": 2,
+            "events": 2
+          },
+          "short_reference_word": {
+            "basis": {
+              "heuristic": 2
+            },
+            "error_words": 2,
+            "events": 2
+          }
+        },
+        "subtypes": {
+          "anticipation": {
+            "basis": {
+              "heuristic": 1
+            },
+            "error_words": 1,
+            "events": 1
+          },
+          "same_language": {
+            "basis": {
+              "heuristic": 1
+            },
+            "error_words": 1,
+            "events": 1
+          }
+        }
+      },
+      "deleted_speech": {
+        "basis": {
+          "structural": {
+            "error_words": 27,
+            "events": 4
+          }
+        },
+        "error_words": 27,
+        "events": 4,
+        "flags": {
+          "at_boundary": {
+            "basis": {
+              "structural": 4
+            },
+            "error_words": 4,
+            "events": 1
+          }
+        },
+        "subtypes": {
+          "run": {
+            "basis": {
+              "structural": 27
+            },
+            "error_words": 27,
+            "events": 4
+          }
+        }
+      },
+      "en_to_tl_substitution": {
+        "basis": {
+          "heuristic": {
+            "error_words": 1,
+            "events": 1
+          }
+        },
+        "error_words": 1,
+        "events": 1,
+        "flags": {
+          "short_reference_word": {
+            "basis": {
+              "heuristic": 1
+            },
+            "error_words": 1,
+            "events": 1
+          }
+        },
+        "subtypes": {
+          "heuristic-hypothesis-language": {
+            "basis": {
+              "heuristic": 1
+            },
+            "error_words": 1,
+            "events": 1
+          }
+        }
+      },
+      "enclitic_particle": {
+        "basis": {
+          "heuristic": {
+            "error_words": 27,
+            "events": 27
+          }
+        },
+        "error_words": 27,
+        "events": 27,
+        "flags": {},
+        "subtypes": {
+          "deleted": {
+            "basis": {
+              "heuristic": 3
+            },
+            "error_words": 3,
+            "events": 3
+          },
+          "inserted": {
+            "basis": {
+              "heuristic": 7
+            },
+            "error_words": 7,
+            "events": 7
+          },
+          "substituted": {
+            "basis": {
+              "heuristic": 17
+            },
+            "error_words": 17,
+            "events": 17
+          }
+        }
+      },
+      "hallucination": {
+        "basis": {
+          "structural": {
+            "error_words": 33,
+            "events": 7
+          }
+        },
+        "error_words": 33,
+        "events": 7,
+        "flags": {
+          "time_unknown": {
+            "basis": {
+              "structural": 33
+            },
+            "error_words": 33,
+            "events": 7
+          }
+        },
+        "subtypes": {
+          "run": {
+            "basis": {
+              "structural": 33
+            },
+            "error_words": 33,
+            "events": 7
+          }
+        }
+      },
+      "morphology_error": {
+        "basis": {
+          "heuristic": {
+            "error_words": 109,
+            "events": 109
+          }
+        },
+        "error_words": 109,
+        "events": 109,
+        "flags": {
+          "root_unlisted": {
+            "basis": {
+              "heuristic": 71
+            },
+            "error_words": 71,
+            "events": 71
+          }
+        },
+        "subtypes": {
+          "affix_added": {
+            "basis": {
+              "heuristic": 6
+            },
+            "error_words": 6,
+            "events": 6
+          },
+          "affix_changed": {
+            "basis": {
+              "heuristic": 22
+            },
+            "error_words": 22,
+            "events": 22
+          },
+          "affix_missing": {
+            "basis": {
+              "heuristic": 19
+            },
+            "error_words": 19,
+            "events": 19
+          },
+          "ligature_added": {
+            "basis": {
+              "heuristic": 1
+            },
+            "error_words": 1,
+            "events": 1
+          },
+          "ligature_dropped": {
+            "basis": {
+              "heuristic": 33
+            },
+            "error_words": 33,
+            "events": 33
+          },
+          "reduplication_added": {
+            "basis": {
+              "heuristic": 11
+            },
+            "error_words": 11,
+            "events": 11
+          },
+          "reduplication_dropped": {
+            "basis": {
+              "heuristic": 17
+            },
+            "error_words": 17,
+            "events": 17
+          }
+        }
+      },
+      "other_deletion": {
+        "basis": {
+          "structural": {
+            "error_words": 42,
+            "events": 42
+          }
+        },
+        "error_words": 42,
+        "events": 42,
+        "flags": {},
+        "subtypes": {
+          "isolated": {
+            "basis": {
+              "structural": 42
+            },
+            "error_words": 42,
+            "events": 42
+          }
+        }
+      },
+      "other_insertion": {
+        "basis": {
+          "structural": {
+            "error_words": 84,
+            "events": 84
+          }
+        },
+        "error_words": 84,
+        "events": 84,
+        "flags": {},
+        "subtypes": {
+          "isolated": {
+            "basis": {
+              "structural": 84
+            },
+            "error_words": 84,
+            "events": 84
+          }
+        }
+      },
+      "other_substitution": {
+        "basis": {
+          "heuristic": {
+            "error_words": 575,
+            "events": 575
+          }
+        },
+        "error_words": 575,
+        "events": 575,
+        "flags": {
+          "language_unresolved": {
+            "basis": {
+              "heuristic": 498
+            },
+            "error_words": 498,
+            "events": 498
+          },
+          "short_reference_word": {
+            "basis": {
+              "heuristic": 151
+            },
+            "error_words": 151,
+            "events": 151
+          }
+        },
+        "subtypes": {
+          "near_miss": {
+            "basis": {
+              "heuristic": 408
+            },
+            "error_words": 408,
+            "events": 408
+          },
+          "unrelated": {
+            "basis": {
+              "heuristic": 167
+            },
+            "error_words": 167,
+            "events": 167
+          }
+        }
+      },
+      "proper_noun_error": {
+        "basis": {
+          "heuristic": {
+            "error_words": 124,
+            "events": 124
+          }
+        },
+        "error_words": 124,
+        "events": 124,
+        "flags": {},
+        "subtypes": {
+          "deleted": {
+            "basis": {
+              "heuristic": 4
+            },
+            "error_words": 4,
+            "events": 4
+          },
+          "different_word": {
+            "basis": {
+              "heuristic": 19
+            },
+            "error_words": 19,
+            "events": 19
+          },
+          "near_spelling": {
+            "basis": {
+              "heuristic": 101
+            },
+            "error_words": 101,
+            "events": 101
+          }
+        }
+      },
+      "spelling_variant": {
+        "basis": {
+          "heuristic": {
+            "error_words": 145,
+            "events": 74
+          }
+        },
+        "error_words": 145,
+        "events": 74,
+        "flags": {},
+        "subtypes": {
+          "spacing": {
+            "basis": {
+              "heuristic": 140
+            },
+            "error_words": 140,
+            "events": 69
+          },
+          "variant-table": {
+            "basis": {
+              "heuristic": 5
+            },
+            "error_words": 5,
+            "events": 5
+          }
+        }
+      }
+    },
+    "code_switch": {
+      "boundary_errors": {
+        "heuristic": 3
+      },
+      "boundary_words": {
+        "heuristic": 60
+      },
+      "labelled_other_errors": {
+        "heuristic": 263
+      },
+      "labelled_other_words": {
+        "heuristic": 5991
+      },
+      "other_errors": 1017,
+      "other_words": 9553,
+      "switch_points": {
+        "heuristic": 36
+      }
+    },
+    "del": 120,
+    "errors": 1169,
+    "hyp_words": 9642,
+    "ins": 149,
+    "inserted_by_hypothesis_language": {
+      "ambiguous": 7,
+      "en": 1,
+      "mix": 1,
+      "other": 5,
+      "tl": 85,
+      "unknown": 50
+    },
+    "items": 349,
+    "labels": {
+      "hypothesis": {
+        "heuristic": {
+          "ambiguous": 265,
+          "en": 59,
+          "mix": 4,
+          "name": 15,
+          "other": 98,
+          "tl": 6107,
+          "unknown": 3094
+        }
+      },
+      "hypothesis_why": {
+        "ambiguous": {
+          "homograph-list": 264,
+          "in-both-lexicons": 1
+        },
+        "en": {
+          "en-inflection": 5,
+          "english-contraction": 2,
+          "lexicon-en": 52
+        },
+        "mix": {
+          "affix+english-stem": 4
+        },
+        "name": {
+          "names-lexicon": 15
+        },
+        "other": {
+          "alphanumeric": 10,
+          "digits": 88
+        },
+        "tl": {
+          "affix+tagalog-stem": 64,
+          "context": 82,
+          "lexicon-tl": 5272,
+          "tagalog-clitic-y": 1,
+          "tl-affix-analysis": 311,
+          "tl-ligature": 377
+        },
+        "unknown": {
+          "affix+unlisted-stem": 36,
+          "apostrophe-no-match": 9,
+          "no-match": 3049
+        }
+      },
+      "reference": {
+        "heuristic": {
+          "ambiguous": 260,
+          "en": 38,
+          "mix": 2,
+          "name": 572,
+          "other": 154,
+          "tl": 6013,
+          "unknown": 2574
+        }
+      },
+      "reference_why": {
+        "ambiguous": {
+          "homograph-list": 259,
+          "in-both-lexicons": 1
+        },
+        "en": {
+          "en-inflection": 1,
+          "english-contraction": 1,
+          "lexicon-en": 36
+        },
+        "mix": {
+          "affix+english-stem": 2
+        },
+        "name": {
+          "capitalised-mid-sentence": 569,
+          "names-lexicon": 3
+        },
+        "other": {
+          "acronym": 34,
+          "alphanumeric": 12,
+          "digits": 107,
+          "filler-or-laughter": 1
+        },
+        "tl": {
+          "affix+tagalog-stem": 62,
+          "context": 76,
+          "lexicon-tl": 5195,
+          "tagalog-clitic-y": 1,
+          "tl-affix-analysis": 299,
+          "tl-ligature": 380
+        },
+        "unknown": {
+          "affix+unlisted-stem": 68,
+          "apostrophe-no-match": 35,
+          "no-match": 2471
+        }
+      }
+    },
+    "ref_words": 9613,
+    "standard_policy_errors": 1169,
+    "sub": 900,
+    "substitution_matrix": {
+      "heuristic": {
+        "ambiguous": {
+          "other": 1
+        },
+        "en": {
+          "tl": 2,
+          "unknown": 1
+        },
+        "name": {
+          "en": 2,
+          "tl": 3,
+          "unknown": 121
+        },
+        "other": {
+          "en": 1,
+          "other": 10,
+          "tl": 19,
+          "unknown": 12
+        },
+        "tl": {
+          "ambiguous": 2,
+          "name": 1,
+          "other": 2,
+          "tl": 141,
+          "unknown": 64
+        },
+        "unknown": {
+          "ambiguous": 2,
+          "en": 16,
+          "mix": 1,
+          "other": 5,
+          "tl": 88,
+          "unknown": 406
+        }
+      }
+    },
+    "timestamps": {
+      "items_checked": 0,
+      "items_unavailable": {
+        "reference has no utterance times": 349
+      },
+      "misaligned": 0,
+      "offset_buckets": {},
+      "pairs": 0
+    }
+  },
+  "inputs": {
+    "adjudication_conflicts": 0,
+    "adjudications_given": 0,
+    "adjudications_unused": 0,
+    "annotators": [],
+    "corpusId": "fleurs-fil_ph-test-onepersentence-seed7",
+    "hypotheses": "fast",
+    "hypothesis_formats": {
+      "json": 349
+    },
+    "items_failed": {},
+    "items_missing_hypothesis_or_reference": [],
+    "items_scored": 349,
+    "items_with_word_tags": 0,
+    "language_spans_that_did_not_match_text": 0,
+    "manifestSha256": "50765003e1bf07bc86be84f740df1dda2c7a28c4a6c5c0d22d42c857d5e92e66",
+    "reference_formats": {
+      "txt": 349
+    },
+    "tagged_words_with_an_unrecognised_tag": 0,
+    "word_tagged_reference_tokens": 0
+  },
+  "items": {
+    "fleurs-1660": {
+      "categories": {
+        "enclitic_particle": 1,
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 20,
+      "sub": 2
+    },
+    "fleurs-1661": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 24,
+      "sub": 0
+    },
+    "fleurs-1662": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 43,
+      "sub": 2
+    },
+    "fleurs-1663": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 4,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 7,
+      "ins": 0,
+      "ref_words": 26,
+      "sub": 6
+    },
+    "fleurs-1664": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 24,
+      "sub": 2
+    },
+    "fleurs-1665": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 30,
+      "sub": 2
+    },
+    "fleurs-1666": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 28,
+      "sub": 2
+    },
+    "fleurs-1667": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 38,
+      "sub": 0
+    },
+    "fleurs-1668": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1,
+        "proper_noun_error": 3,
+        "spelling_variant": 4
+      },
+      "del": 2,
+      "errors": 9,
+      "ins": 0,
+      "ref_words": 41,
+      "sub": 7
+    },
+    "fleurs-1669": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 2
+    },
+    "fleurs-1670": {
+      "categories": {
+        "morphology_error": 3,
+        "other_deletion": 2,
+        "other_substitution": 2,
+        "proper_noun_error": 1
+      },
+      "del": 2,
+      "errors": 8,
+      "ins": 0,
+      "ref_words": 60,
+      "sub": 6
+    },
+    "fleurs-1671": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 5
+      },
+      "del": 0,
+      "errors": 6,
+      "ins": 0,
+      "ref_words": 31,
+      "sub": 6
+    },
+    "fleurs-1672": {
+      "categories": {
+        "morphology_error": 1,
+        "other_deletion": 1,
+        "other_substitution": 4
+      },
+      "del": 1,
+      "errors": 6,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 5
+    },
+    "fleurs-1673": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 3,
+        "proper_noun_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 7,
+      "ins": 1,
+      "ref_words": 31,
+      "sub": 6
+    },
+    "fleurs-1674": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 25,
+      "sub": 0
+    },
+    "fleurs-1675": {
+      "categories": {
+        "morphology_error": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 25,
+      "sub": 2
+    },
+    "fleurs-1676": {
+      "categories": {
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 1
+    },
+    "fleurs-1677": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 18,
+      "sub": 4
+    },
+    "fleurs-1678": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 38,
+      "sub": 2
+    },
+    "fleurs-1679": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 11,
+      "sub": 3
+    },
+    "fleurs-1680": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 6
+      },
+      "del": 0,
+      "errors": 7,
+      "ins": 1,
+      "ref_words": 29,
+      "sub": 6
+    },
+    "fleurs-1681": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 43,
+      "sub": 1
+    },
+    "fleurs-1682": {
+      "categories": {
+        "deleted_speech": 11,
+        "other_substitution": 1
+      },
+      "del": 11,
+      "errors": 12,
+      "ins": 0,
+      "ref_words": 39,
+      "sub": 1
+    },
+    "fleurs-1683": {
+      "categories": {
+        "morphology_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 43,
+      "sub": 1
+    },
+    "fleurs-1684": {
+      "categories": {
+        "enclitic_particle": 1,
+        "other_insertion": 1,
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 2,
+      "ref_words": 23,
+      "sub": 3
+    },
+    "fleurs-1685": {
+      "categories": {
+        "other_substitution": 6,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 8,
+      "ins": 0,
+      "ref_words": 31,
+      "sub": 7
+    },
+    "fleurs-1686": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 28,
+      "sub": 2
+    },
+    "fleurs-1687": {
+      "categories": {
+        "other_substitution": 4
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 18,
+      "sub": 4
+    },
+    "fleurs-1688": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 44,
+      "sub": 0
+    },
+    "fleurs-1689": {
+      "categories": {
+        "morphology_error": 2,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 41,
+      "sub": 3
+    },
+    "fleurs-1690": {
+      "categories": {
+        "morphology_error": 2,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 44,
+      "sub": 4
+    },
+    "fleurs-1691": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 27,
+      "sub": 2
+    },
+    "fleurs-1692": {
+      "categories": {
+        "other_substitution": 4
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 16,
+      "sub": 4
+    },
+    "fleurs-1693": {
+      "categories": {
+        "enclitic_particle": 1,
+        "morphology_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 24,
+      "sub": 1
+    },
+    "fleurs-1694": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 1,
+        "proper_noun_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 5,
+      "ins": 1,
+      "ref_words": 26,
+      "sub": 3
+    },
+    "fleurs-1695": {
+      "categories": {
+        "other_insertion": 2,
+        "other_substitution": 2,
+        "spelling_variant": 3
+      },
+      "del": 2,
+      "errors": 7,
+      "ins": 2,
+      "ref_words": 32,
+      "sub": 3
+    },
+    "fleurs-1696": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 28,
+      "sub": 2
+    },
+    "fleurs-1697": {
+      "categories": {
+        "morphology_error": 1,
+        "other_insertion": 1,
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 1,
+      "ref_words": 21,
+      "sub": 4
+    },
+    "fleurs-1698": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 24,
+      "sub": 0
+    },
+    "fleurs-1699": {
+      "categories": {
+        "morphology_error": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 31,
+      "sub": 2
+    },
+    "fleurs-1700": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 16,
+      "sub": 1
+    },
+    "fleurs-1701": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 21,
+      "sub": 3
+    },
+    "fleurs-1702": {
+      "categories": {
+        "enclitic_particle": 1,
+        "other_substitution": 1,
+        "proper_noun_error": 2
+      },
+      "del": 1,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 3
+    },
+    "fleurs-1703": {
+      "categories": {
+        "other_insertion": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 1,
+      "ref_words": 15,
+      "sub": 0
+    },
+    "fleurs-1704": {
+      "categories": {
+        "hallucination": 6,
+        "other_substitution": 5
+      },
+      "del": 0,
+      "errors": 11,
+      "ins": 6,
+      "ref_words": 21,
+      "sub": 5
+    },
+    "fleurs-1705": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 20,
+      "sub": 2
+    },
+    "fleurs-1706": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 2,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 1,
+      "ref_words": 48,
+      "sub": 3
+    },
+    "fleurs-1707": {
+      "categories": {
+        "other_insertion": 1,
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 22,
+      "sub": 2
+    },
+    "fleurs-1708": {
+      "categories": {
+        "morphology_error": 2,
+        "proper_noun_error": 3
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 29,
+      "sub": 5
+    },
+    "fleurs-1709": {
+      "categories": {
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 30,
+      "sub": 2
+    },
+    "fleurs-1710": {
+      "categories": {
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 29,
+      "sub": 3
+    },
+    "fleurs-1711": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 42,
+      "sub": 0
+    },
+    "fleurs-1712": {
+      "categories": {
+        "enclitic_particle": 1,
+        "morphology_error": 1,
+        "other_insertion": 3,
+        "other_substitution": 4,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 10,
+      "ins": 3,
+      "ref_words": 32,
+      "sub": 7
+    },
+    "fleurs-1713": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 30,
+      "sub": 0
+    },
+    "fleurs-1714": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 36,
+      "sub": 1
+    },
+    "fleurs-1715": {
+      "categories": {
+        "enclitic_particle": 1,
+        "morphology_error": 1,
+        "other_substitution": 3,
+        "proper_noun_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 8,
+      "ins": 1,
+      "ref_words": 38,
+      "sub": 6
+    },
+    "fleurs-1716": {
+      "categories": {
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 62,
+      "sub": 2
+    },
+    "fleurs-1717": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 29,
+      "sub": 0
+    },
+    "fleurs-1718": {
+      "categories": {
+        "hallucination": 3,
+        "morphology_error": 1,
+        "other_insertion": 1,
+        "other_substitution": 3,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 9,
+      "ins": 4,
+      "ref_words": 32,
+      "sub": 5
+    },
+    "fleurs-1719": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 35,
+      "sub": 2
+    },
+    "fleurs-1720": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 20,
+      "sub": 2
+    },
+    "fleurs-1721": {
+      "categories": {
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 20,
+      "sub": 2
+    },
+    "fleurs-1722": {
+      "categories": {
+        "morphology_error": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 33,
+      "sub": 2
+    },
+    "fleurs-1723": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 1,
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 1,
+      "ref_words": 30,
+      "sub": 3
+    },
+    "fleurs-1724": {
+      "categories": {
+        "en_to_tl_substitution": 1,
+        "other_insertion": 4,
+        "other_substitution": 5
+      },
+      "del": 0,
+      "errors": 10,
+      "ins": 4,
+      "ref_words": 20,
+      "sub": 6
+    },
+    "fleurs-1725": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 37,
+      "sub": 1
+    },
+    "fleurs-1726": {
+      "categories": {
+        "boundary_error": 1,
+        "other_substitution": 4
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 35,
+      "sub": 5
+    },
+    "fleurs-1727": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 31,
+      "sub": 2
+    },
+    "fleurs-1728": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 22,
+      "sub": 1
+    },
+    "fleurs-1729": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 5,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 7,
+      "ins": 0,
+      "ref_words": 48,
+      "sub": 7
+    },
+    "fleurs-1730": {
+      "categories": {
+        "deleted_speech": 4,
+        "morphology_error": 1,
+        "other_substitution": 2,
+        "proper_noun_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 5,
+      "errors": 10,
+      "ins": 0,
+      "ref_words": 42,
+      "sub": 5
+    },
+    "fleurs-1731": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 14,
+      "sub": 1
+    },
+    "fleurs-1732": {
+      "categories": {
+        "other_deletion": 2,
+        "other_insertion": 2,
+        "other_substitution": 6,
+        "spelling_variant": 2
+      },
+      "del": 2,
+      "errors": 12,
+      "ins": 3,
+      "ref_words": 34,
+      "sub": 7
+    },
+    "fleurs-1733": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 42,
+      "sub": 2
+    },
+    "fleurs-1734": {
+      "categories": {
+        "morphology_error": 2,
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 36,
+      "sub": 5
+    },
+    "fleurs-1735": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 6,
+        "proper_noun_error": 2,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 11,
+      "ins": 1,
+      "ref_words": 64,
+      "sub": 9
+    },
+    "fleurs-1736": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 13,
+      "sub": 0
+    },
+    "fleurs-1737": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 16,
+      "sub": 1
+    },
+    "fleurs-1738": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 3
+      },
+      "del": 1,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 21,
+      "sub": 3
+    },
+    "fleurs-1739": {
+      "categories": {
+        "other_substitution": 2,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 3
+    },
+    "fleurs-1740": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 21,
+      "sub": 1
+    },
+    "fleurs-1741": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 19,
+      "sub": 1
+    },
+    "fleurs-1742": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 27,
+      "sub": 0
+    },
+    "fleurs-1743": {
+      "categories": {
+        "other_substitution": 4
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 51,
+      "sub": 4
+    },
+    "fleurs-1744": {
+      "categories": {
+        "other_insertion": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 17,
+      "sub": 1
+    },
+    "fleurs-1745": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 2
+    },
+    "fleurs-1746": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 19,
+      "sub": 2
+    },
+    "fleurs-1747": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 9,
+      "sub": 1
+    },
+    "fleurs-1748": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 14,
+      "sub": 1
+    },
+    "fleurs-1749": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 1
+      },
+      "del": 1,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 34,
+      "sub": 1
+    },
+    "fleurs-1750": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 15,
+      "sub": 1
+    },
+    "fleurs-1751": {
+      "categories": {
+        "proper_noun_error": 1,
+        "spelling_variant": 4
+      },
+      "del": 2,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 37,
+      "sub": 3
+    },
+    "fleurs-1752": {
+      "categories": {
+        "enclitic_particle": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 1,
+      "ref_words": 22,
+      "sub": 0
+    },
+    "fleurs-1753": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 39,
+      "sub": 4
+    },
+    "fleurs-1754": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 1,
+      "ref_words": 27,
+      "sub": 3
+    },
+    "fleurs-1755": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 11,
+      "sub": 2
+    },
+    "fleurs-1756": {
+      "categories": {
+        "enclitic_particle": 1,
+        "morphology_error": 1,
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 35,
+      "sub": 4
+    },
+    "fleurs-1757": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 1
+      },
+      "del": 1,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 31,
+      "sub": 1
+    },
+    "fleurs-1758": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 22,
+      "sub": 0
+    },
+    "fleurs-1759": {
+      "categories": {
+        "morphology_error": 2,
+        "other_deletion": 1,
+        "other_insertion": 2,
+        "other_substitution": 5,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 12,
+      "ins": 3,
+      "ref_words": 48,
+      "sub": 8
+    },
+    "fleurs-1760": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 17,
+      "sub": 1
+    },
+    "fleurs-1761": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 21,
+      "sub": 0
+    },
+    "fleurs-1762": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 17,
+      "sub": 1
+    },
+    "fleurs-1763": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 31,
+      "sub": 2
+    },
+    "fleurs-1764": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 17,
+      "sub": 2
+    },
+    "fleurs-1765": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 18,
+      "sub": 2
+    },
+    "fleurs-1766": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 35,
+      "sub": 0
+    },
+    "fleurs-1767": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 3
+      },
+      "del": 1,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 25,
+      "sub": 3
+    },
+    "fleurs-1768": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 30,
+      "sub": 1
+    },
+    "fleurs-1769": {
+      "categories": {
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 24,
+      "sub": 1
+    },
+    "fleurs-1770": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 14,
+      "sub": 0
+    },
+    "fleurs-1771": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 30,
+      "sub": 2
+    },
+    "fleurs-1772": {
+      "categories": {
+        "morphology_error": 1,
+        "other_deletion": 1
+      },
+      "del": 1,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 12,
+      "sub": 1
+    },
+    "fleurs-1773": {
+      "categories": {
+        "hallucination": 3,
+        "morphology_error": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 6,
+      "ins": 3,
+      "ref_words": 27,
+      "sub": 3
+    },
+    "fleurs-1774": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 42,
+      "sub": 2
+    },
+    "fleurs-1775": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 32,
+      "sub": 3
+    },
+    "fleurs-1776": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 0
+    },
+    "fleurs-1777": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 2,
+        "proper_noun_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 6,
+      "ins": 0,
+      "ref_words": 30,
+      "sub": 5
+    },
+    "fleurs-1778": {
+      "categories": {
+        "morphology_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 13,
+      "sub": 1
+    },
+    "fleurs-1779": {
+      "categories": {
+        "proper_noun_error": 3
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 19,
+      "sub": 3
+    },
+    "fleurs-1780": {
+      "categories": {
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 25,
+      "sub": 3
+    },
+    "fleurs-1781": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 15,
+      "sub": 2
+    },
+    "fleurs-1782": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 40,
+      "sub": 1
+    },
+    "fleurs-1783": {
+      "categories": {
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 22,
+      "sub": 2
+    },
+    "fleurs-1784": {
+      "categories": {
+        "morphology_error": 1,
+        "proper_noun_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 44,
+      "sub": 3
+    },
+    "fleurs-1785": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 54,
+      "sub": 2
+    },
+    "fleurs-1786": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 27,
+      "sub": 1
+    },
+    "fleurs-1787": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 31,
+      "sub": 3
+    },
+    "fleurs-1788": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 38,
+      "sub": 0
+    },
+    "fleurs-1789": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 25,
+      "sub": 0
+    },
+    "fleurs-1790": {
+      "categories": {
+        "enclitic_particle": 2,
+        "morphology_error": 1,
+        "other_deletion": 1,
+        "other_insertion": 1,
+        "other_substitution": 5
+      },
+      "del": 1,
+      "errors": 10,
+      "ins": 1,
+      "ref_words": 37,
+      "sub": 8
+    },
+    "fleurs-1791": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 14,
+      "sub": 0
+    },
+    "fleurs-1792": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 18,
+      "sub": 1
+    },
+    "fleurs-1793": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 21,
+      "sub": 3
+    },
+    "fleurs-1794": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 19,
+      "sub": 1
+    },
+    "fleurs-1795": {
+      "categories": {
+        "other_substitution": 2,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 47,
+      "sub": 3
+    },
+    "fleurs-1796": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 21,
+      "sub": 0
+    },
+    "fleurs-1797": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 22,
+      "sub": 0
+    },
+    "fleurs-1798": {
+      "categories": {
+        "other_substitution": 3,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 30,
+      "sub": 4
+    },
+    "fleurs-1799": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 16,
+      "sub": 3
+    },
+    "fleurs-1800": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 2
+    },
+    "fleurs-1801": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 34,
+      "sub": 1
+    },
+    "fleurs-1802": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 12,
+      "sub": 0
+    },
+    "fleurs-1803": {
+      "categories": {
+        "enclitic_particle": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 26,
+      "sub": 3
+    },
+    "fleurs-1804": {
+      "categories": {
+        "enclitic_particle": 1,
+        "morphology_error": 1,
+        "other_insertion": 1,
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 6,
+      "ins": 2,
+      "ref_words": 43,
+      "sub": 4
+    },
+    "fleurs-1805": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 14,
+      "sub": 2
+    },
+    "fleurs-1806": {
+      "categories": {
+        "morphology_error": 1,
+        "other_insertion": 1,
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 1,
+      "ref_words": 42,
+      "sub": 4
+    },
+    "fleurs-1807": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 28,
+      "sub": 2
+    },
+    "fleurs-1808": {
+      "categories": {
+        "morphology_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 21,
+      "sub": 1
+    },
+    "fleurs-1809": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 1,
+      "ref_words": 34,
+      "sub": 3
+    },
+    "fleurs-1810": {
+      "categories": {
+        "other_insertion": 2,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 2,
+      "ref_words": 35,
+      "sub": 2
+    },
+    "fleurs-1811": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 20,
+      "sub": 1
+    },
+    "fleurs-1812": {
+      "categories": {
+        "morphology_error": 2,
+        "other_deletion": 1,
+        "other_substitution": 5
+      },
+      "del": 1,
+      "errors": 8,
+      "ins": 0,
+      "ref_words": 35,
+      "sub": 7
+    },
+    "fleurs-1813": {
+      "categories": {
+        "other_substitution": 4,
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 6,
+      "ins": 0,
+      "ref_words": 30,
+      "sub": 6
+    },
+    "fleurs-1814": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 28,
+      "sub": 1
+    },
+    "fleurs-1815": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 21,
+      "sub": 1
+    },
+    "fleurs-1816": {
+      "categories": {
+        "enclitic_particle": 1,
+        "morphology_error": 1,
+        "proper_noun_error": 1,
+        "spelling_variant": 1
+      },
+      "del": 1,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 29,
+      "sub": 3
+    },
+    "fleurs-1817": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 16,
+      "sub": 3
+    },
+    "fleurs-1818": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 3,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 6,
+      "ins": 0,
+      "ref_words": 21,
+      "sub": 5
+    },
+    "fleurs-1819": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 27,
+      "sub": 1
+    },
+    "fleurs-1820": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 22,
+      "sub": 3
+    },
+    "fleurs-1821": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 19,
+      "sub": 1
+    },
+    "fleurs-1822": {
+      "categories": {
+        "other_deletion": 1,
+        "other_insertion": 1,
+        "other_substitution": 7,
+        "proper_noun_error": 1
+      },
+      "del": 1,
+      "errors": 10,
+      "ins": 1,
+      "ref_words": 32,
+      "sub": 8
+    },
+    "fleurs-1824": {
+      "categories": {
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 37,
+      "sub": 2
+    },
+    "fleurs-1825": {
+      "categories": {
+        "other_insertion": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 1,
+      "ref_words": 17,
+      "sub": 0
+    },
+    "fleurs-1826": {
+      "categories": {
+        "morphology_error": 1,
+        "other_insertion": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 1,
+      "ref_words": 15,
+      "sub": 3
+    },
+    "fleurs-1827": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 0
+    },
+    "fleurs-1828": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 2,
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 5
+    },
+    "fleurs-1829": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 35,
+      "sub": 0
+    },
+    "fleurs-1830": {
+      "categories": {
+        "proper_noun_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 17,
+      "sub": 2
+    },
+    "fleurs-1831": {
+      "categories": {
+        "enclitic_particle": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 30,
+      "sub": 3
+    },
+    "fleurs-1832": {
+      "categories": {
+        "other_substitution": 5
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 26,
+      "sub": 5
+    },
+    "fleurs-1833": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 32,
+      "sub": 2
+    },
+    "fleurs-1834": {
+      "categories": {
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 27,
+      "sub": 1
+    },
+    "fleurs-1835": {
+      "categories": {
+        "enclitic_particle": 1,
+        "morphology_error": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 32,
+      "sub": 4
+    },
+    "fleurs-1836": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 45,
+      "sub": 2
+    },
+    "fleurs-1837": {
+      "categories": {
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 26,
+      "sub": 2
+    },
+    "fleurs-1838": {
+      "categories": {
+        "other_deletion": 1,
+        "spelling_variant": 2
+      },
+      "del": 2,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 18,
+      "sub": 1
+    },
+    "fleurs-1839": {
+      "categories": {
+        "morphology_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 13,
+      "sub": 2
+    },
+    "fleurs-1840": {
+      "categories": {
+        "other_substitution": 2,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 32,
+      "sub": 3
+    },
+    "fleurs-1841": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 27,
+      "sub": 2
+    },
+    "fleurs-1842": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 6,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 9,
+      "ins": 1,
+      "ref_words": 48,
+      "sub": 7
+    },
+    "fleurs-1843": {
+      "categories": {
+        "other_insertion": 2,
+        "other_substitution": 4,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 7,
+      "ins": 2,
+      "ref_words": 30,
+      "sub": 5
+    },
+    "fleurs-1844": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 21,
+      "sub": 3
+    },
+    "fleurs-1845": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 3,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 26,
+      "sub": 5
+    },
+    "fleurs-1846": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 4
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 1,
+      "ref_words": 24,
+      "sub": 4
+    },
+    "fleurs-1847": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 3
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 30,
+      "sub": 4
+    },
+    "fleurs-1848": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 4
+      },
+      "del": 1,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 34,
+      "sub": 4
+    },
+    "fleurs-1849": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 24,
+      "sub": 0
+    },
+    "fleurs-1850": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 25,
+      "sub": 2
+    },
+    "fleurs-1851": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 28,
+      "sub": 1
+    },
+    "fleurs-1852": {
+      "categories": {
+        "other_insertion": 2,
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 2,
+      "ref_words": 63,
+      "sub": 3
+    },
+    "fleurs-1853": {
+      "categories": {
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 20,
+      "sub": 1
+    },
+    "fleurs-1854": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 19,
+      "sub": 1
+    },
+    "fleurs-1855": {
+      "categories": {
+        "deleted_speech": 5,
+        "enclitic_particle": 1,
+        "morphology_error": 1,
+        "other_deletion": 1,
+        "other_insertion": 1,
+        "other_substitution": 3
+      },
+      "del": 6,
+      "errors": 12,
+      "ins": 1,
+      "ref_words": 39,
+      "sub": 5
+    },
+    "fleurs-1856": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 31,
+      "sub": 1
+    },
+    "fleurs-1857": {
+      "categories": {
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 27,
+      "sub": 2
+    },
+    "fleurs-1858": {
+      "categories": {
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 2
+    },
+    "fleurs-1859": {
+      "categories": {
+        "morphology_error": 1,
+        "other_insertion": 1,
+        "other_substitution": 4,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 7,
+      "ins": 1,
+      "ref_words": 41,
+      "sub": 6
+    },
+    "fleurs-1860": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 1
+      },
+      "del": 1,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 16,
+      "sub": 1
+    },
+    "fleurs-1861": {
+      "categories": {
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 22,
+      "sub": 2
+    },
+    "fleurs-1862": {
+      "categories": {
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 37,
+      "sub": 3
+    },
+    "fleurs-1863": {
+      "categories": {
+        "other_deletion": 2,
+        "other_substitution": 1
+      },
+      "del": 2,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 42,
+      "sub": 1
+    },
+    "fleurs-1864": {
+      "categories": {
+        "other_substitution": 3,
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 37,
+      "sub": 5
+    },
+    "fleurs-1865": {
+      "categories": {
+        "morphology_error": 1,
+        "other_deletion": 1,
+        "other_substitution": 2,
+        "proper_noun_error": 2
+      },
+      "del": 1,
+      "errors": 6,
+      "ins": 0,
+      "ref_words": 32,
+      "sub": 5
+    },
+    "fleurs-1866": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 20,
+      "sub": 1
+    },
+    "fleurs-1867": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 28,
+      "sub": 3
+    },
+    "fleurs-1868": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 29,
+      "sub": 1
+    },
+    "fleurs-1869": {
+      "categories": {
+        "enclitic_particle": 1,
+        "other_insertion": 1,
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 1,
+      "ref_words": 32,
+      "sub": 4
+    },
+    "fleurs-1870": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 2
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 17,
+      "sub": 2
+    },
+    "fleurs-1871": {
+      "categories": {
+        "morphology_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 13,
+      "sub": 1
+    },
+    "fleurs-1872": {
+      "categories": {
+        "morphology_error": 1,
+        "other_deletion": 1,
+        "other_substitution": 5,
+        "proper_noun_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 2,
+      "errors": 10,
+      "ins": 1,
+      "ref_words": 31,
+      "sub": 7
+    },
+    "fleurs-1873": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 26,
+      "sub": 0
+    },
+    "fleurs-1874": {
+      "categories": {
+        "morphology_error": 2,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 31,
+      "sub": 3
+    },
+    "fleurs-1875": {
+      "categories": {
+        "other_deletion": 1
+      },
+      "del": 1,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 22,
+      "sub": 0
+    },
+    "fleurs-1876": {
+      "categories": {
+        "other_substitution": 3,
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 1,
+      "ref_words": 18,
+      "sub": 4
+    },
+    "fleurs-1877": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 1,
+      "ref_words": 37,
+      "sub": 3
+    },
+    "fleurs-1878": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 3
+      },
+      "del": 1,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 36,
+      "sub": 3
+    },
+    "fleurs-1879": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 18,
+      "sub": 0
+    },
+    "fleurs-1880": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 14,
+      "sub": 1
+    },
+    "fleurs-1881": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 28,
+      "sub": 2
+    },
+    "fleurs-1882": {
+      "categories": {
+        "morphology_error": 1,
+        "other_deletion": 1,
+        "other_substitution": 3
+      },
+      "del": 1,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 32,
+      "sub": 4
+    },
+    "fleurs-1883": {
+      "categories": {
+        "hallucination": 9,
+        "other_insertion": 1,
+        "other_substitution": 5
+      },
+      "del": 0,
+      "errors": 15,
+      "ins": 10,
+      "ref_words": 25,
+      "sub": 5
+    },
+    "fleurs-1884": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 22,
+      "sub": 2
+    },
+    "fleurs-1885": {
+      "categories": {
+        "other_insertion": 4,
+        "other_substitution": 5
+      },
+      "del": 0,
+      "errors": 9,
+      "ins": 4,
+      "ref_words": 20,
+      "sub": 5
+    },
+    "fleurs-1886": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 0
+    },
+    "fleurs-1887": {
+      "categories": {
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 18,
+      "sub": 3
+    },
+    "fleurs-1888": {
+      "categories": {
+        "deleted_speech": 7,
+        "morphology_error": 1,
+        "other_substitution": 3
+      },
+      "del": 7,
+      "errors": 11,
+      "ins": 0,
+      "ref_words": 29,
+      "sub": 4
+    },
+    "fleurs-1889": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 16,
+      "sub": 0
+    },
+    "fleurs-1890": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 20,
+      "sub": 2
+    },
+    "fleurs-1891": {
+      "categories": {
+        "morphology_error": 1,
+        "other_insertion": 1,
+        "other_substitution": 3,
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 7,
+      "ins": 1,
+      "ref_words": 16,
+      "sub": 6
+    },
+    "fleurs-1892": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 33,
+      "sub": 1
+    },
+    "fleurs-1893": {
+      "categories": {
+        "enclitic_particle": 1,
+        "morphology_error": 1,
+        "other_deletion": 1,
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 1,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 32,
+      "sub": 4
+    },
+    "fleurs-1894": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 19,
+      "sub": 0
+    },
+    "fleurs-1895": {
+      "categories": {
+        "other_substitution": 2,
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 22,
+      "sub": 4
+    },
+    "fleurs-1896": {
+      "categories": {
+        "enclitic_particle": 1,
+        "morphology_error": 1,
+        "other_deletion": 1,
+        "other_substitution": 5
+      },
+      "del": 1,
+      "errors": 8,
+      "ins": 0,
+      "ref_words": 42,
+      "sub": 7
+    },
+    "fleurs-1897": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 2
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 17,
+      "sub": 2
+    },
+    "fleurs-1898": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 1,
+      "ref_words": 34,
+      "sub": 3
+    },
+    "fleurs-1899": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 39,
+      "sub": 2
+    },
+    "fleurs-1900": {
+      "categories": {
+        "enclitic_particle": 1
+      },
+      "del": 1,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 0
+    },
+    "fleurs-1901": {
+      "categories": {
+        "other_deletion": 1,
+        "other_insertion": 1,
+        "other_substitution": 5,
+        "spelling_variant": 3
+      },
+      "del": 2,
+      "errors": 10,
+      "ins": 1,
+      "ref_words": 37,
+      "sub": 7
+    },
+    "fleurs-1902": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 12,
+      "sub": 2
+    },
+    "fleurs-1903": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 21,
+      "sub": 1
+    },
+    "fleurs-1904": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 1
+    },
+    "fleurs-1905": {
+      "categories": {
+        "other_substitution": 2,
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 18,
+      "sub": 4
+    },
+    "fleurs-1906": {
+      "categories": {
+        "morphology_error": 1,
+        "other_insertion": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 14,
+      "sub": 1
+    },
+    "fleurs-1907": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 3,
+        "proper_noun_error": 2
+      },
+      "del": 1,
+      "errors": 6,
+      "ins": 0,
+      "ref_words": 17,
+      "sub": 5
+    },
+    "fleurs-1908": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 15,
+      "sub": 2
+    },
+    "fleurs-1909": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 26,
+      "sub": 2
+    },
+    "fleurs-1910": {
+      "categories": {
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 11,
+      "sub": 2
+    },
+    "fleurs-1911": {
+      "categories": {
+        "morphology_error": 2,
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 1,
+      "ref_words": 30,
+      "sub": 4
+    },
+    "fleurs-1912": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 20,
+      "sub": 0
+    },
+    "fleurs-1913": {
+      "categories": {
+        "enclitic_particle": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 26,
+      "sub": 3
+    },
+    "fleurs-1914": {
+      "categories": {
+        "other_substitution": 1,
+        "spelling_variant": 4
+      },
+      "del": 1,
+      "errors": 5,
+      "ins": 1,
+      "ref_words": 17,
+      "sub": 3
+    },
+    "fleurs-1915": {
+      "categories": {
+        "other_substitution": 2,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 26,
+      "sub": 3
+    },
+    "fleurs-1916": {
+      "categories": {
+        "other_deletion": 1,
+        "other_insertion": 1,
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 1,
+      "errors": 4,
+      "ins": 1,
+      "ref_words": 32,
+      "sub": 2
+    },
+    "fleurs-1917": {
+      "categories": {
+        "morphology_error": 1,
+        "other_insertion": 1,
+        "other_substitution": 3
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 1,
+      "ref_words": 20,
+      "sub": 4
+    },
+    "fleurs-1918": {
+      "categories": {
+        "proper_noun_error": 3
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 25,
+      "sub": 3
+    },
+    "fleurs-1919": {
+      "categories": {
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 25,
+      "sub": 2
+    },
+    "fleurs-1920": {
+      "categories": {
+        "morphology_error": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 25,
+      "sub": 2
+    },
+    "fleurs-1921": {
+      "categories": {
+        "enclitic_particle": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 23,
+      "sub": 2
+    },
+    "fleurs-1922": {
+      "categories": {
+        "morphology_error": 2,
+        "other_substitution": 3,
+        "proper_noun_error": 1,
+        "spelling_variant": 1
+      },
+      "del": 0,
+      "errors": 7,
+      "ins": 0,
+      "ref_words": 26,
+      "sub": 7
+    },
+    "fleurs-1923": {
+      "categories": {
+        "enclitic_particle": 1,
+        "morphology_error": 1,
+        "other_substitution": 10
+      },
+      "del": 0,
+      "errors": 12,
+      "ins": 0,
+      "ref_words": 46,
+      "sub": 12
+    },
+    "fleurs-1924": {
+      "categories": {
+        "enclitic_particle": 1,
+        "hallucination": 3,
+        "other_insertion": 1,
+        "other_substitution": 5,
+        "proper_noun_error": 2
+      },
+      "del": 0,
+      "errors": 12,
+      "ins": 5,
+      "ref_words": 27,
+      "sub": 7
+    },
+    "fleurs-1925": {
+      "categories": {
+        "morphology_error": 1,
+        "other_insertion": 3,
+        "other_substitution": 4,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 9,
+      "ins": 3,
+      "ref_words": 21,
+      "sub": 6
+    },
+    "fleurs-1926": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 16,
+      "sub": 2
+    },
+    "fleurs-1927": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 24,
+      "sub": 1
+    },
+    "fleurs-1928": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 4
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 17,
+      "sub": 5
+    },
+    "fleurs-1929": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 24,
+      "sub": 0
+    },
+    "fleurs-1930": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 18,
+      "sub": 1
+    },
+    "fleurs-1931": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 36,
+      "sub": 1
+    },
+    "fleurs-1932": {
+      "categories": {
+        "other_insertion": 2,
+        "other_substitution": 3,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 7,
+      "ins": 2,
+      "ref_words": 57,
+      "sub": 4
+    },
+    "fleurs-1933": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 32,
+      "sub": 0
+    },
+    "fleurs-1934": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 27,
+      "sub": 2
+    },
+    "fleurs-1935": {
+      "categories": {
+        "other_deletion": 2,
+        "other_substitution": 2
+      },
+      "del": 2,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 16,
+      "sub": 2
+    },
+    "fleurs-1936": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 4
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 1,
+      "ref_words": 50,
+      "sub": 4
+    },
+    "fleurs-1937": {
+      "categories": {
+        "morphology_error": 1,
+        "other_deletion": 1,
+        "other_insertion": 1,
+        "other_substitution": 4,
+        "proper_noun_error": 7
+      },
+      "del": 1,
+      "errors": 14,
+      "ins": 1,
+      "ref_words": 69,
+      "sub": 12
+    },
+    "fleurs-1938": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 24,
+      "sub": 1
+    },
+    "fleurs-1939": {
+      "categories": {
+        "proper_noun_error": 1,
+        "spelling_variant": 4
+      },
+      "del": 1,
+      "errors": 5,
+      "ins": 1,
+      "ref_words": 26,
+      "sub": 3
+    },
+    "fleurs-1940": {
+      "categories": {
+        "other_substitution": 4
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 33,
+      "sub": 4
+    },
+    "fleurs-1941": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 11,
+      "sub": 1
+    },
+    "fleurs-1942": {
+      "categories": {
+        "morphology_error": 3,
+        "other_insertion": 1
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 1,
+      "ref_words": 37,
+      "sub": 3
+    },
+    "fleurs-1943": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 28,
+      "sub": 3
+    },
+    "fleurs-1944": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 28,
+      "sub": 0
+    },
+    "fleurs-1945": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 17,
+      "sub": 2
+    },
+    "fleurs-1946": {
+      "categories": {
+        "other_deletion": 1,
+        "other_insertion": 1,
+        "other_substitution": 1
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 36,
+      "sub": 1
+    },
+    "fleurs-1947": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 0
+    },
+    "fleurs-1948": {
+      "categories": {
+        "other_substitution": 3,
+        "proper_noun_error": 3
+      },
+      "del": 2,
+      "errors": 6,
+      "ins": 0,
+      "ref_words": 33,
+      "sub": 4
+    },
+    "fleurs-1949": {
+      "categories": {
+        "boundary_error": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 18,
+      "sub": 3
+    },
+    "fleurs-1950": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 34,
+      "sub": 1
+    },
+    "fleurs-1951": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 28,
+      "sub": 2
+    },
+    "fleurs-1952": {
+      "categories": {
+        "other_insertion": 2,
+        "other_substitution": 7
+      },
+      "del": 0,
+      "errors": 9,
+      "ins": 2,
+      "ref_words": 31,
+      "sub": 7
+    },
+    "fleurs-1953": {
+      "categories": {
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 11,
+      "sub": 1
+    },
+    "fleurs-1954": {
+      "categories": {
+        "other_substitution": 4
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 29,
+      "sub": 4
+    },
+    "fleurs-1955": {
+      "categories": {
+        "morphology_error": 1,
+        "other_insertion": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 21,
+      "sub": 1
+    },
+    "fleurs-1956": {
+      "categories": {
+        "morphology_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 33,
+      "sub": 1
+    },
+    "fleurs-1957": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 12,
+      "sub": 1
+    },
+    "fleurs-1958": {
+      "categories": {
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 1
+    },
+    "fleurs-1959": {
+      "categories": {
+        "other_substitution": 1,
+        "spelling_variant": 3
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 2,
+      "ref_words": 19,
+      "sub": 2
+    },
+    "fleurs-1960": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 41,
+      "sub": 2
+    },
+    "fleurs-1961": {
+      "categories": {
+        "other_substitution": 2,
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 1,
+      "ref_words": 44,
+      "sub": 3
+    },
+    "fleurs-1962": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 19,
+      "sub": 2
+    },
+    "fleurs-1963": {
+      "categories": {
+        "morphology_error": 1,
+        "other_deletion": 1,
+        "other_substitution": 2,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 6,
+      "ins": 1,
+      "ref_words": 33,
+      "sub": 4
+    },
+    "fleurs-1964": {
+      "categories": {
+        "enclitic_particle": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 27,
+      "sub": 3
+    },
+    "fleurs-1965": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 26,
+      "sub": 1
+    },
+    "fleurs-1966": {
+      "categories": {
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 18,
+      "sub": 2
+    },
+    "fleurs-1967": {
+      "categories": {
+        "morphology_error": 1,
+        "other_insertion": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 1,
+      "ref_words": 35,
+      "sub": 3
+    },
+    "fleurs-1968": {
+      "categories": {
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 42,
+      "sub": 1
+    },
+    "fleurs-1969": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 30,
+      "sub": 1
+    },
+    "fleurs-1970": {
+      "categories": {
+        "other_substitution": 4,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 6,
+      "ins": 0,
+      "ref_words": 31,
+      "sub": 5
+    },
+    "fleurs-1971": {
+      "categories": {
+        "other_substitution": 4,
+        "spelling_variant": 4
+      },
+      "del": 2,
+      "errors": 8,
+      "ins": 0,
+      "ref_words": 45,
+      "sub": 6
+    },
+    "fleurs-1972": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 18,
+      "sub": 1
+    },
+    "fleurs-1973": {
+      "categories": {
+        "enclitic_particle": 1,
+        "other_deletion": 1,
+        "other_substitution": 1
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 32,
+      "sub": 2
+    },
+    "fleurs-1974": {
+      "categories": {
+        "morphology_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 13,
+      "sub": 2
+    },
+    "fleurs-1975": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 2
+    },
+    "fleurs-1976": {
+      "categories": {
+        "other_substitution": 2,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 24,
+      "sub": 3
+    },
+    "fleurs-1977": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 22,
+      "sub": 2
+    },
+    "fleurs-1978": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 12,
+      "sub": 1
+    },
+    "fleurs-1979": {
+      "categories": {
+        "other_insertion": 2,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 2,
+      "ref_words": 21,
+      "sub": 1
+    },
+    "fleurs-1980": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 4
+      },
+      "del": 1,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 25,
+      "sub": 4
+    },
+    "fleurs-1981": {
+      "categories": {
+        "other_insertion": 2,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 2,
+      "ref_words": 22,
+      "sub": 2
+    },
+    "fleurs-1982": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 3,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 1,
+      "ref_words": 22,
+      "sub": 4
+    },
+    "fleurs-1983": {
+      "categories": {
+        "other_substitution": 1,
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 40,
+      "sub": 2
+    },
+    "fleurs-1984": {
+      "categories": {
+        "other_substitution": 2,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 38,
+      "sub": 3
+    },
+    "fleurs-1985": {
+      "categories": {
+        "enclitic_particle": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 41,
+      "sub": 3
+    },
+    "fleurs-1986": {
+      "categories": {
+        "hallucination": 9,
+        "other_substitution": 4
+      },
+      "del": 0,
+      "errors": 13,
+      "ins": 9,
+      "ref_words": 22,
+      "sub": 4
+    },
+    "fleurs-1987": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 17,
+      "sub": 1
+    },
+    "fleurs-1988": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 22,
+      "sub": 0
+    },
+    "fleurs-1989": {
+      "categories": {
+        "morphology_error": 1,
+        "other_insertion": 2,
+        "other_substitution": 2,
+        "proper_noun_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 8,
+      "ins": 2,
+      "ref_words": 38,
+      "sub": 5
+    },
+    "fleurs-1990": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 45,
+      "sub": 2
+    },
+    "fleurs-1991": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 19,
+      "sub": 2
+    },
+    "fleurs-1992": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 4,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 6,
+      "ins": 1,
+      "ref_words": 26,
+      "sub": 5
+    },
+    "fleurs-1993": {
+      "categories": {
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 21,
+      "sub": 1
+    },
+    "fleurs-1994": {
+      "categories": {
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 22,
+      "sub": 1
+    },
+    "fleurs-1995": {
+      "categories": {
+        "other_deletion": 1,
+        "other_substitution": 6
+      },
+      "del": 1,
+      "errors": 7,
+      "ins": 0,
+      "ref_words": 34,
+      "sub": 6
+    },
+    "fleurs-1996": {
+      "categories": {
+        "other_substitution": 1,
+        "proper_noun_error": 4
+      },
+      "del": 0,
+      "errors": 5,
+      "ins": 0,
+      "ref_words": 32,
+      "sub": 5
+    },
+    "fleurs-1997": {
+      "categories": {
+        "morphology_error": 1,
+        "other_insertion": 1,
+        "other_substitution": 6,
+        "proper_noun_error": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 11,
+      "ins": 1,
+      "ref_words": 36,
+      "sub": 9
+    },
+    "fleurs-1998": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 24,
+      "sub": 0
+    },
+    "fleurs-1999": {
+      "categories": {
+        "other_insertion": 1,
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 25,
+      "sub": 2
+    },
+    "fleurs-2000": {
+      "categories": {
+        "morphology_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 30,
+      "sub": 1
+    },
+    "fleurs-2001": {
+      "categories": {
+        "spelling_variant": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 1,
+      "ref_words": 34,
+      "sub": 1
+    },
+    "fleurs-2002": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 24,
+      "sub": 1
+    },
+    "fleurs-2003": {
+      "categories": {},
+      "del": 0,
+      "errors": 0,
+      "ins": 0,
+      "ref_words": 20,
+      "sub": 0
+    },
+    "fleurs-2004": {
+      "categories": {
+        "morphology_error": 1,
+        "other_substitution": 2,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 4,
+      "ins": 0,
+      "ref_words": 25,
+      "sub": 4
+    },
+    "fleurs-2005": {
+      "categories": {
+        "other_deletion": 1,
+        "spelling_variant": 2
+      },
+      "del": 1,
+      "errors": 3,
+      "ins": 1,
+      "ref_words": 15,
+      "sub": 1
+    },
+    "fleurs-2006": {
+      "categories": {
+        "morphology_error": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 23,
+      "sub": 1
+    },
+    "fleurs-2007": {
+      "categories": {
+        "other_substitution": 2,
+        "proper_noun_error": 1
+      },
+      "del": 0,
+      "errors": 3,
+      "ins": 0,
+      "ref_words": 27,
+      "sub": 3
+    },
+    "fleurs-2008": {
+      "categories": {
+        "other_substitution": 2
+      },
+      "del": 0,
+      "errors": 2,
+      "ins": 0,
+      "ref_words": 43,
+      "sub": 2
+    },
+    "fleurs-2009": {
+      "categories": {
+        "other_substitution": 1
+      },
+      "del": 0,
+      "errors": 1,
+      "ins": 0,
+      "ref_words": 44,
+      "sub": 1
+    }
+  },
+  "label": "fast",
+  "lexicons": {
+    "homographs.txt": {
+      "entries": 20,
+      "sha256": "02d81f142166f744e3817360af928fc437a61c1666285af37dd6dd7667ddc5bd",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    },
+    "lexicon-en.txt": {
+      "entries": 936,
+      "sha256": "94d7a2d550d7cdb87116745a40594c6dbe22bcdc31b8f51a722a114b8f059eba",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    },
+    "lexicon-names.txt": {
+      "entries": 151,
+      "sha256": "dd970d1031443d2c5a46fd0cb8994b28c371fc5aa169269736d81c221e7373b4",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    },
+    "lexicon-other.txt": {
+      "entries": 27,
+      "sha256": "c0d26a392188743216a18196a6b464836d89120060fc1ce39a6ca33faff3472c",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    },
+    "lexicon-tl.txt": {
+      "entries": 990,
+      "sha256": "41be2dd9202ef91fad86a39eea847ccc08dcbbb117952ecf3ba9fa5d6d8881df",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    },
+    "particles.txt": {
+      "entries": 21,
+      "sha256": "78a6ec018a5c49693c099eb84e276f5262b4caebe2441336fe346d881287399b",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    },
+    "spelling-variants.txt": {
+      "entries": 28,
+      "sha256": "858d299ae209ef081cbbec835b4e2c9c553724bf19df91fcecd649cb17dd082d",
+      "source": "written for this project by Claude (an AI model); no native-speaker review"
+    }
+  },
+  "schema": "notero-taxonomy-report/1",
+  "tool": {
+    "name": "eval/taxonomy.py",
+    "tieBreak": "default",
+    "tokenPolicy": "notero-standard (score.normalize)",
+    "version": 1
+  }
+}

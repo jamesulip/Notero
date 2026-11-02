@@ -1,0 +1,189 @@
+{
+ "card": {
+  "attribution": "AMI Meeting Corpus, University of Edinburgh et al., CC BY 4.0. Audio resampled to 16 kHz.",
+  "licence": "CC BY 4.0 (audio and annotations), https://groups.inf.ed.ac.uk/ami/corpus/license.shtml",
+  "name": "AMI Meeting Corpus, test set (16 meetings), Mix-Headset",
+  "reference": "pyannote/AMI-diarization-setup only_words RTTM, commit 67c2d539286e89f68952d5dcf83912bd9f01dfae (Apache-2.0), from AMI manual annotations 1.6.2",
+  "speech": "English scenario and non-scenario meetings, close-talk headsets mixed to one track"
+ },
+ "corpus": "ami",
+ "items": [
+  {
+   "audio": "audio/ami-IS1009a.wav",
+   "audioSha256": "63c917d40f3c0caae1736f0a05d11c638d0922be5074eb20f7de84fc8da2095b",
+   "corpus": "ami",
+   "durationS": 838.833,
+   "id": "ami-IS1009a",
+   "ref": "refs/ami-IS1009a.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 695.9,
+   "sourceSha256": "6eb5a0ede0d9e72794f976ce7bea5b78133eae969f99b4c5418b43c2468d25b1"
+  },
+  {
+   "audio": "audio/ami-IS1009b.wav",
+   "audioSha256": "8cebee300c6d0629f746f78d0eeba3ff0ec189b844beb156a89d263a59f40773",
+   "corpus": "ami",
+   "durationS": 2052.333,
+   "id": "ami-IS1009b",
+   "ref": "refs/ami-IS1009b.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1982.97,
+   "sourceSha256": "07c2891ae6ad7c507b2a4f15b2dcd0a2343491df9e4e6a58f9db0d0b2c5e1382"
+  },
+  {
+   "audio": "audio/ami-IS1009c.wav",
+   "audioSha256": "e5aa5931df18ed4467b4c283b9c926902c3e685b01f2803dd6fb420c8809edc5",
+   "corpus": "ami",
+   "durationS": 1820.833,
+   "id": "ami-IS1009c",
+   "ref": "refs/ami-IS1009c.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1584.45,
+   "sourceSha256": "f317910070db0f2649315decbb34686d648bbe9dc3f7576710184f4d572bdbcc"
+  },
+  {
+   "audio": "audio/ami-IS1009d.wav",
+   "audioSha256": "24379b1e75802a4874f0bfeabb09b432b11cf04996cbccfc3de9c71c9a0999df",
+   "corpus": "ami",
+   "durationS": 1944.5,
+   "id": "ami-IS1009d",
+   "ref": "refs/ami-IS1009d.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1738.6,
+   "sourceSha256": "470440114ee2ed076cfc77c53136ad5d3af500d8a5a6ca36755e83534f5ca4ea"
+  },
+  {
+   "audio": "audio/ami-ES2004a.wav",
+   "audioSha256": "ffed143aa8e4641364650cb7705be8687747f8ec05c92503067e1162f6894349",
+   "corpus": "ami",
+   "durationS": 1049.355,
+   "id": "ami-ES2004a",
+   "ref": "refs/ami-ES2004a.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 923.43,
+   "sourceSha256": "3e2560b19bee6952c7c7ce041b0f1ea8a7ea9468044c4eea79d2a2c67e24ab0f"
+  },
+  {
+   "audio": "audio/ami-ES2004b.wav",
+   "audioSha256": "633c497c07a9f9ae25cc39f85a2c1622b2dabec3d3ace68794c08c40408404f2",
+   "corpus": "ami",
+   "durationS": 2345.493,
+   "id": "ami-ES2004b",
+   "ref": "refs/ami-ES2004b.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 2233.05,
+   "sourceSha256": "ad0cf07c42b1694ccf7bea8f1a37348d9cfab194787abc7d050b29ba56e365c8"
+  },
+  {
+   "audio": "audio/ami-ES2004c.wav",
+   "audioSha256": "bf06ae946ee351ed6ec997dff2959857223202d71fbc00ff4414a4bf763ac1c5",
+   "corpus": "ami",
+   "durationS": 2334.368,
+   "id": "ami-ES2004c",
+   "ref": "refs/ami-ES2004c.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 2244.47,
+   "sourceSha256": "47dc9bd2e3b1d174842091ae9e1fe765218f0c87658b17d6469c404e03ec2ac5"
+  },
+  {
+   "audio": "audio/ami-ES2004d.wav",
+   "audioSha256": "8f85460a62fe7388e5e66d59aeeae81e8bd4b2542c572a336b7c6919d038d010",
+   "corpus": "ami",
+   "durationS": 2222.291,
+   "id": "ami-ES2004d",
+   "ref": "refs/ami-ES2004d.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 2006.77,
+   "sourceSha256": "3cfce3297ebb7faeb53c02727eea5e9f2c76e9ed4b62db3b03d73e66836e91f3"
+  },
+  {
+   "audio": "audio/ami-TS3003a.wav",
+   "audioSha256": "697deb459acb1d6e2a685b4a2fe5fa180a5945a047d4e7df55eccbb00fa050a2",
+   "corpus": "ami",
+   "durationS": 1505.643,
+   "id": "ami-TS3003a",
+   "ref": "refs/ami-TS3003a.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1025.964,
+   "sourceSha256": "b6ce59ff735c234afdd94b13744aa26f6785af746170543fd03b33160e920a6d"
+  },
+  {
+   "audio": "audio/ami-TS3003b.wav",
+   "audioSha256": "9c9fe113512286b5cc68ff4b4a0403b497ecc8ccc314bc11230b2849d933fa51",
+   "corpus": "ami",
+   "durationS": 2210.304,
+   "id": "ami-TS3003b",
+   "ref": "refs/ami-TS3003b.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1820.5,
+   "sourceSha256": "0c94f3a09ab747caa7714efe8852f5ff37d36cf272b75709344991df1aa266ca"
+  },
+  {
+   "audio": "audio/ami-TS3003c.wav",
+   "audioSha256": "5721ea6d132882c5be897e7f76020297750e5ffbb5ea266b0bd039bacce813fb",
+   "corpus": "ami",
+   "durationS": 2570.0,
+   "id": "ami-TS3003c",
+   "ref": "refs/ami-TS3003c.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1894.25,
+   "sourceSha256": "b9f455870e8cb0ba765523a1767cc366775ab7e5e3eabf37d9c91289e5a1a70a"
+  },
+  {
+   "audio": "audio/ami-TS3003d.wav",
+   "audioSha256": "9dfe6f642a5cff556b39b6fe5d52f87418f1bfbbd24a10897721906797a91f6a",
+   "corpus": "ami",
+   "durationS": 2618.2,
+   "id": "ami-TS3003d",
+   "ref": "refs/ami-TS3003d.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 2070.34,
+   "sourceSha256": "ece4a41c37c1092c737d1dfe313afb18248364625991f745fed4b372c3c67eb3"
+  },
+  {
+   "audio": "audio/ami-EN2002a.wav",
+   "audioSha256": "ac76316195d1c232fc91e0b2f6ea567ae5900348b66cf60f76827008fead99c0",
+   "corpus": "ami",
+   "durationS": 2142.709,
+   "id": "ami-EN2002a",
+   "ref": "refs/ami-EN2002a.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 2530.26,
+   "sourceSha256": "a15017d0d3c871866971ee178052a0ce3a7e44d6fbf89fc23dcab326511b65f5"
+  },
+  {
+   "audio": "audio/ami-EN2002b.wav",
+   "audioSha256": "b9f96ffe165fa1f8586b77a9a19bf2d476e3a782fad5f6276ff8e348f73285de",
+   "corpus": "ami",
+   "durationS": 1786.848,
+   "id": "ami-EN2002b",
+   "ref": "refs/ami-EN2002b.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1943.44,
+   "sourceSha256": "50e2c8e4737850c4bf3cc24e7087c755e1c733cd91822106afd0df485ba64893"
+  },
+  {
+   "audio": "audio/ami-EN2002c.wav",
+   "audioSha256": "a29e89da1c2406583c1204fecd49779168944a4ad4dc25e03a45ea99edddd2c7",
+   "corpus": "ami",
+   "durationS": 2972.256,
+   "id": "ami-EN2002c",
+   "ref": "refs/ami-EN2002c.rttm",
+   "refSpeakers": 3,
+   "refSpeechS": 3343.64,
+   "sourceSha256": "a057708b3adb553f709fcde97d2af8e0455076bc3f88c250975227433d6e0270"
+  },
+  {
+   "audio": "audio/ami-EN2002d.wav",
+   "audioSha256": "9a5fd2da75c2952405e000865cf97e65587830a72293c73b46706d41803beb2e",
+   "corpus": "ami",
+   "durationS": 2209.899,
+   "id": "ami-EN2002d",
+   "ref": "refs/ami-EN2002d.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 2675.89,
+   "sourceSha256": "6aa99d9d71cb695ea699d6be277f78eff68e847c93560031486eba9f18164ebe"
+  }
+ ],
+ "schemaVersion": 1
+}

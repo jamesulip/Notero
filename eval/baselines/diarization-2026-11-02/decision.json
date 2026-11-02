@@ -1,0 +1,110 @@
+{
+ "baseline": "pyannote",
+ "candidates": {
+  "nemotron3": {
+   "checks": {
+    "allRunsScored": {
+     "failed": [],
+     "missing": [],
+     "pass": true
+    },
+    "noNewMerges": {
+     "files": [
+      "synth-holdout-h-four-voices"
+     ],
+     "pass": false
+    },
+    "peakFootprint": {
+     "maxMB": 94.3,
+     "pass": true
+    },
+    "realTimeFactor": {
+     "median": 0.00281,
+     "pass": true
+    },
+    "relativeDerImprovement:ami": {
+     "baselineDer": 0.236958,
+     "candidateDer": 0.241324,
+     "pass": false,
+     "relative": -0.0184
+    },
+    "relativeDerImprovement:liva": {
+     "baselineDer": 0.581295,
+     "candidateDer": 0.16071,
+     "pass": true,
+     "relative": 0.7235
+    },
+    "repeatStable": {
+     "maxSpread": 0.0,
+     "pairs": 37,
+     "pass": true,
+     "unscorable": []
+    },
+    "speakerNamesCarry": {
+     "baselineWrongPct": 27.87,
+     "candidateWrongPct": 7.17,
+     "pass": true,
+     "runs": 64
+    },
+    "timestampsValid": {
+     "files": [],
+     "pass": true
+    }
+   },
+   "passesGate": false
+  },
+  "nemotron3-fast128": {
+   "checks": {
+    "allRunsScored": {
+     "failed": [],
+     "missing": [],
+     "pass": true
+    },
+    "noNewMerges": {
+     "files": [
+      "synth-holdout-h-four-voices"
+     ],
+     "pass": false
+    },
+    "peakFootprint": {
+     "maxMB": 79.2,
+     "pass": true
+    },
+    "realTimeFactor": {
+     "median": 0.00355,
+     "pass": true
+    },
+    "relativeDerImprovement:ami": {
+     "baselineDer": 0.236958,
+     "candidateDer": 0.241531,
+     "pass": false,
+     "relative": -0.0193
+    },
+    "relativeDerImprovement:liva": {
+     "baselineDer": 0.581295,
+     "candidateDer": 0.179905,
+     "pass": true,
+     "relative": 0.6905
+    },
+    "repeatStable": {
+     "maxSpread": 0.0,
+     "pairs": 37,
+     "pass": true,
+     "unscorable": []
+    },
+    "speakerNamesCarry": {
+     "baselineWrongPct": 27.87,
+     "candidateWrongPct": 7.93,
+     "pass": true,
+     "runs": 64
+    },
+    "timestampsValid": {
+     "files": [],
+     "pass": true
+    }
+   },
+   "passesGate": false
+  }
+ },
+ "recommendation": "keep pyannote: nemotron3 does not pass the gate"
+}

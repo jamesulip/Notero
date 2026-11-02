@@ -1,0 +1,29 @@
+{
+  "audioSeconds": 6270.6,
+  "corpusId": "fleurs-fil_ph-test-onepersentence-seed7",
+  "gender": {
+    "MALE": 349
+  },
+  "items": 349,
+  "leakage": "Evaluation only, nothing is trained. Whisper's training data is not published; OpenAI reports FLEURS as an evaluation set for Whisper (published claim, unverified here).",
+  "references": "FLEURS raw_transcription, verbatim; category tagalog for every item",
+  "selection": "one recording per sentence by seeded hash (seed 7)",
+  "source": {
+    "audio_url": "https://huggingface.co/datasets/google/fleurs/resolve/main/data/fil_ph/audio/test.tar.gz",
+    "citation": "Conneau et al., FLEURS: Few-shot Learning Evaluation of Universal Representations of Speech, arXiv:2205.12446",
+    "config": "fil_ph",
+    "dataset": "google/fleurs",
+    "gated": false,
+    "hf_repo_commit": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+    "license": "CC-BY-4.0",
+    "license_evidence": "Hugging Face dataset card front matter `license: - cc-by-4.0`, and the card line 'All datasets are licensed under the Creative Commons license (CC-BY).'",
+    "page": "https://huggingface.co/datasets/google/fleurs",
+    "split": "test",
+    "tar_sha256_published": "eb8349c6fc36fb363d6d9c30e53c503d1531ca599ad2100afd822aec2774e31b",
+    "tar_size_published": 889243315,
+    "tsv_url": "https://huggingface.co/datasets/google/fleurs/resolve/main/data/fil_ph/test.tsv"
+  },
+  "speakerIds": "not published by FLEURS; speaker diversity cannot be counted",
+  "speech": "read Wikipedia-style sentences, one sentence per recording",
+  "split": "test"
+}

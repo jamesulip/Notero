@@ -1,5 +1,116 @@
 # Changelog
 
+## Unreleased
+
+### Evaluation framework
+
+- **`transcribe --score` scores saved transcripts with one written method,** and loads no model,
+  opens no audio device and uses no network. It reads a manifest, plain-text or JSON references
+  and one hypothesis for each item, and writes a JSON and a Markdown report.
+  [BENCHMARKS.md](docs/BENCHMARKS.md#the-evaluation-framework) gives the method.
+- **The reports give WER and CER for the corpus, each recording and each utterance,** with
+  substitutions, deletions and insertions. They also give results by utterance language, by word
+  language and at code-switch points, and by speaker overlap. They list deletion bursts and the
+  reference speech that no hypothesis word covers. Each breakdown needs its annotation, and
+  without it the report says "unavailable" with the reason.
+- **The intervals are a seeded, stratified percentile bootstrap,** and `--compare` adds a paired
+  comparison of two systems on the same references. The same inputs give the same bytes.
+- **Scoring is versioned.** The configuration (`eval/evaluation-config.v1.json`) and the scoring
+  policy have a version and a fingerprint, and each report records them. The report also records
+  the corpus ID, the model, the model revision from the local download cache, the hardware and the
+  inference settings. It keeps the whole-file RTF, the live commit latency, the process footprint
+  and the model residency apart.
+- The default policy gives the same words and counts as `eval/score.py`. The older scorers do not
+  change: `--reference` still prints the same `WER` line, and the `evaluation (…)` line is new.
+- `--reference` accepts the JSON reference form, and the tool checks the reference and the
+  configuration before the decode. `transcribe --json` reports gain the optional fields
+  `evaluation`, `provenance` and `performance`. A saved benchmark gains `evaluation` and
+  `modelRevision`, and older saved benchmarks still load.
+- **No benchmark result comes with this change.** The framework was tested on synthetic text only.
+
+### Taglish error taxonomy
+
+- **`eval/taxonomy.py` sorts each word error into one kind.** The kinds are: Tagalog written as
+  English and English written as Tagalog, errors at code-switch points, mixed-language words
+  (`nag-meeting`, `i-share`), Filipino morphology (affix, reduplication, linker), proper names,
+  particles (`po`, `naman`, `lang`), runs of invented words, runs of deleted speech, and
+  spelling variants. It also reports timestamp misalignment. It is optional. It uses the same tokens
+  and edit distance as the WER, so the error words of all categories add up to S + D + I. No
+  existing number or file changes.
+  [eval/TAXONOMY.md](eval/TAXONOMY.md) gives the method.
+- **Labels are `verified`, `heuristic` or `structural`, and the report never adds them together.**
+  A reference can carry word-level language tags in a plain-text or JSON file that a person edits
+  (`.tagged.txt`; `languageSpans`). Without tags the language labels come from small word lists
+  that an AI model wrote, with no native-speaker review. A word that no list covers is `unknown` and not Filipino. The report says
+  how many tokens are `unknown` or `ambiguous`. A person can adjudicate any event in a TSV file.
+- **It runs from `score.py --taxonomy-out`, `tier_benchmark.py taxonomy` and
+  `compare_language.py --taxonomy`.** The same inputs give byte-identical reports. The reports hold
+  no corpus text unless `--include-text` is set.
+- **The first results are on the saved Liva and FLEURS tier decodes.**
+  [BENCHMARKS.md](docs/BENCHMARKS.md#error-taxonomy-of-the-tier-decodes-2026-11-02) gives them
+  with their limits. On the Liva sample, 38.8% of the Balanced errors are runs of three or more
+  deleted words. Best has 98 fewer Tagalog-to-English substitutions than Balanced in the first decode (95 in the second; heuristic).
+  The category counts move with the alignment tie-break (`--tie-break`): read no difference of less than about 70 words in one category.
+  No reference has word-level tags, so no result is `verified`.
+- **Synthetic fixtures with expected counts worked out from the text** are in `eval/fixtures/taxonomy/`. `tests/test_taxonomy.py`
+  adds 127 tests.
+- **A research report corrects an earlier statement.** [docs/TAGLISH-CORPORA.md](docs/TAGLISH-CORPORA.md)
+  lists the public Filipino and Taglish speech resources with their licences. FilSwitch still
+  states no licence. The earlier claim that no public conversational Taglish corpus has a
+  suitable licence was wrong as worded: Liva `en-tl` and CEnTaCS (5.4 hours of monologue, CC BY 4.0)
+  are permissive and small. No public Filipino meeting speech exists in the sets found. No new
+  corpus was downloaded.
+
+### Tier comparison
+
+- **`eval/tier_benchmark.py` compares the three tiers on one corpus** with identical decodes,
+  interleaved under the bench lock, scored by `transcribe --score`, and a decision gate fixed in
+  the plan before the first decode. It builds corpora from FLEURS `fil_ph` and from the Liva AI
+  `en-tl` sample (CC-BY-4.0), each checked against its published hashes.
+- **The default stays Balanced.** On 349 sentences of read Tagalog the tiers are within about
+  half a point (Balanced 11.66% WER). On 40 minutes of conversational Taglish, Best is about
+  4 points better in two decodes, which is under the 10% that the gate needs, and Best cannot run
+  live. Fast was slower than Balanced on the M2 Pro and slightly less accurate.
+  [eval/TIER-RESULTS.md](eval/TIER-RESULTS.md) gives the method and the limits.
+- Real meeting accuracy is still unmeasured. FilSwitch, the best public Taglish test set,
+  states no licence and was not used.
+
+### Speaker diarization
+
+- **`eval/diarization_eval.py` compares speaker backends on the same annotated audio.** It
+  prepares the AMI test set, the Liva AI Taglish sample and synthetic fixtures. It fixes the gate
+  in a plan before any run, runs every backend under the bench lock with the network denied, and
+  scores the results.
+  - `eval/diarization_metrics.py` gives DER with an explicit collar and overlap rule, the parts in
+    and out of overlap, overlap detection, merged and fragmented speakers, the speaker count and
+    timestamp validity.
+  - Other steps re-run on changed audio to count names carried to the wrong person, sample Neural
+    Engine memory from outside, and score against a second reference set.
+  - `make_multispeaker.py --set speakers` builds fixtures with two to six voices.
+- **An experimental Nemotron 3 backend, off.** It is a separate package,
+  `experimental/nemotron3/`, on FluidAudio 0.18.0. `Nemotron3SpeakerEngine` conforms to the app's
+  `SpeakerDiarizing` and never downloads. The app's FluidAudio pin and its default backend do not
+  change.
+- **The comparison keeps the current backend.**
+  - Nemotron 3 cut DER on the Taglish sample from 58.1% to 16.1%, and speaker confusion on AMI
+    from 9.5% to 0.4%.
+  - It did not lower AMI DER against the manual references (23.7% against 24.1%), and it merged
+    one synthetic voice pair. The gate needed 15% on each real corpus.
+  - See [DIARIZATION.md](docs/DIARIZATION.md).
+- **Fixed: speaker names were lost after Transcribe Again with speaker identification off.** The
+  next identification compared against the unlabelled revision, matched nothing and put every
+  voice under a new default name. It now uses the newest revision that has labels.
+  - A merge now rewrites every revision, and a new speaker is numbered after every label any
+    revision still carries. Without this, a new speaker could take the merged-away label and
+    inherit the merged lines.
+  - 11 store regression tests cover rename, merge, reassign, Identify Again, Transcribe Again and
+    restart.
+- **Fixed: a line under two speakers at once went to a random one of them.**
+  `SegmentMerger.dominantSpeaker` took the winner of a tie from `Dictionary` order. A tie now goes
+  to the lower label.
+- **Measured, not fixed:** the shipping speaker pass's peak footprint grows by about 27 MB per
+  minute of audio (1.68 GB on a 50-minute meeting).
+
 ## 1.2.0 — 2026-11-01
 
 ### Speed, memory and stability (second cycle)

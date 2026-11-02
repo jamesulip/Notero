@@ -1,0 +1,1633 @@
+{
+ "arms": [
+  {
+   "argv": [
+    "/tmp/notero-data/diar/bin/diarbench",
+    "--audio",
+    "{audio}",
+    "--models",
+    "/tmp/notero-data/diar/models-pyannote",
+    "--json",
+    "{json}",
+    "--mode",
+    "accurate",
+    "--label",
+    "{label}"
+   ],
+   "binarySha256": "c7d12399e6acd67ee3b70d85871add89c662ba6269b7c5bfc3e42fb6551e0346",
+   "label": "pyannote"
+  },
+  {
+   "argv": [
+    "/tmp/notero-data/diar/bin/nemodiarbench",
+    "--audio",
+    "{audio}",
+    "--models",
+    "/tmp/notero-data/n3-models/offline",
+    "--preset",
+    "offline",
+    "--json",
+    "{json}",
+    "--label",
+    "{label}"
+   ],
+   "binarySha256": "c7a928c9a603c39edbe692478c98e1571266bb55360102b724c29a9928dbd2f0",
+   "label": "nemotron3"
+  },
+  {
+   "argv": [
+    "/tmp/notero-data/diar/bin/nemodiarbench",
+    "--audio",
+    "{audio}",
+    "--models",
+    "/tmp/notero-data/n3-models/fast128",
+    "--preset",
+    "fast128",
+    "--json",
+    "{json}",
+    "--label",
+    "{label}"
+   ],
+   "binarySha256": "c7a928c9a603c39edbe692478c98e1571266bb55360102b724c29a9928dbd2f0",
+   "label": "nemotron3-fast128"
+  }
+ ],
+ "baseline": "pyannote",
+ "candidates": [
+  "nemotron3",
+  "nemotron3-fast128"
+ ],
+ "commit": "304ca227d97f1b07e78f2dd14adeccdb9dad6d56",
+ "created": "2026-11-02T15:15:15+08:00",
+ "dirty": true,
+ "gate": {
+  "identityCorpora": [
+   "liva",
+   "synth-tuning",
+   "synth-n"
+  ],
+  "maxMedianRealTimeFactor": 0.1,
+  "maxMergedSpeakersIncrease": 0,
+  "maxPeakFootprintMB": 1024,
+  "maxRepeatDerSpread": 0.01,
+  "maxWrongNameIncreasePoints": 1.0,
+  "minRelativeDerImprovement": 0.15,
+  "realCorpora": [
+   "ami",
+   "liva"
+  ]
+ },
+ "hardware": {
+  "chip": "Apple M2 Pro",
+  "memoryGB": 16,
+  "model": "Mac14,12",
+  "os": "26.6.2"
+ },
+ "items": [
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-IS1009a.wav",
+   "audioSha256": "63c917d40f3c0caae1736f0a05d11c638d0922be5074eb20f7de84fc8da2095b",
+   "corpus": "ami",
+   "durationS": 838.833,
+   "id": "ami-IS1009a",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-IS1009a.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 695.9,
+   "sourceSha256": "6eb5a0ede0d9e72794f976ce7bea5b78133eae969f99b4c5418b43c2468d25b1"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-IS1009b.wav",
+   "audioSha256": "8cebee300c6d0629f746f78d0eeba3ff0ec189b844beb156a89d263a59f40773",
+   "corpus": "ami",
+   "durationS": 2052.333,
+   "id": "ami-IS1009b",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-IS1009b.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1982.97,
+   "sourceSha256": "07c2891ae6ad7c507b2a4f15b2dcd0a2343491df9e4e6a58f9db0d0b2c5e1382"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-IS1009c.wav",
+   "audioSha256": "e5aa5931df18ed4467b4c283b9c926902c3e685b01f2803dd6fb420c8809edc5",
+   "corpus": "ami",
+   "durationS": 1820.833,
+   "id": "ami-IS1009c",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-IS1009c.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1584.45,
+   "sourceSha256": "f317910070db0f2649315decbb34686d648bbe9dc3f7576710184f4d572bdbcc"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-IS1009d.wav",
+   "audioSha256": "24379b1e75802a4874f0bfeabb09b432b11cf04996cbccfc3de9c71c9a0999df",
+   "corpus": "ami",
+   "durationS": 1944.5,
+   "id": "ami-IS1009d",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-IS1009d.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1738.6,
+   "sourceSha256": "470440114ee2ed076cfc77c53136ad5d3af500d8a5a6ca36755e83534f5ca4ea"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-ES2004a.wav",
+   "audioSha256": "ffed143aa8e4641364650cb7705be8687747f8ec05c92503067e1162f6894349",
+   "corpus": "ami",
+   "durationS": 1049.355,
+   "id": "ami-ES2004a",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-ES2004a.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 923.43,
+   "sourceSha256": "3e2560b19bee6952c7c7ce041b0f1ea8a7ea9468044c4eea79d2a2c67e24ab0f"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-ES2004b.wav",
+   "audioSha256": "633c497c07a9f9ae25cc39f85a2c1622b2dabec3d3ace68794c08c40408404f2",
+   "corpus": "ami",
+   "durationS": 2345.493,
+   "id": "ami-ES2004b",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-ES2004b.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 2233.05,
+   "sourceSha256": "ad0cf07c42b1694ccf7bea8f1a37348d9cfab194787abc7d050b29ba56e365c8"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-ES2004c.wav",
+   "audioSha256": "bf06ae946ee351ed6ec997dff2959857223202d71fbc00ff4414a4bf763ac1c5",
+   "corpus": "ami",
+   "durationS": 2334.368,
+   "id": "ami-ES2004c",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-ES2004c.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 2244.47,
+   "sourceSha256": "47dc9bd2e3b1d174842091ae9e1fe765218f0c87658b17d6469c404e03ec2ac5"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-ES2004d.wav",
+   "audioSha256": "8f85460a62fe7388e5e66d59aeeae81e8bd4b2542c572a336b7c6919d038d010",
+   "corpus": "ami",
+   "durationS": 2222.291,
+   "id": "ami-ES2004d",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-ES2004d.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 2006.77,
+   "sourceSha256": "3cfce3297ebb7faeb53c02727eea5e9f2c76e9ed4b62db3b03d73e66836e91f3"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-TS3003a.wav",
+   "audioSha256": "697deb459acb1d6e2a685b4a2fe5fa180a5945a047d4e7df55eccbb00fa050a2",
+   "corpus": "ami",
+   "durationS": 1505.643,
+   "id": "ami-TS3003a",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-TS3003a.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1025.964,
+   "sourceSha256": "b6ce59ff735c234afdd94b13744aa26f6785af746170543fd03b33160e920a6d"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-TS3003b.wav",
+   "audioSha256": "9c9fe113512286b5cc68ff4b4a0403b497ecc8ccc314bc11230b2849d933fa51",
+   "corpus": "ami",
+   "durationS": 2210.304,
+   "id": "ami-TS3003b",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-TS3003b.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1820.5,
+   "sourceSha256": "0c94f3a09ab747caa7714efe8852f5ff37d36cf272b75709344991df1aa266ca"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-TS3003c.wav",
+   "audioSha256": "5721ea6d132882c5be897e7f76020297750e5ffbb5ea266b0bd039bacce813fb",
+   "corpus": "ami",
+   "durationS": 2570.0,
+   "id": "ami-TS3003c",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-TS3003c.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1894.25,
+   "sourceSha256": "b9f455870e8cb0ba765523a1767cc366775ab7e5e3eabf37d9c91289e5a1a70a"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-TS3003d.wav",
+   "audioSha256": "9dfe6f642a5cff556b39b6fe5d52f87418f1bfbbd24a10897721906797a91f6a",
+   "corpus": "ami",
+   "durationS": 2618.2,
+   "id": "ami-TS3003d",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-TS3003d.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 2070.34,
+   "sourceSha256": "ece4a41c37c1092c737d1dfe313afb18248364625991f745fed4b372c3c67eb3"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-EN2002a.wav",
+   "audioSha256": "ac76316195d1c232fc91e0b2f6ea567ae5900348b66cf60f76827008fead99c0",
+   "corpus": "ami",
+   "durationS": 2142.709,
+   "id": "ami-EN2002a",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-EN2002a.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 2530.26,
+   "sourceSha256": "a15017d0d3c871866971ee178052a0ce3a7e44d6fbf89fc23dcab326511b65f5"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-EN2002b.wav",
+   "audioSha256": "b9f96ffe165fa1f8586b77a9a19bf2d476e3a782fad5f6276ff8e348f73285de",
+   "corpus": "ami",
+   "durationS": 1786.848,
+   "id": "ami-EN2002b",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-EN2002b.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 1943.44,
+   "sourceSha256": "50e2c8e4737850c4bf3cc24e7087c755e1c733cd91822106afd0df485ba64893"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-EN2002c.wav",
+   "audioSha256": "a29e89da1c2406583c1204fecd49779168944a4ad4dc25e03a45ea99edddd2c7",
+   "corpus": "ami",
+   "durationS": 2972.256,
+   "id": "ami-EN2002c",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-EN2002c.rttm",
+   "refSpeakers": 3,
+   "refSpeechS": 3343.64,
+   "sourceSha256": "a057708b3adb553f709fcde97d2af8e0455076bc3f88c250975227433d6e0270"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/ami/audio/ami-EN2002d.wav",
+   "audioSha256": "9a5fd2da75c2952405e000865cf97e65587830a72293c73b46706d41803beb2e",
+   "corpus": "ami",
+   "durationS": 2209.899,
+   "id": "ami-EN2002d",
+   "ref": "/private/tmp/notero-data/diar/ami/refs/ami-EN2002d.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 2675.89,
+   "sourceSha256": "6aa99d9d71cb695ea699d6be277f78eff68e847c93560031486eba9f18164ebe"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/liva/audio/liva-C_001_007.wav",
+   "audioSha256": "bc8da98d6d2b77562cb59fd8554212f1ba05352b2116c859996dd402e768b469",
+   "corpus": "liva",
+   "durationS": 600.0,
+   "id": "liva-C_001_007",
+   "ref": "/private/tmp/notero-data/diar/liva/refs/liva-C_001_007.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 306.9,
+   "sourceSha256": "4dcb6188295b5228ba2694e742b31de5c3773db905b0b3f0c1385b8aa183d524"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/liva/audio/liva-C_001_009.wav",
+   "audioSha256": "834f722e020097a491b45f3564144c9f462974add603604f24e2369932819bea",
+   "corpus": "liva",
+   "durationS": 600.0,
+   "id": "liva-C_001_009",
+   "ref": "/private/tmp/notero-data/diar/liva/refs/liva-C_001_009.rttm",
+   "refSpeakers": 5,
+   "refSpeechS": 438.47,
+   "sourceSha256": "8718674b7ff3bb0ba14f2598a8fb849e9a1be999130f2fd6413e0121e5443870"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/liva/audio/liva-C_001_015.wav",
+   "audioSha256": "a1d9cd9fa92d08b0fa0ba25b2f1c07e67f023a6d93842ef58621673d6aa40440",
+   "corpus": "liva",
+   "durationS": 600.0,
+   "id": "liva-C_001_015",
+   "ref": "/private/tmp/notero-data/diar/liva/refs/liva-C_001_015.rttm",
+   "refSpeakers": 5,
+   "refSpeechS": 441.55,
+   "sourceSha256": "48077950a052879bf022555d0e277f5baa17258d06950803c4a03d53a9050c81"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/liva/audio/liva-C_001_016.wav",
+   "audioSha256": "697dc693ce6583524f26bf830e25d7757b4a9c3cd0fdfd86bd733ba3664a7612",
+   "corpus": "liva",
+   "durationS": 600.0,
+   "id": "liva-C_001_016",
+   "ref": "/private/tmp/notero-data/diar/liva/refs/liva-C_001_016.rttm",
+   "refSpeakers": 5,
+   "refSpeechS": 516.04,
+   "sourceSha256": "188109e2a93bd46f534ccce4a2a9421be36f45f77c115eeeddd07cf3b4bd9c5b"
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-tuning/audio/chunk-fusion.wav",
+   "audioSha256": "e89f5c3082634e50b68e408a622dacf26b587d93ac2c26c3622f549907f45a8c",
+   "corpus": "synth-tuning",
+   "durationS": 83.812,
+   "id": "synth-tuning-chunk-fusion",
+   "ref": "/private/tmp/notero-data/diar/syn-tuning/refs/chunk-fusion.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 65.404
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-tuning/audio/four-voices.wav",
+   "audioSha256": "addf1917fd10e9ecae90a862a66fc4b857c62b87956abfd75ac0b077b3bbfdac",
+   "corpus": "synth-tuning",
+   "durationS": 164.064,
+   "id": "synth-tuning-four-voices",
+   "ref": "/private/tmp/notero-data/diar/syn-tuning/refs/four-voices.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 143.337
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-tuning/audio/three-overlap.wav",
+   "audioSha256": "d90e4ea707696f8f9290acbd0406dda4600c4444414c80b67f9b291404b2c78a",
+   "corpus": "synth-tuning",
+   "durationS": 93.243,
+   "id": "synth-tuning-three-overlap",
+   "ref": "/private/tmp/notero-data/diar/syn-tuning/refs/three-overlap.rttm",
+   "refSpeakers": 3,
+   "refSpeechS": 85.814
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-tuning/audio/three-voices.wav",
+   "audioSha256": "07d12c5ee3cfc7bfc04f31812f4c72fff4b2c9d5fe8e75866e0dc2bf1e01bbd2",
+   "corpus": "synth-tuning",
+   "durationS": 125.545,
+   "id": "synth-tuning-three-voices",
+   "ref": "/private/tmp/notero-data/diar/syn-tuning/refs/three-voices.rttm",
+   "refSpeakers": 3,
+   "refSpeechS": 111.395
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-tuning/audio/two-distinct.wav",
+   "audioSha256": "504b228ecb64042196667e45cd4f022ad21137b49b7865818542a9c7bd7a4635",
+   "corpus": "synth-tuning",
+   "durationS": 101.988,
+   "id": "synth-tuning-two-distinct",
+   "ref": "/private/tmp/notero-data/diar/syn-tuning/refs/two-distinct.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 86.105
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-tuning/audio/two-short-turns.wav",
+   "audioSha256": "0ee8869af042b56c95b032361856479fe0016946f5436fd2d8711da907505016",
+   "corpus": "synth-tuning",
+   "durationS": 101.078,
+   "id": "synth-tuning-two-short-turns",
+   "ref": "/private/tmp/notero-data/diar/syn-tuning/refs/two-short-turns.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 79.26
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-tuning/audio/two-similar.wav",
+   "audioSha256": "78da4519dc20f1978eacbac1cd3f15690093997ee0732af8e091c17c8cb31f89",
+   "corpus": "synth-tuning",
+   "durationS": 101.642,
+   "id": "synth-tuning-two-similar",
+   "ref": "/private/tmp/notero-data/diar/syn-tuning/refs/two-similar.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 84.025
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-holdout/audio/h-four-voices.wav",
+   "audioSha256": "de8c4f994511d8fe039b1ce5f6d08c23cd50a276245a2cdad3cd05230ab091ed",
+   "corpus": "synth-holdout",
+   "durationS": 161.501,
+   "id": "synth-holdout-h-four-voices",
+   "ref": "/private/tmp/notero-data/diar/syn-holdout/refs/h-four-voices.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 130.372
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-holdout/audio/h-three-overlap.wav",
+   "audioSha256": "88636235b881957834b62f1dc48d0946dc1cdc38b03c0b5731a0b7702fca4407",
+   "corpus": "synth-holdout",
+   "durationS": 91.587,
+   "id": "synth-holdout-h-three-overlap",
+   "ref": "/private/tmp/notero-data/diar/syn-holdout/refs/h-three-overlap.rttm",
+   "refSpeakers": 3,
+   "refSpeechS": 84.364
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-holdout/audio/h-three-voices.wav",
+   "audioSha256": "23d1a0e45ccc076a2d2c3fa1e95884d9786e67f9f0196c9d0b2eb7de68cbd62d",
+   "corpus": "synth-holdout",
+   "durationS": 133.01,
+   "id": "synth-holdout-h-three-voices",
+   "ref": "/private/tmp/notero-data/diar/syn-holdout/refs/h-three-voices.rttm",
+   "refSpeakers": 3,
+   "refSpeechS": 116.128
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-holdout/audio/h-two-distinct.wav",
+   "audioSha256": "6e70848fbf33a6ecf2ebe1c2d7a6fb756ebf271d3debc2f8c0761d95049aa051",
+   "corpus": "synth-holdout",
+   "durationS": 91.508,
+   "id": "synth-holdout-h-two-distinct",
+   "ref": "/private/tmp/notero-data/diar/syn-holdout/refs/h-two-distinct.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 76.678
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-holdout/audio/h-two-short-turns.wav",
+   "audioSha256": "a215966a259810841b634ec1b14cb3cdd04a99ac63d6d05bd1f11d57a94b892d",
+   "corpus": "synth-holdout",
+   "durationS": 111.212,
+   "id": "synth-holdout-h-two-short-turns",
+   "ref": "/private/tmp/notero-data/diar/syn-holdout/refs/h-two-short-turns.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 87.192
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-speakers/audio/n2.wav",
+   "audioSha256": "4c18df31b116c80327a7e3ae95de63d4a09c2f618d2016ef0f4ed8b39ef5d1b1",
+   "corpus": "synth-n",
+   "durationS": 129.014,
+   "id": "synth-n-n2",
+   "ref": "/private/tmp/notero-data/diar/syn-speakers/refs/n2.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 105.329
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-speakers/audio/n3.wav",
+   "audioSha256": "bcc2a0a2c9b5e6f2f701c3fcfe90cb9551f47d43272add979e2501eab395c0b8",
+   "corpus": "synth-n",
+   "durationS": 154.001,
+   "id": "synth-n-n3",
+   "ref": "/private/tmp/notero-data/diar/syn-speakers/refs/n3.rttm",
+   "refSpeakers": 3,
+   "refSpeechS": 137.506
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-speakers/audio/n4.wav",
+   "audioSha256": "ebf57b8437d11f02a2ce9e7a29d3748b6f697f41d08741f8fce5e2c8b0c80e85",
+   "corpus": "synth-n",
+   "durationS": 183.246,
+   "id": "synth-n-n4",
+   "ref": "/private/tmp/notero-data/diar/syn-speakers/refs/n4.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 170.583
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-speakers/audio/n5.wav",
+   "audioSha256": "d6d40504c5c93efb14a7fe7f21dd58c0b4bdda2ee333d56918981d41e2ced9fb",
+   "corpus": "synth-n",
+   "durationS": 212.781,
+   "id": "synth-n-n5",
+   "ref": "/private/tmp/notero-data/diar/syn-speakers/refs/n5.rttm",
+   "refSpeakers": 5,
+   "refSpeechS": 185.469
+  },
+  {
+   "audio": "/private/tmp/notero-data/diar/syn-speakers/audio/n6.wav",
+   "audioSha256": "a9f0f2a3983d2b1a489df31d94698abed2db813001a1c47891f02b6c8540e818",
+   "corpus": "synth-n",
+   "durationS": 241.073,
+   "id": "synth-n-n6",
+   "ref": "/private/tmp/notero-data/diar/syn-speakers/refs/n6.rttm",
+   "refSpeakers": 6,
+   "refSpeechS": 207.636
+  }
+ ],
+ "notes": [
+  "Baseline: the shipping SpeakerEngine (pyannote segmentation + WeSpeaker, FluidAudio 0.15.6, accurate mode, default tuning), diarbench built from 17be76a.",
+  "Primary candidate: Nemotron 3 Diarization, FluidAudio 0.18.0, preset offline, threshold 0.5, min duration 0.2 s (FluidAudio defaults), chosen before any real-audio run. HF FluidInference/nemotron-3-diarization-coreml 25a90f97f254, openmdw-1.1.",
+  "Secondary, reported but not the recommendation's subject: preset fast128.",
+  "Seen before this plan: a smoke run of all three arms on the synth-n fixtures only. No real-audio output was seen."
+ ],
+ "order": [
+  {
+   "arm": "nemotron3",
+   "item": "ami-IS1009a",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-IS1009a",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-IS1009a",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-IS1009b",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-IS1009b",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-IS1009b",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-IS1009c",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-IS1009c",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-IS1009c",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-IS1009d",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-IS1009d",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-IS1009d",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-ES2004a",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-ES2004a",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-ES2004a",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-ES2004b",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-ES2004b",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-ES2004b",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-ES2004c",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-ES2004c",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-ES2004c",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-ES2004d",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-ES2004d",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-ES2004d",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-TS3003a",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-TS3003a",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-TS3003a",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-TS3003b",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-TS3003b",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-TS3003b",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-TS3003c",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-TS3003c",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-TS3003c",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-TS3003d",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-TS3003d",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-TS3003d",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-EN2002a",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-EN2002a",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-EN2002a",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-EN2002b",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-EN2002b",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-EN2002b",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-EN2002c",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-EN2002c",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-EN2002c",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-EN2002d",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-EN2002d",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-EN2002d",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "liva-C_001_007",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "liva-C_001_007",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "liva-C_001_007",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "liva-C_001_009",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "liva-C_001_009",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "liva-C_001_009",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "liva-C_001_015",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "liva-C_001_015",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "liva-C_001_015",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "liva-C_001_016",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "liva-C_001_016",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "liva-C_001_016",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-chunk-fusion",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-chunk-fusion",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-chunk-fusion",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-four-voices",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-four-voices",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-four-voices",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-three-overlap",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-three-overlap",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-three-overlap",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-three-voices",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-three-voices",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-three-voices",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-two-distinct",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-two-distinct",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-two-distinct",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-two-short-turns",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-two-short-turns",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-two-short-turns",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-two-similar",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-two-similar",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-two-similar",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-holdout-h-four-voices",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-holdout-h-four-voices",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-holdout-h-four-voices",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-holdout-h-three-overlap",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-holdout-h-three-overlap",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-holdout-h-three-overlap",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-holdout-h-three-voices",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-holdout-h-three-voices",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-holdout-h-three-voices",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-holdout-h-two-distinct",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-holdout-h-two-distinct",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-holdout-h-two-distinct",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-holdout-h-two-short-turns",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-holdout-h-two-short-turns",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-holdout-h-two-short-turns",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-n-n2",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-n-n2",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-n-n2",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-n-n3",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-n-n3",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-n-n3",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-n-n4",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-n-n4",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-n-n4",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-n-n5",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-n-n5",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-n-n5",
+   "run": 1
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-n-n6",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-n-n6",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-n-n6",
+   "run": 1
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-IS1009a",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-IS1009a",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-IS1009a",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-IS1009b",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-IS1009b",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-IS1009b",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-IS1009c",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-IS1009c",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-IS1009c",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-IS1009d",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-IS1009d",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-IS1009d",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-ES2004a",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-ES2004a",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-ES2004a",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-ES2004b",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-ES2004b",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-ES2004b",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-ES2004c",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-ES2004c",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-ES2004c",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-ES2004d",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-ES2004d",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-ES2004d",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-TS3003a",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-TS3003a",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-TS3003a",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-TS3003b",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-TS3003b",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-TS3003b",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-TS3003c",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-TS3003c",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-TS3003c",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-TS3003d",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-TS3003d",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-TS3003d",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-EN2002a",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-EN2002a",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-EN2002a",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-EN2002b",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-EN2002b",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-EN2002b",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-EN2002c",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-EN2002c",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-EN2002c",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "ami-EN2002d",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "ami-EN2002d",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "ami-EN2002d",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "liva-C_001_007",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "liva-C_001_007",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "liva-C_001_007",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "liva-C_001_009",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "liva-C_001_009",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "liva-C_001_009",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "liva-C_001_015",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "liva-C_001_015",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "liva-C_001_015",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "liva-C_001_016",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "liva-C_001_016",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "liva-C_001_016",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-chunk-fusion",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-chunk-fusion",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-chunk-fusion",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-four-voices",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-four-voices",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-four-voices",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-three-overlap",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-three-overlap",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-three-overlap",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-three-voices",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-three-voices",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-three-voices",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-two-distinct",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-two-distinct",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-two-distinct",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-two-short-turns",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-two-short-turns",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-two-short-turns",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-tuning-two-similar",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-tuning-two-similar",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-tuning-two-similar",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-holdout-h-four-voices",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-holdout-h-four-voices",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-holdout-h-four-voices",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-holdout-h-three-overlap",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-holdout-h-three-overlap",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-holdout-h-three-overlap",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-holdout-h-three-voices",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-holdout-h-three-voices",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-holdout-h-three-voices",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-holdout-h-two-distinct",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-holdout-h-two-distinct",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-holdout-h-two-distinct",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-holdout-h-two-short-turns",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-holdout-h-two-short-turns",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-holdout-h-two-short-turns",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-n-n2",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-n-n2",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-n-n2",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-n-n3",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-n-n3",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-n-n3",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-n-n4",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-n-n4",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-n-n4",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-n-n5",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-n-n5",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-n-n5",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3",
+   "item": "synth-n-n6",
+   "run": 2
+  },
+  {
+   "arm": "pyannote",
+   "item": "synth-n-n6",
+   "run": 2
+  },
+  {
+   "arm": "nemotron3-fast128",
+   "item": "synth-n-n6",
+   "run": 2
+  }
+ ],
+ "primaryCandidate": "nemotron3",
+ "rules": {
+  "primary": {
+   "collar": 0.25,
+   "fragment_share": 0.1,
+   "frame": 0.01,
+   "min_hyp_s": 1.0,
+   "min_speaker_s": 5.0,
+   "skip_overlap": false
+  },
+  "secondary": [
+   {
+    "collar": 0.0,
+    "fragment_share": 0.1,
+    "frame": 0.01,
+    "min_hyp_s": 1.0,
+    "min_speaker_s": 5.0,
+    "skip_overlap": false
+   },
+   {
+    "collar": 0.25,
+    "fragment_share": 0.1,
+    "frame": 0.01,
+    "min_hyp_s": 1.0,
+    "min_speaker_s": 5.0,
+    "skip_overlap": true
+   }
+  ]
+ },
+ "schemaVersion": 1,
+ "seed": 20261102,
+ "wrap": [
+  "/tmp/notero-team/bench-lock.sh",
+  "sandbox-exec",
+  "-p",
+  "(version 1)(allow default)(deny network*)"
+ ]
+}

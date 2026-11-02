@@ -50,6 +50,13 @@ formats), the search index, `RingBuffer`, `HighPassFilter`, `WordErrorRate`,
 `Benchmark`, and the `PCMSource` protocol. `Catalogues.swift` holds the model
 catalogue, the language catalogue, `ModelTier` and `DiarizationMode`.
 
+`Evaluation/` is the evaluation framework: text normalization, word and
+character alignment, the corpus scores, the seeded bootstrap and the JSON and
+Markdown reports. It reads no file. `transcribe --score` loads the inputs and
+gives them to it. `EvaluationProvenance` in `TranscriberEngine` reads the model
+revision from the local download cache. [BENCHMARKS.md](BENCHMARKS.md#the-evaluation-framework)
+gives the method.
+
 ### `TranscriberStore`
 
 The SwiftData schema and the queries. The model objects are `StoredRecording`,
@@ -265,6 +272,19 @@ person who opened the meeting is Speaker 1.
 
 A job can carry `expectedSpeakers`, which is the number of people that the user
 says were in the room. It is a target for the clustering and never a cap.
+
+When two speakers overlap over a word or a line, the speaker that holds more of its
+time is credited. A tie goes to the lower label, so the same spans always give the
+same transcript.
+
+The newest finished revision that has speaker labels is the evidence for carrying
+names. A revision made with speaker identification off has none, so it is skipped.
+
+**An experimental second backend exists and the app does not use it.**
+`experimental/nemotron3/` holds `Nemotron3SpeakerEngine`, a `SpeakerDiarizing`
+conformance on NVIDIA Nemotron 3 through FluidAudio 0.18.0, in its own package so
+that the app's FluidAudio pin does not move. [DIARIZATION.md](DIARIZATION.md) gives
+the comparison and what a switch still needs.
 
 ## How the app reads a transcript
 

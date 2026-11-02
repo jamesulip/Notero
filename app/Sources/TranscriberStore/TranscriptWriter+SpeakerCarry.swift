@@ -113,7 +113,7 @@ extension TranscriptWriter {
     ///
     /// Same question as `applySpeakers`, asked of a new revision instead of the
     /// current rows: the evidence is the lines of the latest earlier revision that
-    /// finished, set against the lines the new run produced. `excluding` names the
+    /// finished with speaker labels (`labelledRows`), set against the lines the new run produced. `excluding` names the
     /// revisions that are not "earlier": the one being written, and the open
     /// partial revision of this very job (which has no speakers yet).
     ///
@@ -123,16 +123,14 @@ extension TranscriptWriter {
                          on recording: StoredRecording,
                          excluding: Set<UUID> = []) -> (segments: [Segment], roster: [SpeakerLabel]) {
         guard !roster.isEmpty,
-              let previous = (recording.transcripts ?? [])
-                  .filter({ !excluding.contains($0.id) && $0.isComplete })
-                  .max(by: { $0.revision < $1.revision })
+              let evidence = labelledRows(on: recording, excluding: excluding)
         else { return (segments, roster) }
 
         let spans: [SpeakerSpan] = segments.compactMap { segment in
             guard let label = segment.speakerId, segment.endMs > segment.startMs else { return nil }
             return SpeakerSpan(speakerId: label, startMs: segment.startMs, endMs: segment.endMs)
         }
-        let plan = speakerCarryPlan(rows: previous.orderedSegments, recording: recording,
+        let plan = speakerCarryPlan(rows: evidence, recording: recording,
                                     spans: spans, roster: roster)
         let relabelled = segments.map { segment -> Segment in
             var copy = segment
@@ -140,6 +138,28 @@ extension TranscriptWriter {
             return copy
         }
         return (relabelled, plan.relabel(roster))
+    }
+
+    /// The lines of the newest finished revision that carries speaker labels,
+    /// leaving out `excluding`. Nil when no revision does.
+    ///
+    /// Newest *labelled*, not newest: Transcribe Again with speaker
+    /// identification off stores a revision with no labels and leaves the names
+    /// on rows with no lines. Taken as the evidence, that revision matched
+    /// nothing, and the next Identify Speakers Again or Transcribe Again put
+    /// every voice under a new default name while the names a person typed sat
+    /// on no line. Every revision is a reading of the same audio, so the one
+    /// before it says just as well whose stretch of the timeline was whose.
+    func labelledRows(on recording: StoredRecording,
+                      excluding: Set<UUID> = []) -> [StoredSegment]? {
+        let candidates = (recording.transcripts ?? [])
+            .filter { !excluding.contains($0.id) && $0.isComplete }
+            .sorted { $0.revision > $1.revision }
+        for transcript in candidates {
+            let rows = transcript.orderedSegments
+            if rows.contains(where: { $0.speakerId != nil }) { return rows }
+        }
+        return nil
     }
 
     /// The same, by recording id, for a caller outside the actor.

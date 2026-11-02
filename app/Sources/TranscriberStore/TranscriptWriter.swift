@@ -285,7 +285,13 @@ public actor TranscriptWriter {
         // on the transcript so a name and a colour follow the voice, not the
         // number (see `SpeakerMatching`).
         let rows = transcript.orderedSegments
-        let plan = speakerCarryPlan(rows: rows, recording: recording, spans: spans, roster: roster)
+        // The lines as they stand are the evidence; when none carries a label
+        // (Transcribe Again ran with identification off), the newest earlier
+        // revision that does (see `labelledRows`).
+        let evidence = rows.contains(where: { $0.speakerId != nil })
+            ? rows
+            : labelledRows(on: recording, excluding: [transcript.id]) ?? rows
+        let plan = speakerCarryPlan(rows: evidence, recording: recording, spans: spans, roster: roster)
         let sorted = plan.relabel(spans).sorted { $0.startMs < $1.startMs }
         for row in rows {
             row.speakerId = SegmentMerger.dominantSpeaker(

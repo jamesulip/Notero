@@ -23,14 +23,18 @@ public actor BenchmarkRunner {
 
     /// - Parameter reference: ground-truth transcript, when there is one. WER
     ///   is only reported if it is supplied; a made-up number would be worse
-    ///   than no number.
+    ///   than no number. Plain text, one utterance per line.
+    /// - Parameter evaluation: the scoring rules for `BenchmarkRun.evaluation`.
+    ///   Scoring reads no file and no network; it adds no time to `processMs`.
     public func run(
         source: any PCMSource,
         tiers: [ModelTier] = ModelTier.allCases,
         language: String = LanguageCatalogue.defaultLanguage,
         reference: String? = nil,
+        evaluation: EvaluationConfig = .default,
         onProgress: (@Sendable (Progress) -> Void)? = nil
     ) async throws -> BenchmarkReport {
+        let evaluationReference = reference.map { EvaluationReference.plainText($0, itemId: "benchmark") }
 
         // Speech regions once, outside the timing. Every tier decodes exactly
         // the same windows, or the comparison measures VAD variance instead of
@@ -84,6 +88,14 @@ public actor BenchmarkRunner {
 
                 let segments = SegmentMerger.segments(from: decoded.tokens)
                 let text = segments.map(\.displayText).joined(separator: " ")
+                // After the clock stopped: scoring is not decode time.
+                let score = evaluationReference.map {
+                    Evaluator.score(reference: $0,
+                                    hypothesis: EvaluationHypothesis(text: text, words: decoded.tokens),
+                                    config: evaluation)
+                }
+                let revision = EvaluationProvenance.modelRevision(
+                    modelId: model, modelsDirectory: engines.modelsDirectory).value
                 runs.append(BenchmarkRun(
                     modelId: model, tier: tier, label: option?.label ?? model,
                     audioMs: speechMs, processMs: processMs, loadMs: loadMs,
@@ -91,7 +103,10 @@ public actor BenchmarkRunner {
                     segmentCount: segments.count,
                     wordCount: text.split(separator: " ").count,
                     language: language,
-                    wer: reference.map { WordErrorRate.score(reference: $0, hypothesis: text) }
+                    wer: reference.map { WordErrorRate.score(reference: $0, hypothesis: text) },
+                    evaluation: score,
+                    evaluationConfigFingerprint: score == nil ? nil : evaluation.fingerprint,
+                    modelRevision: revision
                 ))
             } catch {
                 runs.append(BenchmarkRun(modelId: model, tier: tier,

@@ -1,0 +1,460 @@
+{
+ "pooled": {
+  "nemotron3": [
+   {
+    "abs_count_error": 1,
+    "confusion": 0.004627,
+    "confusion_s": 63.06,
+    "count_errors": 1,
+    "der": 0.034949,
+    "errors_s": 476.36,
+    "false_alarm": 0.012767,
+    "false_alarm_s": 174.01,
+    "files": 16,
+    "fragmented_ref_speakers": 0,
+    "merged_ref_speakers": 2,
+    "missed": 0.017556,
+    "missed_s": 239.29,
+    "overlap": {
+     "confusion": 0.030739,
+     "confusion_s": 30.59,
+     "der": 0.141719,
+     "errors_s": 141.03,
+     "false_alarm": 0.010541,
+     "false_alarm_s": 10.49,
+     "missed": 0.100438,
+     "missed_s": 99.95,
+     "speech_s": 995.14
+    },
+    "single": {
+     "confusion": 0.00257,
+     "confusion_s": 32.47,
+     "der": 0.02654,
+     "errors_s": 335.33,
+     "false_alarm": 0.012942,
+     "false_alarm_s": 163.52,
+     "missed": 0.011028,
+     "missed_s": 139.34,
+     "speech_s": 12634.97
+    },
+    "speech_s": 13630.11
+   },
+   {
+    "abs_count_error": 1,
+    "confusion": 0.008539,
+    "confusion_s": 204.36,
+    "count_errors": 1,
+    "der": 0.094119,
+    "errors_s": 2252.38,
+    "false_alarm": 0.03501,
+    "false_alarm_s": 837.82,
+    "files": 16,
+    "fragmented_ref_speakers": 0,
+    "merged_ref_speakers": 2,
+    "missed": 0.05057,
+    "missed_s": 1210.2,
+    "overlap": {
+     "confusion": 0.020403,
+     "confusion_s": 94.45,
+     "der": 0.171497,
+     "errors_s": 793.88,
+     "false_alarm": 0.009341,
+     "false_alarm_s": 43.24,
+     "missed": 0.141752,
+     "missed_s": 656.19,
+     "speech_s": 4629.13
+    },
+    "single": {
+     "confusion": 0.005694,
+     "confusion_s": 109.91,
+     "der": 0.075562,
+     "errors_s": 1458.5,
+     "false_alarm": 0.041166,
+     "false_alarm_s": 794.58,
+     "missed": 0.028702,
+     "missed_s": 554.01,
+     "speech_s": 19302.08
+    },
+    "speech_s": 23931.21
+   },
+   {
+    "abs_count_error": 1,
+    "confusion": 0.00257,
+    "confusion_s": 32.47,
+    "count_errors": 1,
+    "der": 0.02654,
+    "errors_s": 335.33,
+    "false_alarm": 0.012942,
+    "false_alarm_s": 163.52,
+    "files": 16,
+    "fragmented_ref_speakers": 0,
+    "merged_ref_speakers": 2,
+    "missed": 0.011028,
+    "missed_s": 139.34,
+    "overlap": {
+     "confusion": null,
+     "confusion_s": 0.0,
+     "der": null,
+     "errors_s": 0.0,
+     "false_alarm": null,
+     "false_alarm_s": 0.0,
+     "missed": null,
+     "missed_s": 0.0,
+     "speech_s": 0.0
+    },
+    "single": {
+     "confusion": 0.00257,
+     "confusion_s": 32.47,
+     "der": 0.02654,
+     "errors_s": 335.33,
+     "false_alarm": 0.012942,
+     "false_alarm_s": 163.52,
+     "missed": 0.011028,
+     "missed_s": 139.34,
+     "speech_s": 12634.97
+    },
+    "speech_s": 12634.97
+   }
+  ],
+  "nemotron3-fast128": [
+   {
+    "abs_count_error": 1,
+    "confusion": 0.004275,
+    "confusion_s": 58.27,
+    "count_errors": 1,
+    "der": 0.035634,
+    "errors_s": 485.7,
+    "false_alarm": 0.013273,
+    "false_alarm_s": 180.91,
+    "files": 16,
+    "fragmented_ref_speakers": 0,
+    "merged_ref_speakers": 2,
+    "missed": 0.018086,
+    "missed_s": 246.52,
+    "overlap": {
+     "confusion": 0.024941,
+     "confusion_s": 24.82,
+     "der": 0.144542,
+     "errors_s": 143.84,
+     "false_alarm": 0.014752,
+     "false_alarm_s": 14.68,
+     "missed": 0.10485,
+     "missed_s": 104.34,
+     "speech_s": 995.14
+    },
+    "single": {
+     "confusion": 0.002647,
+     "confusion_s": 33.45,
+     "der": 0.027057,
+     "errors_s": 341.86,
+     "false_alarm": 0.013156,
+     "false_alarm_s": 166.23,
+     "missed": 0.011253,
+     "missed_s": 142.18,
+     "speech_s": 12634.97
+    },
+    "speech_s": 13630.11
+   },
+   {
+    "abs_count_error": 1,
+    "confusion": 0.008436,
+    "confusion_s": 201.89,
+    "count_errors": 1,
+    "der": 0.09534,
+    "errors_s": 2281.61,
+    "false_alarm": 0.03542,
+    "false_alarm_s": 847.65,
+    "files": 16,
+    "fragmented_ref_speakers": 0,
+    "merged_ref_speakers": 2,
+    "missed": 0.051484,
+    "missed_s": 1232.07,
+    "overlap": {
+     "confusion": 0.021987,
+     "confusion_s": 101.78,
+     "der": 0.175402,
+     "errors_s": 811.96,
+     "false_alarm": 0.011101,
+     "false_alarm_s": 51.39,
+     "missed": 0.142314,
+     "missed_s": 658.79,
+     "speech_s": 4629.13
+    },
+    "single": {
+     "confusion": 0.005186,
+     "confusion_s": 100.11,
+     "der": 0.076139,
+     "errors_s": 1469.65,
+     "false_alarm": 0.041253,
+     "false_alarm_s": 796.26,
+     "missed": 0.0297,
+     "missed_s": 573.28,
+     "speech_s": 19302.08
+    },
+    "speech_s": 23931.21
+   },
+   {
+    "abs_count_error": 1,
+    "confusion": 0.002647,
+    "confusion_s": 33.45,
+    "count_errors": 1,
+    "der": 0.027057,
+    "errors_s": 341.86,
+    "false_alarm": 0.013156,
+    "false_alarm_s": 166.23,
+    "files": 16,
+    "fragmented_ref_speakers": 0,
+    "merged_ref_speakers": 2,
+    "missed": 0.011253,
+    "missed_s": 142.18,
+    "overlap": {
+     "confusion": null,
+     "confusion_s": 0.0,
+     "der": null,
+     "errors_s": 0.0,
+     "false_alarm": null,
+     "false_alarm_s": 0.0,
+     "missed": null,
+     "missed_s": 0.0,
+     "speech_s": 0.0
+    },
+    "single": {
+     "confusion": 0.002647,
+     "confusion_s": 33.45,
+     "der": 0.027057,
+     "errors_s": 341.86,
+     "false_alarm": 0.013156,
+     "false_alarm_s": 166.23,
+     "missed": 0.011253,
+     "missed_s": 142.18,
+     "speech_s": 12634.97
+    },
+    "speech_s": 12634.97
+   }
+  ],
+  "pyannote": [
+   {
+    "abs_count_error": 13,
+    "confusion": 0.104105,
+    "confusion_s": 1418.96,
+    "count_errors": 11,
+    "der": 0.248622,
+    "errors_s": 3388.74,
+    "false_alarm": 0.095735,
+    "false_alarm_s": 1304.88,
+    "files": 16,
+    "fragmented_ref_speakers": 0,
+    "merged_ref_speakers": 19,
+    "missed": 0.048782,
+    "missed_s": 664.9,
+    "overlap": {
+     "confusion": 0.069789,
+     "confusion_s": 69.45,
+     "der": 0.51037,
+     "errors_s": 507.89,
+     "false_alarm": 0.0,
+     "false_alarm_s": 0.0,
+     "missed": 0.440581,
+     "missed_s": 438.44,
+     "speech_s": 995.14
+    },
+    "single": {
+     "confusion": 0.106808,
+     "confusion_s": 1349.51,
+     "der": 0.228006,
+     "errors_s": 2880.85,
+     "false_alarm": 0.103275,
+     "false_alarm_s": 1304.88,
+     "missed": 0.017923,
+     "missed_s": 226.46,
+     "speech_s": 12634.97
+    },
+    "speech_s": 13630.11
+   },
+   {
+    "abs_count_error": 13,
+    "confusion": 0.122388,
+    "confusion_s": 2928.89,
+    "count_errors": 11,
+    "der": 0.454382,
+    "errors_s": 10873.91,
+    "false_alarm": 0.205863,
+    "false_alarm_s": 4926.54,
+    "files": 16,
+    "fragmented_ref_speakers": 0,
+    "merged_ref_speakers": 20,
+    "missed": 0.126132,
+    "missed_s": 3018.48,
+    "overlap": {
+     "confusion": 0.074526,
+     "confusion_s": 344.99,
+     "der": 0.537261,
+     "errors_s": 2487.05,
+     "false_alarm": 0.0,
+     "false_alarm_s": 0.0,
+     "missed": 0.462735,
+     "missed_s": 2142.06,
+     "speech_s": 4629.13
+    },
+    "single": {
+     "confusion": 0.133866,
+     "confusion_s": 2583.9,
+     "der": 0.434506,
+     "errors_s": 8386.86,
+     "false_alarm": 0.255234,
+     "false_alarm_s": 4926.54,
+     "missed": 0.045405,
+     "missed_s": 876.42,
+     "speech_s": 19302.08
+    },
+    "speech_s": 23931.21
+   },
+   {
+    "abs_count_error": 13,
+    "confusion": 0.106808,
+    "confusion_s": 1349.51,
+    "count_errors": 11,
+    "der": 0.228006,
+    "errors_s": 2880.85,
+    "false_alarm": 0.103275,
+    "false_alarm_s": 1304.88,
+    "files": 16,
+    "fragmented_ref_speakers": 0,
+    "merged_ref_speakers": 19,
+    "missed": 0.017923,
+    "missed_s": 226.46,
+    "overlap": {
+     "confusion": null,
+     "confusion_s": 0.0,
+     "der": null,
+     "errors_s": 0.0,
+     "false_alarm": null,
+     "false_alarm_s": 0.0,
+     "missed": null,
+     "missed_s": 0.0,
+     "speech_s": 0.0
+    },
+    "single": {
+     "confusion": 0.106808,
+     "confusion_s": 1349.51,
+     "der": 0.228006,
+     "errors_s": 2880.85,
+     "false_alarm": 0.103275,
+     "false_alarm_s": 1304.88,
+     "missed": 0.017923,
+     "missed_s": 226.46,
+     "speech_s": 12634.97
+    },
+    "speech_s": 12634.97
+   }
+  ]
+ },
+ "references": [
+  {
+   "item": "ami-IS1009a",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/IS1009a.rttm",
+   "sha256": "2558f451d58c14173920e1446a9b5a0129a529200e085f56acc3bbebf7302e40"
+  },
+  {
+   "item": "ami-IS1009b",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/IS1009b.rttm",
+   "sha256": "47debfc3e4174d850a0c1cba7baf33fa28302562081e81582dfae010847f5afa"
+  },
+  {
+   "item": "ami-IS1009c",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/IS1009c.rttm",
+   "sha256": "d247294366f1741156057917c28311c06c1ad4d70308c1517f0e10cfa7b61b97"
+  },
+  {
+   "item": "ami-IS1009d",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/IS1009d.rttm",
+   "sha256": "07ca6e54d9dedbc852c5419e177e8861e0bbd6db0e63e1e391c100882722e9ec"
+  },
+  {
+   "item": "ami-ES2004a",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/ES2004a.rttm",
+   "sha256": "3ed314bb088e11a2a53f6eb1a8ed3876f6ae6f3f92d3340640baabac90167c98"
+  },
+  {
+   "item": "ami-ES2004b",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/ES2004b.rttm",
+   "sha256": "1dafa3e1867c3cb774b332c1023bf033a247dbb1f699bee2e49c366148154503"
+  },
+  {
+   "item": "ami-ES2004c",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/ES2004c.rttm",
+   "sha256": "ba0f256fd97bfc0829f2f066569d87c091b8d9634cecd54c1cda8ee26f3548d4"
+  },
+  {
+   "item": "ami-ES2004d",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/ES2004d.rttm",
+   "sha256": "3c86b5a3d5c27c2b445ca879a19503856d403e6665a74cf9da00143924cad611"
+  },
+  {
+   "item": "ami-TS3003a",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/TS3003a.rttm",
+   "sha256": "e54428dc033c8ebda5dbed4d0781e62d23e376ca4ee09e6f8319e579a1acfb98"
+  },
+  {
+   "item": "ami-TS3003b",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/TS3003b.rttm",
+   "sha256": "64e1b119caef61b361b1d5e51bfdd68c2c4f417bbe4ab248ebe0c63f1edbccb2"
+  },
+  {
+   "item": "ami-TS3003c",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/TS3003c.rttm",
+   "sha256": "bebc0ab9335677bb4af468bf41274c041747eac1f6a38816a6fefe9e5cb2cf85"
+  },
+  {
+   "item": "ami-TS3003d",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/TS3003d.rttm",
+   "sha256": "4ddae8079132a9eb74e56953014f991ffe45e221cac9f3e482ca0417297c5c5c"
+  },
+  {
+   "item": "ami-EN2002a",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/EN2002a.rttm",
+   "sha256": "3f8938f08b19eea51529cfeda608543e0c3c885c679d2b8f2360d668bdba406b"
+  },
+  {
+   "item": "ami-EN2002b",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/EN2002b.rttm",
+   "sha256": "07a861ce71802ed83df55408dace96006a6c4a96fd44ec35ecb248f3803479bb"
+  },
+  {
+   "item": "ami-EN2002c",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/EN2002c.rttm",
+   "sha256": "a62bb8379aba37ae0f7288fe98ba058eb1b2d9d867f5e8c62cbc205c60ffa897"
+  },
+  {
+   "item": "ami-EN2002d",
+   "ref": "/tmp/notero-data/fa-src/AMI/test/EN2002d.rttm",
+   "sha256": "0cbdf77a9651b1998061430d946995d32e877e67b989790c4155970c65e16899"
+  }
+ ],
+ "rules": [
+  {
+   "collar": 0.25,
+   "fragment_share": 0.1,
+   "frame": 0.01,
+   "min_hyp_s": 1.0,
+   "min_speaker_s": 5.0,
+   "skip_overlap": false
+  },
+  {
+   "collar": 0.0,
+   "fragment_share": 0.1,
+   "frame": 0.01,
+   "min_hyp_s": 1.0,
+   "min_speaker_s": 5.0,
+   "skip_overlap": false
+  },
+  {
+   "collar": 0.25,
+   "fragment_share": 0.1,
+   "frame": 0.01,
+   "min_hyp_s": 1.0,
+   "min_speaker_s": 5.0,
+   "skip_overlap": true
+  }
+ ]
+}

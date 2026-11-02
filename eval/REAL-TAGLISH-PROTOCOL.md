@@ -99,6 +99,31 @@ function words, then the macOS English word list, else Filipino. It is *good eno
 to see a trend and wrong on individual words*. Read its output against the words
 themselves before you quote it.
 
+### Optional: what kind of errors were they?
+
+`eval/taxonomy.py` sorts the word errors of the same folder into kinds: Tagalog written as English,
+errors at code-switch points, mixed words such as "nag-meeting", Filipino affixes and linkers,
+names, runs of invented or deleted words, and word times that are far from the utterance.
+It reads the same `manifest.json`, `refs/` and hypotheses, runs on your Mac and changes no number
+above. Method: [TAXONOMY.md](TAXONOMY.md).
+
+```bash
+python3 -I eval/taxonomy.py report --manifest /tmp/notero-data/mine/manifest.json \
+    --hyp-dir <directory of <id>.json or <id>.txt> --label tl --out-dir /tmp/notero-data/mine/taxonomy \
+    --events-tsv /tmp/notero-data/mine/taxonomy/events.tsv
+```
+
+**Without word-level language tags, every language label is a heuristic guess from small word
+lists, and the report says so.** You can make a part of your reviewed stretch verified. Write the
+corrected line with a tag after each word (`yung/tl meeting/en nag-meeting/mix Andy/ne`) in a
+`refs/<id>.tagged.txt` file, and list it in a manifest of its own for `taxonomy.py report` only. Do not
+put a tagged file in the manifest that `score.py`, `compare_language.py` or `transcribe --score` reads: they would
+count the tags as words. Tag at least the words you want counted.
+An untagged word stays a heuristic. The format is in [TAXONOMY.md](TAXONOMY.md#reference-formats).
+The `--events-tsv` file lists every event with its words, so you can adjudicate the categories you
+disagree with. **Both files hold your meetings. Keep them outside the repository** and never use
+`--include-text` on a report that you share.
+
 ## 4. How much is enough
 
 Treat these as rules of thumb for what a result can distinguish, not as guarantees.

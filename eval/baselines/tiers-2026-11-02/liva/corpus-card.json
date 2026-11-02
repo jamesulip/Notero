@@ -1,0 +1,23 @@
+{
+  "audioSecondsApprox": 2400.0,
+  "corpusId": "liva-en-tl-overlapping-51b5d0b",
+  "items": 4,
+  "leakage": "evaluation only; the vendor says the audio is collected in-house, not from YouTube (unverified)",
+  "limits": "about 40 minutes of one group: a smoke test of conversational Taglish, not a benchmark",
+  "references": "vendor transcripts, 'AI-generated and then human reviewed, or fully human generated' (card); event tags removed; utterance language set to 'mixed'; no word-level language",
+  "source": {
+    "attribution": "Liva AI, Code-Switching ASR, https://huggingface.co/datasets/liva-ai/code-switching-asr",
+    "files": {
+      "C_001_007": "4dcb6188295b5228ba2694e742b31de5c3773db905b0b3f0c1385b8aa183d524",
+      "C_001_009": "8718674b7ff3bb0ba14f2598a8fb849e9a1be999130f2fd6413e0121e5443870",
+      "C_001_015": "48077950a052879bf022555d0e277f5baa17258d06950803c4a03d53a9050c81",
+      "C_001_016": "188109e2a93bd46f534ccce4a2a9421be36f45f77c115eeeddd07cf3b4bd9c5b"
+    },
+    "license": "cc-by-4.0 (dataset card YAML at the pinned revision)",
+    "repo": "liva-ai/code-switching-asr",
+    "revision": "51b5d0b419e4e96cbc658603fc728a76b53be5fc"
+  },
+  "speakers": "4-5 per file; all four files are session C_001, so probably one group of friends",
+  "speech": "conversational Taglish: friends talking in a voice chat while gaming, one mixed-down track",
+  "utterances": 1245
+}

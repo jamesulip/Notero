@@ -71,6 +71,19 @@ def histogram(languages: list[str | None]) -> str:
     return " ".join(f"{k}×{v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1])) or "—"
 
 
+def taxonomy_reports(manifest: Path, out_dir: Path, arms: list[str], mode: str) -> list[tuple[str, Path]]:
+    """Optional: one error-taxonomy report per arm, from the transcripts `run_arm` already wrote."""
+    import taxonomy
+
+    written = []
+    for arm in arms:
+        folder = out_dir / mode / arm
+        target = out_dir / f"taxonomy-{mode}" / arm
+        taxonomy.report_from_manifest(manifest, folder, label=f"{arm} ({mode})", out_dir=target)
+        written.append((arm, target / "taxonomy.md"))
+    return written
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -81,6 +94,8 @@ def main() -> int:
     parser.add_argument("--arms", default="tl,auto", help="comma-separated language modes")
     parser.add_argument("--live", action="store_true", help="replay through the live path instead of offline")
     parser.add_argument("--out-dir", type=Path, default=EVAL / "out")
+    parser.add_argument("--taxonomy", action="store_true",
+                        help="also write the optional error-taxonomy report of each arm (eval/taxonomy.py)")
     parser.add_argument("--extra", nargs=argparse.REMAINDER, default=[],
                         help="passed through to the CLI (e.g. --extra --pre-roll 0)")
     args = parser.parse_args()
@@ -138,6 +153,10 @@ def main() -> int:
         print(f"| **ALL** | {arm} | {pct(wer)} | {acc['sub']}/{acc['del']}/{acc['ins']} | {acc['ref']} "
               f"| {pct(tl_rate)} ({acc['tl_err']}/{acc['tl_ref']}) | {pct(en_rate)} ({acc['en_err']}/{acc['en_ref']}) "
               f"| {pct(sw_rate)} ({acc['sw_err']}/{acc['sw_pos']}) | {acc['decode_ms'] / 1000:.1f} s | {rtf:.3f} | |")
+
+    if args.taxonomy:
+        for arm_label, path in taxonomy_reports(args.manifest, args.out_dir, arms, mode):
+            print(f"taxonomy [{arm_label}]: {path}")
 
     summary_path = args.out_dir / f"compare-language-{mode}.json"
     summary_path.parent.mkdir(parents=True, exist_ok=True)

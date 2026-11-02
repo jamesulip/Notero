@@ -1,0 +1,6 @@
+# Words that are ordinary words in BOTH Tagalog and English, so their spelling says nothing
+# about the language. The classifier labels them "ambiguous" and only resolves one when both
+# neighbouring words are clearly in the same language (and then marks it as a context guess).
+# Words that appear in both lexicon-tl.txt and lexicon-en.txt are ambiguous automatically;
+# this list adds the ones the two lists might not both contain. Written by Claude (the AI model that made this change).
+ate dating to no so man may at in an ma pa mag pag hay pan bata mama papa pare

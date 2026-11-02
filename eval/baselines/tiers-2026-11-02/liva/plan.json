@@ -1,0 +1,185 @@
+{
+  "binary": {
+    "path": "/Users/server/Documents/GitHub/Notero/app/.build/arm64-apple-macosx/release/transcribe",
+    "sha256": "0eb68b4cac0e994757d9b1562fee12d3c449e743dc7d1e9be9737b24bd1beda8"
+  },
+  "commit": "5f34fbcffa1a756b2dcdc9cf1fc20ecb53970c78",
+  "createdUtc": "2026-11-01T18:24:14Z",
+  "decodeFlags": [
+    "--language",
+    "tl",
+    "--no-diarize"
+  ],
+  "evalConfig": "/Users/server/Documents/GitHub/Notero/eval/evaluation-config.v1.json",
+  "evalConfigSha256": "5993215e331383790b4fd1d8a1024ce70555ac84ac638c05625f8522cfef2c90",
+  "gate": {
+    "baseline": "balanced",
+    "difference_interval_must_exclude_zero": true,
+    "max_failed_decodes_over_baseline": 0,
+    "max_median_whole_file_rtf": 0.6,
+    "max_model_residency_mb": 3500,
+    "min_relative_wer_improvement": 0.1,
+    "notes": "A tier replaces the baseline as the default only if every condition holds on the corpus of this plan. live_capable is ModelTier.suitableForLive: the default tier also drives live transcription. max_median_whole_file_rtf is the canKeepUpLive proxy of BenchmarkRun. max_model_residency_mb keeps the model inside a 16 GB Mac's budget next to the speaker models and the app. A result on read speech can at most support a change pending real-Taglish validation; it cannot settle it.",
+    "require_live_capable": true
+  },
+  "machine": [
+    "Mac14,12",
+    "Apple M2 Pro",
+    "17179869184"
+  ],
+  "manifest": {
+    "corpusId": "liva-en-tl-overlapping-51b5d0b",
+    "items": 4,
+    "path": "/private/tmp/notero-data/tiers/liva/manifest.json",
+    "sha256": "9c088855bbb9b42bff45c251c5e0d027fff4806228acdd0681a81b8d57e0621d"
+  },
+  "modelsDirectory": "/Users/server/Library/Application Support/Transcriber/Models",
+  "repeatItems": [
+    "liva-en-tl-C_001_007",
+    "liva-en-tl-C_001_009",
+    "liva-en-tl-C_001_015",
+    "liva-en-tl-C_001_016"
+  ],
+  "schedule": [
+    {
+      "item": "liva-en-tl-C_001_007",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "liva-en-tl-C_001_007",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "liva-en-tl-C_001_007",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "liva-en-tl-C_001_009",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "liva-en-tl-C_001_009",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "liva-en-tl-C_001_009",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "liva-en-tl-C_001_015",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "liva-en-tl-C_001_015",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "liva-en-tl-C_001_015",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "liva-en-tl-C_001_016",
+      "repeat": 0,
+      "tier": "fast"
+    },
+    {
+      "item": "liva-en-tl-C_001_016",
+      "repeat": 0,
+      "tier": "balanced"
+    },
+    {
+      "item": "liva-en-tl-C_001_016",
+      "repeat": 0,
+      "tier": "best"
+    },
+    {
+      "item": "liva-en-tl-C_001_007",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "liva-en-tl-C_001_007",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "liva-en-tl-C_001_007",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "liva-en-tl-C_001_009",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "liva-en-tl-C_001_009",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "liva-en-tl-C_001_009",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "liva-en-tl-C_001_015",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "liva-en-tl-C_001_015",
+      "repeat": 1,
+      "tier": "balanced"
+    },
+    {
+      "item": "liva-en-tl-C_001_015",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "liva-en-tl-C_001_016",
+      "repeat": 1,
+      "tier": "best"
+    },
+    {
+      "item": "liva-en-tl-C_001_016",
+      "repeat": 1,
+      "tier": "fast"
+    },
+    {
+      "item": "liva-en-tl-C_001_016",
+      "repeat": 1,
+      "tier": "balanced"
+    }
+  ],
+  "schema": 1,
+  "seed": 20261102,
+  "tiers": {
+    "balanced": {
+      "liveCapable": true,
+      "modelId": "openai_whisper-large-v3-v20240930_turbo",
+      "revision": "0f63a7800b00dd0226abd051b906c246e1907482"
+    },
+    "best": {
+      "liveCapable": false,
+      "modelId": "openai_whisper-large-v3_turbo",
+      "revision": "0f63a7800b00dd0226abd051b906c246e1907482"
+    },
+    "fast": {
+      "liveCapable": true,
+      "modelId": "openai_whisper-large-v3-v20240930_626MB",
+      "revision": "0f63a7800b00dd0226abd051b906c246e1907482"
+    }
+  },
+  "what": "tier comparison plan; written before any decode"
+}

@@ -313,9 +313,14 @@ public enum RecordingStore {
                              in context: ModelContext) throws {
         guard speaker !== target, speaker.speakerId != target.speakerId,
               let recording = target.recording else { return }
-        for row in recording.transcript?.orderedSegments ?? []
-        where row.speakerId == speaker.speakerId {
-            row.speakerId = target.speakerId
+        // Every revision, not only the current one: an earlier revision is the
+        // evidence that carries names into the next run (`labelledRows`), and a
+        // merged-away label left there could be reused by `addSpeaker` and hand
+        // a new person the lines that were just merged.
+        for transcript in recording.transcripts ?? [] {
+            for row in transcript.orderedSegments where row.speakerId == speaker.speakerId {
+                row.speakerId = target.speakerId
+            }
         }
         target.speechMs += speaker.speechMs
         context.delete(speaker)
@@ -346,7 +351,11 @@ public enum RecordingStore {
     public static func addSpeaker(named name: String? = nil, to recording: StoredRecording,
                                   in context: ModelContext) throws -> StoredSpeaker {
         let existing = recording.speakers ?? []
-        let next = (existing.compactMap { Int($0.speakerId.filter(\.isNumber)) }.max() ?? 0) + 1
+        // After every label in the roster and in every revision, so a new
+        // speaker never takes a label that older lines still carry.
+        let historic = (recording.transcripts ?? []).flatMap { $0.orderedSegments.compactMap(\.speakerId) }
+        let next = ((existing.map(\.speakerId) + historic)
+            .compactMap { Int($0.filter(\.isNumber)) }.max() ?? 0) + 1
         let id = "S\(next)"
         let speaker = StoredSpeaker(
             speakerId: id,

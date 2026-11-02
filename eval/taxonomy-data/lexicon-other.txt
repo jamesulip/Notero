@@ -1,0 +1,4 @@
+# Tokens that belong to neither language: fillers, backchannels and laughter. They are
+# labelled "other" and never counted as Tagalog or English. Written by Claude (the AI model that made this change).
+uh um uhm hmm hm mm mmm mhm ah aha oh ooh eh huh ha hah oops ugh aww aw shh psst
+haha hahaha hehe hihi hoho

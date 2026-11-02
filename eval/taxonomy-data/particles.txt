@@ -1,0 +1,4 @@
+# Enclitics and discourse particles. A reference or hypothesis word on this list that is
+# deleted, inserted or replaced is counted as an "enclitic_particle" error. Written by Claude (see
+# lexicon-tl.txt for provenance). One word per token, any number per line.
+po ho naman lang lamang na pa din rin daw raw nga pala yata ata ba muna kaya sana kasi man
