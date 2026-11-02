@@ -38,6 +38,11 @@ turn "keep" into "change", and the decision is "keep" under both versions.
 | FilSwitch (DLSU authors) | Read Philippine news in Taglish, 152 speakers, 2.04 h speaker-disjoint test split (published) | — | **No licence stated.** | **No.** Blocked until the authors grant permission. It is the best public Taglish test set found. |
 | Others | Common Voice has no `tl` audio; Babel Tagalog is paid telephone speech; the rest are non-commercial, research-only or have no rights. | — | — | No |
 
+**Correction, 2026-11-02 ([TAGLISH-CORPORA.md](../docs/TAGLISH-CORPORA.md)).** The sentence in the first
+paragraph is right for *meetings* and too strong for *conversation*. A re-check found two small public Taglish
+sets with permissive licences: CEnTaCS (5.4 hours of monologue, CC BY 4.0) and the Liva sample used here.
+FilSwitch still states no licence. No public Filipino meeting speech was found.
+
 Caveats (measured or published, as marked):
 
 - FLEURS labels all 964 `fil_ph` test recordings MALE and publishes no speaker IDs (published). Speaker diversity cannot be counted.

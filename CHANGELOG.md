@@ -28,6 +28,38 @@
   `modelRevision`, and older saved benchmarks still load.
 - **No benchmark result comes with this change.** The framework was tested on synthetic text only.
 
+### Taglish error taxonomy
+
+- **`eval/taxonomy.py` sorts each word error into one kind.** The kinds are: Tagalog written as
+  English and English written as Tagalog, errors at code-switch points, mixed-language words
+  (`nag-meeting`, `i-share`), Filipino morphology (affix, reduplication, linker), proper names,
+  particles (`po`, `naman`, `lang`), runs of invented words, runs of deleted speech, and
+  spelling variants. It also reports timestamp misalignment. It is optional. It uses the same tokens
+  and edit distance as the WER, so the error words of all categories add up to S + D + I. No
+  existing number or file changes.
+  [eval/TAXONOMY.md](eval/TAXONOMY.md) gives the method.
+- **Labels are `verified`, `heuristic` or `structural`, and the report never adds them together.**
+  A reference can carry word-level language tags in a plain-text or JSON file that a person edits
+  (`.tagged.txt`; `languageSpans`). Without tags the language labels come from small word lists
+  that an AI model wrote, with no native-speaker review. A word that no list covers is `unknown` and not Filipino. The report says
+  how many tokens are `unknown` or `ambiguous`. A person can adjudicate any event in a TSV file.
+- **It runs from `score.py --taxonomy-out`, `tier_benchmark.py taxonomy` and
+  `compare_language.py --taxonomy`.** The same inputs give byte-identical reports. The reports hold
+  no corpus text unless `--include-text` is set.
+- **The first results are on the saved Liva and FLEURS tier decodes.**
+  [BENCHMARKS.md](docs/BENCHMARKS.md#error-taxonomy-of-the-tier-decodes-2026-11-02) gives them
+  with their limits. On the Liva sample, 38.8% of the Balanced errors are runs of three or more
+  deleted words. Best has 98 fewer Tagalog-to-English substitutions than Balanced in the first decode (93 in the second; heuristic).
+  No reference has word-level tags, so no result is `verified`.
+- **Synthetic fixtures with expected counts worked out from the text** are in `eval/fixtures/taxonomy/`. `tests/test_taxonomy.py`
+  adds 88 tests.
+- **A research report corrects an earlier statement.** [docs/TAGLISH-CORPORA.md](docs/TAGLISH-CORPORA.md)
+  lists the public Filipino and Taglish speech resources with their licences. FilSwitch still
+  states no licence. The earlier claim that no public conversational Taglish corpus has a
+  suitable licence was wrong as worded: Liva `en-tl` and CEnTaCS (5.4 hours of monologue, CC BY 4.0)
+  are permissive and small. No public Filipino meeting speech exists in the sets found. No new
+  corpus was downloaded.
+
 ### Tier comparison
 
 - **`eval/tier_benchmark.py` compares the three tiers on one corpus** with identical decodes,

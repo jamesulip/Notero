@@ -352,7 +352,117 @@ Read the conditions before you use these numbers:
 - **One Mac.** Every number is from the Mac mini M2 Pro, 16 GB.
 - **Read speech.** FLEURS is read speech.
 - **Not a meeting.** The Liva sample is a gaming voice chat of one group of friends. It is not a meeting, and no transcript of it was identical between two decodes.
-- **Meetings are unmeasured.** Real meeting accuracy is unmeasured, because no public conversational Taglish corpus of a useful size has a licence that allows this use.
+- **Meetings are unmeasured.** Real meeting accuracy is unmeasured. No public Filipino meeting speech was found. The small public Taglish sets with a permissive licence (Liva `en-tl`, 40 minutes; CEnTaCS, 5.4 hours of monologue) are not meetings. [TAGLISH-CORPORA.md](TAGLISH-CORPORA.md) gives the research and corrects an earlier statement about licences.
+
+## Error taxonomy of the tier decodes, 2026-11-02
+
+`eval/taxonomy.py` sorts each word error into one kind. It is an optional report. It reads the
+transcripts that the tier comparison already saved, decodes nothing, and changes no number above.
+[eval/TAXONOMY.md](../eval/TAXONOMY.md) gives the categories, the label rules and the file formats.
+
+**Read this first.** No reference in these two corpora has word-level language tags. **Every
+language label below is a heuristic** from small word lists that an AI model (Claude) wrote, and the
+`verified` count is zero. No native speaker has reviewed the lists. The category counts show how the
+decodes fail. They are not measurements of the speech.
+
+- The categories partition the errors. The error words add up to the S + D + I of the tables above.
+- The totals match the published WER: Liva 3,784 / 3,592 / 3,903 errors for Balanced, Best and
+  Fast over 5,537 words; FLEURS 1,121 / 1,091 / 1,169 over 9,613 words. The FLEURS S/D/I of
+  Balanced (869 / 123 / 129) equals the `transcribe --score` figures.
+- Liva Best differs from the published 64.80% by 0.07 points (64.87%). The cause is the two
+  backticks that [TIER-RESULTS.md](../eval/TIER-RESULTS.md) names.
+
+### Liva AI `en-tl`, error words by category (first decode)
+
+| Category | Fast | Balanced | Best |
+| --- | ---: | ---: | ---: |
+| `deleted_speech` (runs of 3 or more) | 1,654 | 1,467 | 1,359 |
+| `other_substitution` | 1,226 | 1,233 | 1,235 |
+| `other_deletion` (isolated) | 272 | 304 | 307 |
+| `enclitic_particle` | 201 | 211 | 171 |
+| `boundary_error` | 194 | 183 | 191 |
+| `tl_to_en_substitution` (heuristic) | 162 | 159 | 61 |
+| `proper_noun_error` | 37 | 40 | 34 |
+| `morphology_error` | 33 | 37 | 44 |
+| `hallucination` | 17 | 40 | 54 |
+| `en_to_tl_substitution` (heuristic) | 29 | 17 | 23 |
+| `other_insertion` | 30 | 45 | 52 |
+| `spelling_variant` | 30 | 30 | 40 |
+| `mixed_word_error` | 18 | 18 | 21 |
+| **Errors** (reference words 5,537) | **3,903** | **3,784** | **3,592** |
+
+Every category in the table is heuristic or structural. None is verified.
+
+- **Most errors are speech that produced no words.** Runs of three or more deleted words are 38.8% of
+  the Balanced errors (230 runs, 1,467 words), and isolated deletions add 8.0%. Insertions are 2.5% (93 words).
+  This agrees with the overlap finding in TIER-RESULTS: the model writes one speaker when two talk.
+- **Best has fewer errors than Balanced by 192 words (first decode) and 216 (second decode).** Two
+  categories hold most of the difference. `tl_to_en_substitution` is 98 words lower in the first
+  decode and 93 lower in the second. Words in deleted runs are 108 lower and 50 lower. The
+  `hallucination` words are higher for Best (14 and 43 more). Best has one run of 18 words in the
+  first decode and one of 102 words in the second decode that lie outside every reference
+  utterance. They are the only two of the 25 inserted runs in the six Liva decodes that the report
+  places outside reference speech. The 102-word run matches the longest loop in TIER-RESULTS.
+- **The Tagalog-to-English substitutions are short words.** 123 of the 159 Balanced reference words
+  have four letters or fewer. They are mostly function words that became short English words
+  ("I", "hello", "okay" and similar). The category counts the language of the output word, so it
+  cannot tell a mishearing from a translation. No translation was found by hand in TIER-RESULTS.
+- **Code-switch points are not worse than other words.** 58.0% of the 569 words at 318 heuristic
+  switch points are wrong (330), against 67.7% of the other 4,968 words. This repeats the earlier
+  finding, with the same caveat: the switch points are heuristic.
+- **Word timestamps.** 17.1% of 3,683 aligned word pairs (Balanced) and 12.9% of 3,788 (Best) have a time
+  more than one second outside the reference utterance. The reference times belong to whole
+  utterances, and the overlapped speech reorders the reference. Read this as an upper bound.
+- **Label coverage.** 26.2% of the Balanced reference tokens are `unknown` or `ambiguous`, and 65.9%
+  are `tl` or `en`. The word lists do not cover the rest. 52 reference tokens are `mix`
+  (Tagalog affix with English stem), so the 18 `mixed_word_error` words are too few to compare.
+- **Second decode.** The same table for the second decode is in
+  `eval/baselines/taxonomy-2026-11-02/liva-repeat1/`. The `tl_to_en` gap between Balanced (160) and
+  Best (67) repeats. The Fast value does not repeat (162, then 91). The two decodes of one tier
+  differ by up to about 70 words in some categories, so a gap of less than about 70 words in one
+  category is inside the spread between two decodes of one tier.
+
+### FLEURS `fil_ph`, error words by category (first decode)
+
+| Category | Fast | Balanced | Best |
+| --- | ---: | ---: | ---: |
+| `other_substitution` | 545 | 531 | 517 |
+| `spelling_variant` | 145 | 144 | 139 |
+| `proper_noun_error` | 124 | 116 | 111 |
+| `morphology_error` | 109 | 97 | 98 |
+| `other_insertion` | 84 | 84 | 89 |
+| `hallucination` | 33 | 15 | 3 |
+| `boundary_error` | 31 | 31 | 30 |
+| `enclitic_particle` | 27 | 29 | 29 |
+| `deleted_speech` | 27 | 30 | 30 |
+| `other_deletion` | 41 | 41 | 42 |
+| `en_to_tl_substitution`, `tl_to_en_substitution` | 3 | 3 | 3 |
+| **Errors** (reference words 9,613) | **1,169** | **1,121** | **1,091** |
+
+- **This is read Tagalog, and most errors are spelling.** 377 of the 531 Balanced
+  `other_substitution` words are near misses (character similarity of 0.6 or more). 138 of the 144
+  `spelling_variant` words are words that the model joined or split ("kahalin tulad"). The standard
+  WER counts each of these as an error.
+- **Names are 10.3% of the errors,** and 98 of the 116 are a near spelling of the right name. The
+  name labels come from capital letters in a cased reference, so a capitalised ordinary word that
+  is not on the word lists is also called a name.
+- **Morphology is 8.7%.** The largest subtype is a dropped linker (`ligature_dropped`, 32 words:
+  "magandang" written "maganda"). Reduplication is wrong in 24 words (13 dropped, 11 added).
+- **Language swaps are almost absent** (3 words), as expected for read Tagalog. The old
+  `langscore` heuristic called 608 tokens in these references English. This tool labels 73 of them
+  `en` and 2,539 `unknown`, because it does not guess that an unlisted word is Filipino or English.
+- 29.1% of the Balanced reference tokens are `unknown` or `ambiguous`. There are no reference times,
+  so no hallucination is placed in silence and no timestamp is checked.
+
+Reproduce, from the saved decodes:
+
+```bash
+python3 -I eval/taxonomy.py plan --plan /tmp/notero-data/tiers/liva-run1/plan.json --out-dir /tmp/tax/liva
+python3 -I eval/taxonomy.py plan --plan /tmp/notero-data/tiers/run1/plan.json --out-dir /tmp/tax/fleurs
+python3 -I eval/taxonomy.py plan --plan /tmp/notero-data/tiers/liva-run1/plan.json --out-dir /tmp/tax/liva-r1 --repeat 1
+```
+
+The reports contain counts and no corpus text. They are in `eval/baselines/taxonomy-2026-11-02/`.
 
 ## 2026-11-01 baseline: f022c6e on the Mac mini M2 Pro
 
@@ -1128,6 +1238,7 @@ suspects and does not confirm; this matches the lead's own n = 6 offline A/B.
 | `meeting01` | **absent** | **absent** (`eval/refs/` holds only `.gitkeep`) | `eval/manifest.json` references it, so `compare_language.py` prints "skipping clips with no audio or reference on disk: meeting01" and scores one clip. The 25 s excerpt behind the older tables is not on this Mac. |
 | the paused clip (87 s) | **absent** | derived from the synthetic text | `eval/make_paused.py` rebuilds it. Not generated here. |
 | multi-speaker fixtures | `eval/make_multispeaker.py` rebuilds them (`--set tuning`, `holdout`, `speakers`) | RTTM, exact boundaries | Synthetic text-to-speech voices, 2 to 6 speakers. |
+| taxonomy fixture | `eval/fixtures/taxonomy/`, tracked | tagged and plain text, one JSON with times | Synthetic text written for the repository, with expected counts that were worked out from the text. No audio. Exercises every category of `eval/taxonomy.py`. |
 | AMI test set, Liva AI en-tl sample | fetched into `/tmp`, not in git | RTTM (AMI manual and forced-alignment references; Liva speaker-labelled transcripts) | Public, CC BY 4.0. Used for the [diarization comparison](#diarization-comparison-2026-11-02). |
 
 There is **no real Taglish meeting recording with a clean reference on any machine

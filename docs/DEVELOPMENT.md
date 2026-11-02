@@ -73,6 +73,19 @@ does not build it. Test it on its own: `cd experimental/nemotron3 && swift test`
 (7 tests, no model weights). It resolves FluidAudio 0.18.0, so its first build
 downloads that package.
 
+## Test the Python evaluation tools
+
+```bash
+/tmp/notero-venv/bin/python -m pytest tests --ignore=tests/test_protocol.py
+```
+
+There are 556 tests in this run: 468 for the older tools and 88 in
+`tests/test_taxonomy.py` for the Taglish error taxonomy. `tests/test_protocol.py`
+tests the legacy server. It needs the models and the network, so leave it out.
+The other tests need no model, no audio and no network. The taxonomy tests use
+only the synthetic text in `eval/fixtures/taxonomy/`. The expected counts in that
+folder were worked out from the sentences. They are not a copy of the tool output.
+
 | Test target | What it covers |
 | --- | --- |
 | `TranscriberCoreTests` | Pure logic. No fakes are necessary. |
