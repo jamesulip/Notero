@@ -46,9 +46,11 @@ dropped, hyphens split, apostrophes inside a word kept). That has two consequenc
   The total cannot change. **The split between S, D and I can, and so can some category counts:**
   where two alignments have the same cost, the tie-break moves words between categories. The tool
   uses `langscore.align`'s tie-break (the older tools' choice). `--tie-break del-ins-sub` and
-  `ins-del-sub` show the spread. On the Liva first decode it moved a category by up to about 50
-  words (Best `other_insertion` 52 to 106); read no difference of less than about 40 words in one
-  category. FLEURS moves by at most a few words.
+  `ins-del-sub` show the spread. On the Liva first decode it moved a category by up to 67
+  words (Balanced `other_substitution` 1,258 to 1,191; Best `other_insertion` 52 to 106). Read no
+  difference of less than about 70 words in one category: of the Best-against-Balanced differences, only
+  the Tagalog-to-English substitutions and the deleted runs are larger. FLEURS moved by at most 8 words
+  in a check that is not committed.
 - **A hyphen is never an error.** "nag-meeting" is the tokens "nag" and "meeting", kept as one
   group so a mixed-language word can be recognised. "nagmeeting" and "nag meeting" are a
   join/split of the same letters, and are counted as `spelling_variant`.
@@ -141,8 +143,8 @@ The heuristic, in order (the report counts tokens by the rule that fired):
 
 All lists are in `eval/taxonomy-data/`, **written by Claude (the AI model that made this change) from general
 knowledge, for this project**. They were not copied from a dictionary, a corpus, a frequency list or
-the system word list. An independent check found no sign of a copy (for example, the English list has
-195 inflected forms that the system list does not contain), but a model writing from memory cannot
+the system word list. An independent check found no sign of a copy (an independent count found 194 entries of the English list that the system
+word list does not contain, which argues against a copy of that list only), but a model writing from memory cannot
 prove that its sources are clean, so treat "no third-party licence" as an assertion and not a
 finding. They are offered under this repository's MIT licence. They have not been reviewed by a
 native speaker, and they are small: about 990 Tagalog, 940 English and 150 name entries at the time

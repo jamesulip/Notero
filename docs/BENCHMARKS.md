@@ -366,13 +366,13 @@ transcripts that the tier comparison already saved, decodes nothing, and changes
   Every language label below is a heuristic from small word lists that an AI model (Claude) wrote.
   No native speaker has reviewed the lists. The `verified` count is zero.
 - **The counts show how the decodes fail. They do not measure the speech.**
-- **Do not read a difference of less than about 40 words in one category.** The categories partition
+- **Do not read a difference of less than about 70 words in one category.** The categories partition
   the errors, and the total never changes. But when two alignments have the same cost, the choice
   between them moves words from one category to another. On the Liva first decode, two other
   tie-breaks (`--tie-break`, folders `liva-tiebreak-*` in the baselines) move
   `morphology_error` of Best from 44 to 28 words, `other_insertion` of Best from 52 to 106 words,
-  and `boundary_error` of Best from 168 to 140 words. The `tl_to_en_substitution` gap between Balanced and Best does not
-  move: 97 words with the default tie-break, 91 and 89 with the others.
+  and `boundary_error` of Best from 168 to 140 words. The largest move of any category is 67 words (Balanced `other_substitution`). The `tl_to_en_substitution` gap between
+  Balanced and Best moves little: 98 words with the default tie-break, 91 and 89 with the others.
 - The totals match the published WER: Liva 3,784 / 3,592 / 3,903 errors for Balanced, Best and
   Fast over 5,537 words; FLEURS 1,121 / 1,091 / 1,169 over 9,613 words. The FLEURS S/D/I of
   Balanced (869 / 123 / 129) equals the `transcribe --score` figures.
@@ -385,11 +385,11 @@ transcripts that the tier comparison already saved, decodes nothing, and changes
 | Category | Fast | Balanced | Best |
 | --- | ---: | ---: | ---: |
 | `deleted_speech` (runs of 3 or more) | 1,654 | 1,467 | 1,359 |
-| `other_substitution` | 1,248 | 1,256 | 1,257 |
+| `other_substitution` | 1,251 | 1,258 | 1,257 |
 | `other_deletion` (isolated) | 272 | 305 | 308 |
 | `enclitic_particle` | 201 | 211 | 171 |
-| `boundary_error` | 167 | 159 | 168 |
-| `tl_to_en_substitution` (heuristic) | 165 | 158 | 61 |
+| `boundary_error` | 164 | 156 | 168 |
+| `tl_to_en_substitution` (heuristic) | 165 | 159 | 61 |
 | `proper_noun_error` | 39 | 42 | 35 |
 | `morphology_error` | 33 | 37 | 44 |
 | `hallucination` | 17 | 40 | 54 |
@@ -403,24 +403,26 @@ Every row is heuristic or structural. None is verified.
 
 - **Most errors are speech that produced no words.** Runs of three or more deleted words are 38.8% of
   the Balanced errors (230 runs, 1,467 words), and isolated deletions add 8.1%. Insertions are 2.5%
-  (93 words). This agrees with the overlap finding in TIER-RESULTS: the model writes one speaker when
+  (93 words; 3.2% and 3.4% with the other two tie-breaks). This agrees with the overlap finding in TIER-RESULTS: the model writes one speaker when
   two talk.
 - **Best has fewer errors than Balanced by 192 words (first decode) and 216 (second decode).** Two
-  categories hold most of the difference. `tl_to_en_substitution` is 97 words lower in the first
-  decode and 94 lower in the second. Words in deleted runs are 108 lower and 50 lower. The
-  `hallucination` words are higher for Best (14 and 43 more). Best has one run of 18 words in the
+  categories hold most of the difference. `tl_to_en_substitution` is 98 words lower in the first
+  decode and 95 lower in the second (91 and 89 lower with the other two tie-breaks). Words in deleted
+  runs are 108 lower and 50 lower (127 and 127 lower with the other tie-breaks in the first decode).
+  The smaller differences are inside the spread and should not be read: `hallucination` words are
+  higher for Best (14 and 43 more) and particle errors are lower (40 and 44 fewer). Best has one run of 18 words in the
   first decode and one of 102 words in the second decode that lie outside every reference
   utterance. They are the only two of the 25 inserted runs in the six Liva decodes that the report
   places outside reference speech. The 102-word run matches the longest loop in TIER-RESULTS.
-- **The Tagalog-to-English substitutions are short words.** 122 of the 158 Balanced reference words
+- **The Tagalog-to-English substitutions are short words.** 123 of the 159 Balanced reference words
   have four letters or fewer. They are mostly function words that became short English words
   ("I", "hello", "okay" and similar). The category counts the language of the output word, so it
   cannot tell a mishearing from a translation. No translation was found by hand in TIER-RESULTS.
-- **No evidence that code-switch points are worse than other words.** 58.2% of the 498 words at 276
-  heuristic switch points are wrong (290 words). The fair comparison is with the other words that
-  have a `tl` or `en` label, because a switch point needs two such words: 63.3% of those 3,108 words
-  are wrong. The gap is 5.0 points for Balanced, 1.6 for Best (56.6% against 58.2%) and 3.8 for
-  Fast. The 276 points are in four recordings of one friend group, and the labels are heuristic. The comparison
+- **No evidence that code-switch points are worse than other words.** 58.0% of the 495 words at 274
+  heuristic switch points are wrong (287 words). The fair comparison is with the other words that
+  have a `tl` or `en` label, because a switch point needs two such words: 63.3% of those 3,109 words
+  are wrong. The gap is 5.3 points for Balanced, 1.9 for Best (56.4% against 58.3%) and 4.0 for
+  Fast. The 274 points are in four recordings of one friend group, and the labels are heuristic. The comparison
   with all other words (67.5%) is biased, because it includes the `unknown`, `ambiguous`, `other`
   and `name` words, which are wrong more often.
 - **Word timestamps.** 17.1% of 3,683 aligned word pairs (Balanced) and 12.9% of 3,788 (Best) have a time
@@ -433,8 +435,8 @@ Every row is heuristic or structural. None is verified.
   rule, and many capitalised words in these vendor transcripts are not names (ordinary English words
   that the lists do not contain). Read `proper_noun_error` (42 words) as an upper bound.
 - **Second decode.** The same table for the second decode is in
-  `eval/baselines/taxonomy-2026-11-02/liva-repeat1/`. The `tl_to_en` gap between Balanced (161) and
-  Best (67) repeats. The Fast value does not repeat (165, then 91). The two decodes of one tier
+  `eval/baselines/taxonomy-2026-11-02/liva-repeat1/`. The `tl_to_en` gap between Balanced (162) and
+  Best (67) repeats. The Fast value does not repeat (165, then 92). The two decodes of one tier
   differ by up to about 70 words in some categories, so a gap of less than about 70 words in one
   category is inside the spread between two decodes of one tier.
 

@@ -1426,27 +1426,30 @@ the decodes fail. They do not measure the speech.
 **The category counts depend on the tie-break.** The total of a decode is fixed. But when two
 alignments have the same cost, the choice moves words between categories. Two other tie-breaks move
 the Liva Best `morphology_error` from 44 to 28 words, `other_insertion` from 52 to 106 and
-`boundary_error` from 168 to 140. A difference of less than about 40 words in one category means
-nothing. The `tl_to_en` gap between Balanced and Best survives (97 words, then 91 and 89). An
+`boundary_error` from 168 to 140. A difference of less than about 70 words in one category means
+nothing (the largest move was 67 words). The `tl_to_en` gap between Balanced and Best survives (98 words, then 91 and 89). An
 independent review found this; it is now an option (`--tie-break`) and a committed baseline.
 
 **What the Liva decodes show (heuristic, one friend group, two decodes of each tier).**
 
 - **Most of the error is speech that produced no words.** Runs of three or more deleted words are
-  38.8% of the Balanced errors (1,467 of 3,784 words in 230 runs). Insertions are 2.5%.
+  38.8% of the Balanced errors (1,467 of 3,784 words in 230 runs). Insertions are 2.5% (3.2% and 3.4%
+  with the other tie-breaks).
 - **Best's lead over Balanced is mostly two things.** In the first decode Best has 192 fewer errors:
-  97 fewer Tagalog-to-English substitutions, 108 fewer words in deleted runs, 40 fewer particle errors
-  and 14 more invented words. The second decode gives 94, 50, 44 and 43 more. Most of the
+  98 fewer Tagalog-to-English substitutions and 108 fewer words in deleted runs (and 40 fewer particle
+  errors and 14 more invented words, which are inside the tie-break spread and mean nothing). The second
+  decode gives 95 and 50 (and 44 fewer particle errors, 43 more invented words). Under the other two
+  tie-breaks the first decode gives 91 and 89, and 127 and 127. Most of the
   Tagalog-to-English words are short Tagalog function words that became "I", "hello" or "okay"
-  (122 of 158 reference words have four letters or fewer). The category counts the output word's
+  (123 of 159 reference words have four letters or fewer). The category counts the output word's
   language and cannot tell a mishearing from a translation. TIER-RESULTS found no translation by hand.
-- **The `tl_to_en` gap between Balanced and Best repeats** (158 and 61, then 161 and 67). Fast does not
-  (165, then 91). A difference of less than about 70 words in one category is inside the spread
+- **The `tl_to_en` gap between Balanced and Best repeats** (159 and 61, then 162 and 67). Fast does not
+  (165, then 92). A difference of less than about 70 words in one category is inside the spread
   between two decodes of one tier.
-- **No evidence that code-switch points are worse.** 58.2% of 498 words at 276 heuristic switch
+- **No evidence that code-switch points are worse.** 58.0% of 495 words at 274 heuristic switch
   points are wrong, against 63.3% of the other words that carry a `tl` or `en` label (the fair
   control) and 67.5% of all other words (a biased control, because a switch point needs two labelled
-  words). The gap is 5.0 points for Balanced and 1.6 for Best. A first draft of this entry compared
+  words). The gap is 5.3 points for Balanced and 1.9 for Best. A first draft of this entry compared
   with all other words and reported a gap of 9.7 points; the independent review corrected it.
 - **Best's invented runs are the long ones.** Two of the 25 inserted runs in the six decodes lie outside
   every reference utterance (18 and 102 words). Both are Best's.

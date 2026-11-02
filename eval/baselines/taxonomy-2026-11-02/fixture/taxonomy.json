@@ -16,7 +16,7 @@
   },
   "caveats": [
     "112 of 169 reference tokens carry a word-level tag supplied by the reference annotation (the tool does not check the annotator). The remaining tokens, and every hypothesis token, are heuristic. The two are kept apart in every table.",
-    "The category counts depend on which of several equal-cost alignments is chosen (this tool uses the same tie-break as eval/langscore.py). The total never changes, but a category of a few dozen words can move by tens of words under another tie-break: do not read a difference of less than about 40 words in one category.",
+    "The category counts depend on which of several equal-cost alignments is chosen. This report used the `default` tie-break (the one of eval/langscore.py, which the older tools use). The total never changes, but a category can move by tens of words under another tie-break (`--tie-break`; 67 words at most in the Liva check): do not read a difference of less than about 70 words in one category.",
     "Hypothesis words are never tagged by a person, so tl_to_en / en_to_tl substitutions rest on a heuristic label for the hypothesis word even when the reference word is verified.",
     "The word lists are small and were written by an AI model (Claude) without a native speaker's review: `unknown` is the largest honest answer for words they do not cover, and the ambiguous/unknown shares are reported rather than hidden.",
     "Categories partition the word errors by a first-match rule list; a word that fits two rules is counted under the earlier one. Which rule fired is a design choice, not a linguistic finding.",
@@ -48,6 +48,7 @@
     "timestampToleranceMs": 1000
   },
   "corpus": {
+    "adjudication_conflicts": 0,
     "adjudication_keys_used": 0,
     "adjudications_applied": 0,
     "by_reference_label": {
@@ -641,6 +642,7 @@
     }
   },
   "inputs": {
+    "adjudication_conflicts": 0,
     "adjudications_given": 0,
     "adjudications_unused": 0,
     "annotators": [
@@ -745,7 +747,7 @@
     },
     "lexicon-names.txt": {
       "entries": 151,
-      "sha256": "ad2db326e05585a0172376483a162b25c46304218c25219f05d1de04fad1a4cf",
+      "sha256": "dd970d1031443d2c5a46fd0cb8994b28c371fc5aa169269736d81c221e7373b4",
       "source": "written for this project by Claude (an AI model); no native-speaker review"
     },
     "lexicon-other.txt": {

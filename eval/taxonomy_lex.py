@@ -52,7 +52,16 @@ kanila hindi di huwag wag wala may mayroon meron lang din rin daw raw naman nga 
 kasi kaya pero para kung kapag pag habang bago mula tungkol man ano sino saan kailan bakit paano alin ilan
 gaano magkano
 """.split())
-_CONTRACTION_TAILS = {"s", "t", "re", "ve", "ll", "d", "m"}
+#: English contraction tails and, where the head matters, the heads that make one ("p're" is not
+#: "you're"; "kailan't" is not "can't"). None means any head.
+_CONTRACTIONS: dict[str, frozenset | None] = {
+    "s": None, "ll": None, "d": None,
+    "m": frozenset({"i"}),
+    "re": frozenset({"you", "we", "they", "who", "what", "there", "here", "where", "how", "these", "those"}),
+    "ve": frozenset({"i", "you", "we", "they", "would", "could", "should", "might", "must", "who", "what"}),
+    "t": frozenset({"don", "doesn", "didn", "isn", "aren", "wasn", "weren", "hasn", "haven", "hadn", "can", "couldn",
+                    "wouldn", "shouldn", "won", "mustn", "needn", "mightn", "ain", "shan", "daren"}),
+}
 _CLITIC_TAILS = {"yo", "yun", "yan", "yon", "yung", "to"}
 _ACRONYM = re.compile(r"^[A-Z]{2,6}$")
 
@@ -324,9 +333,9 @@ def _classify_word(word: str, lex: Lexicon) -> Label:
         return Label("other", "heuristic", "alphanumeric")
     if "'" in word:
         head, _, tail = word.partition("'")
-        # "n't" is English ("don't", "can't"); a bare "'t" after anything else is Tagalog or unknown
-        # ("ba't" = bakit, "hangga't" = hanggang): the head must end in "n" to count as English.
-        if tail in _CONTRACTION_TAILS and head and (tail != "t" or head.endswith("n")):
+        # An English contraction needs an English head ("don't", "you're"). A Tagalog "'t" ("ba't" =
+        # bakit, "hangga't" = hanggang) or "p're" is not one, and is left `unknown`.
+        if tail in _CONTRACTIONS and head and (_CONTRACTIONS[tail] is None or head in _CONTRACTIONS[tail]):
             return Label("en", "heuristic", "english-contraction")
         if tail == "y" and head and (_in_tl(head, lex) or head in lex.tl):
             return Label("tl", "heuristic", "tagalog-clitic-y")

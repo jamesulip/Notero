@@ -6,7 +6,7 @@ Optional report on top of the headline WER (`eval/taxonomy.py`, schema `notero-t
 
 ## Inputs
 
-- corpus: `liva-en-tl-overlapping-51b5d0b`, manifest SHA-256 `9c088855bbb9b42b…`
+- corpus: `liva-en-tl-overlapping-51b5d0b`, manifest SHA-256 `9c088855bbb9b42b…`; alignment tie-break `default`
 - items scored: 4; missing a hypothesis or reference: 0
 - reference formats: {'json': 4}; hypothesis formats: {'json': 4}
 - reference items with word-level language tags: 0 (0 tokens); annotators: none recorded
@@ -88,7 +88,7 @@ Definitions: `tl_to_en_substitution` a Tagalog reference word replaced by an Eng
 | `morphology_error` | `root_unlisted` | 18 | 18 | 0 | 18 | 0 |
 | `hallucination` | `inside_reference_speech` | 3 | 36 | 0 | 0 | 36 |
 | `hallucination` | `outside_reference_speech` | 1 | 18 | 0 | 0 | 18 |
-| `deleted_speech` | `at_boundary` | 39 | 327 | 0 | 0 | 327 |
+| `deleted_speech` | `at_boundary` | 38 | 314 | 0 | 0 | 314 |
 | `enclitic_particle` | `at_boundary` | 12 | 12 | 0 | 12 | 0 |
 | `spelling_variant` | `at_boundary` | 4 | 10 | 0 | 10 | 0 |
 | `other_substitution` | `language_unresolved` | 931 | 931 | 0 | 931 | 0 |
@@ -101,9 +101,9 @@ Definitions: `tl_to_en_substitution` a Tagalog reference word replaced by an Eng
 | basis | tl | en | mix | name | other | ambiguous | unknown | total |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | verified | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| heuristic | 2964 | 642 | 50 | 95 | 299 | 188 | 1299 | 5537 |
+| heuristic | 2964 | 640 | 50 | 95 | 299 | 188 | 1301 | 5537 |
 
-Heuristic tokens that are `unknown` or `ambiguous`: 1487 of 5537 (26.9%). Heuristic tokens labelled `tl` or `en`: 3606 (65.1%).
+Heuristic tokens that are `unknown` or `ambiguous`: 1489 of 5537 (26.9%). Heuristic tokens labelled `tl` or `en`: 3604 (65.1%).
 
 **Hypothesis tokens** (a hypothesis word is never verified)
 
@@ -125,7 +125,7 @@ Heuristic reference labels by rule:
 | tl | `tagalog-clitic-y` | 5 |
 | en | `lexicon-en` | 575 |
 | en | `en-inflection` | 48 |
-| en | `english-contraction` | 14 |
+| en | `english-contraction` | 12 |
 | en | `context` | 5 |
 | mix | `affix+english-stem` | 50 |
 | name | `capitalised-mid-sentence` | 94 |
@@ -137,19 +137,19 @@ Heuristic reference labels by rule:
 | ambiguous | `homograph-list` | 188 |
 | unknown | `no-match` | 1129 |
 | unknown | `affix+unlisted-stem` | 150 |
-| unknown | `apostrophe-no-match` | 20 |
+| unknown | `apostrophe-no-match` | 22 |
 
 ## Substitutions by language (reference row, hypothesis column)
 
 | reference basis | reference label | tl | en | mix | name | other | ambiguous | unknown |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | heuristic | tl | 444 | 87 | 5 | 0 | 29 | 17 | 275 |
-| heuristic | en | 48 | 33 | 0 | 0 | 10 | 4 | 72 |
+| heuristic | en | 48 | 33 | 0 | 0 | 10 | 4 | 71 |
 | heuristic | mix | 3 | 5 | 2 | 0 | 0 | 1 | 7 |
 | heuristic | name | 7 | 3 | 0 | 0 | 2 | 0 | 20 |
 | heuristic | other | 48 | 10 | 0 | 0 | 12 | 2 | 24 |
 | heuristic | ambiguous | 13 | 7 | 0 | 0 | 2 | 0 | 17 |
-| heuristic | unknown | 201 | 62 | 4 | 0 | 19 | 12 | 230 |
+| heuristic | unknown | 201 | 62 | 4 | 0 | 19 | 12 | 231 |
 
 The hypothesis column is always a heuristic label. This matrix covers every substitution; the `tl_to_en_substitution` / `en_to_tl_substitution` categories hold only those no earlier rule claimed.
 
@@ -158,24 +158,24 @@ The hypothesis column is always a heuristic label. This matrix covers every subs
 | basis | label | words | substitutions | deletions | error rate (S+D)/words |
 | --- | --- | ---: | ---: | ---: | ---: |
 | heuristic | tl | 2964 | 857 | 840 | 57.3% |
-| heuristic | en | 642 | 167 | 228 | 61.5% |
+| heuristic | en | 640 | 166 | 227 | 61.4% |
 | heuristic | mix | 50 | 18 | 11 | 58.0% |
 | heuristic | name | 95 | 32 | 27 | 62.1% |
 | heuristic | other | 299 | 96 | 123 | 73.2% |
 | heuristic | ambiguous | 188 | 39 | 77 | 61.7% |
-| heuristic | unknown | 1299 | 528 | 433 | 74.0% |
+| heuristic | unknown | 1301 | 529 | 434 | 74.0% |
 
 Inserted words by (heuristic) language: ambiguous 4, en 32, mix 1, other 3, tl 51, unknown 25.
 
 ## Code-switch points
 
-Switch points (adjacent clearly-Tagalog and clearly-English words in one utterance): verified 0, heuristic 276.
+Switch points (adjacent clearly-Tagalog and clearly-English words in one utterance): verified 0, heuristic 274.
 
 | word position | words | errors (S+D) | rate |
 | --- | ---: | ---: | ---: |
-| at a heuristic switch point | 498 | 282 | 56.6% |
-| elsewhere, labelled `tl` or `en` (heuristic) | 3108 | 1810 | 58.2% |
-| elsewhere, any label | 5039 | 3194 | 63.4% |
+| at a heuristic switch point | 495 | 279 | 56.4% |
+| elsewhere, labelled `tl` or `en` (heuristic) | 3109 | 1811 | 58.3% |
+| elsewhere, any label | 5042 | 3197 | 63.4% |
 
 A switch point needs two words that are clearly Tagalog and English, so the fair comparison is with other words that carry such a label (the first rows). "Any label" includes `unknown`, `ambiguous`, `other` and `name` words, which are wrong more often.
 
@@ -186,7 +186,7 @@ A switch point needs two words that are clearly Tagalog and English, so the fair
 ## Caveats
 
 - No reference token carries a word-level language tag, so every language label in this report is a heuristic guess from small hand-written word lists. Read the heuristic counts as indications, not as measurements of the speech.
-- The category counts depend on which of several equal-cost alignments is chosen (this tool uses the same tie-break as eval/langscore.py). The total never changes, but a category of a few dozen words can move by tens of words under another tie-break: do not read a difference of less than about 40 words in one category.
+- The category counts depend on which of several equal-cost alignments is chosen. This report used the `default` tie-break (the one of eval/langscore.py, which the older tools use). The total never changes, but a category can move by tens of words under another tie-break (`--tie-break`; 67 words at most in the Liva check): do not read a difference of less than about 70 words in one category.
 - Hypothesis words are never tagged by a person, so tl_to_en / en_to_tl substitutions rest on a heuristic label for the hypothesis word even when the reference word is verified.
 - The word lists are small and were written by an AI model (Claude) without a native speaker's review: `unknown` is the largest honest answer for words they do not cover, and the ambiguous/unknown shares are reported rather than hidden.
 - Categories partition the word errors by a first-match rule list; a word that fits two rules is counted under the earlier one. Which rule fired is a design choice, not a linguistic finding.

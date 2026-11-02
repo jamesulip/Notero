@@ -6,7 +6,7 @@ Optional report on top of the headline WER (`eval/taxonomy.py`, schema `notero-t
 
 ## Inputs
 
-- corpus: `fleurs-fil_ph-test-onepersentence-seed7`, manifest SHA-256 `50765003e1bf07bc…`
+- corpus: `fleurs-fil_ph-test-onepersentence-seed7`, manifest SHA-256 `50765003e1bf07bc…`; alignment tie-break `default`
 - items scored: 349; missing a hypothesis or reference: 0
 - reference formats: {'txt': 349}; hypothesis formats: {'json': 349}
 - reference items with word-level language tags: 0 (0 tokens); annotators: none recorded
@@ -171,7 +171,7 @@ Items without it: 349 × reference has no utterance times.
 ## Caveats
 
 - No reference token carries a word-level language tag, so every language label in this report is a heuristic guess from small hand-written word lists. Read the heuristic counts as indications, not as measurements of the speech.
-- The category counts depend on which of several equal-cost alignments is chosen (this tool uses the same tie-break as eval/langscore.py). The total never changes, but a category of a few dozen words can move by tens of words under another tie-break: do not read a difference of less than about 40 words in one category.
+- The category counts depend on which of several equal-cost alignments is chosen. This report used the `default` tie-break (the one of eval/langscore.py, which the older tools use). The total never changes, but a category can move by tens of words under another tie-break (`--tie-break`; 67 words at most in the Liva check): do not read a difference of less than about 70 words in one category.
 - Hypothesis words are never tagged by a person, so tl_to_en / en_to_tl substitutions rest on a heuristic label for the hypothesis word even when the reference word is verified.
 - The word lists are small and were written by an AI model (Claude) without a native speaker's review: `unknown` is the largest honest answer for words they do not cover, and the ambiguous/unknown shares are reported rather than hidden.
 - Categories partition the word errors by a first-match rule list; a word that fits two rules is counted under the earlier one. Which rule fired is a design choice, not a linguistic finding.

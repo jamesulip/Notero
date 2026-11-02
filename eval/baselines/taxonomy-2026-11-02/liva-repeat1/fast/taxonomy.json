@@ -16,7 +16,7 @@
   },
   "caveats": [
     "No reference token carries a word-level language tag, so every language label in this report is a heuristic guess from small hand-written word lists. Read the heuristic counts as indications, not as measurements of the speech.",
-    "The category counts depend on which of several equal-cost alignments is chosen (this tool uses the same tie-break as eval/langscore.py). The total never changes, but a category of a few dozen words can move by tens of words under another tie-break: do not read a difference of less than about 40 words in one category.",
+    "The category counts depend on which of several equal-cost alignments is chosen. This report used the `default` tie-break (the one of eval/langscore.py, which the older tools use). The total never changes, but a category can move by tens of words under another tie-break (`--tie-break`; 67 words at most in the Liva check): do not read a difference of less than about 70 words in one category.",
     "Hypothesis words are never tagged by a person, so tl_to_en / en_to_tl substitutions rest on a heuristic label for the hypothesis word even when the reference word is verified.",
     "The word lists are small and were written by an AI model (Claude) without a native speaker's review: `unknown` is the largest honest answer for words they do not cover, and the ambiguous/unknown shares are reported rather than hidden.",
     "Categories partition the word errors by a first-match rule list; a word that fits two rules is counted under the earlier one. Which rule fired is a design choice, not a linguistic finding.",
@@ -49,6 +49,7 @@
     "timestampToleranceMs": 1000
   },
   "corpus": {
+    "adjudication_conflicts": 0,
     "adjudication_keys_used": 0,
     "adjudications_applied": 0,
     "by_reference_label": {
@@ -58,9 +59,9 @@
         "words": 188
       },
       "heuristic|en": {
-        "deletions": 240,
-        "substitutions": 161,
-        "words": 642
+        "deletions": 239,
+        "substitutions": 160,
+        "words": 640
       },
       "heuristic|mix": {
         "deletions": 20,
@@ -83,44 +84,44 @@
         "words": 2964
       },
       "heuristic|unknown": {
-        "deletions": 487,
-        "substitutions": 508,
-        "words": 1299
+        "deletions": 488,
+        "substitutions": 509,
+        "words": 1301
       }
     },
     "categories": {
       "boundary_error": {
         "basis": {
           "heuristic": {
-            "error_words": 155,
-            "events": 155
+            "error_words": 152,
+            "events": 152
           }
         },
-        "error_words": 155,
-        "events": 155,
+        "error_words": 152,
+        "events": 152,
         "flags": {
           "at_boundary": {
             "basis": {
-              "heuristic": 155
+              "heuristic": 152
             },
-            "error_words": 155,
-            "events": 155
+            "error_words": 152,
+            "events": 152
           },
           "short_reference_word": {
             "basis": {
-              "heuristic": 106
+              "heuristic": 103
             },
-            "error_words": 106,
-            "events": 106
+            "error_words": 103,
+            "events": 103
           }
         },
         "subtypes": {
           "anticipation": {
             "basis": {
-              "heuristic": 14
+              "heuristic": 13
             },
-            "error_words": 14,
-            "events": 14
+            "error_words": 13,
+            "events": 13
           },
           "carry_over": {
             "basis": {
@@ -145,10 +146,10 @@
           },
           "unresolved": {
             "basis": {
-              "heuristic": 60
+              "heuristic": 58
             },
-            "error_words": 60,
-            "events": 60
+            "error_words": 58,
+            "events": 58
           }
         }
       },
@@ -446,26 +447,26 @@
       "other_substitution": {
         "basis": {
           "heuristic": {
-            "error_words": 1236,
-            "events": 1236
+            "error_words": 1238,
+            "events": 1238
           }
         },
-        "error_words": 1236,
-        "events": 1236,
+        "error_words": 1238,
+        "events": 1238,
         "flags": {
           "language_unresolved": {
             "basis": {
-              "heuristic": 927
+              "heuristic": 929
             },
-            "error_words": 927,
-            "events": 927
+            "error_words": 929,
+            "events": 929
           },
           "short_reference_word": {
             "basis": {
-              "heuristic": 787
+              "heuristic": 789
             },
-            "error_words": 787,
-            "events": 787
+            "error_words": 789,
+            "events": 789
           }
         },
         "subtypes": {
@@ -478,10 +479,10 @@
           },
           "unrelated": {
             "basis": {
-              "heuristic": 1057
+              "heuristic": 1059
             },
-            "error_words": 1057,
-            "events": 1057
+            "error_words": 1059,
+            "events": 1059
           }
         }
       },
@@ -557,49 +558,49 @@
       "tl_to_en_substitution": {
         "basis": {
           "heuristic": {
-            "error_words": 91,
-            "events": 91
+            "error_words": 92,
+            "events": 92
           }
         },
-        "error_words": 91,
-        "events": 91,
+        "error_words": 92,
+        "events": 92,
         "flags": {
           "short_reference_word": {
             "basis": {
-              "heuristic": 69
+              "heuristic": 70
             },
-            "error_words": 69,
-            "events": 69
+            "error_words": 70,
+            "events": 70
           }
         },
         "subtypes": {
           "heuristic-hypothesis-language": {
             "basis": {
-              "heuristic": 91
+              "heuristic": 92
             },
-            "error_words": 91,
-            "events": 91
+            "error_words": 92,
+            "events": 92
           }
         }
       }
     },
     "code_switch": {
       "boundary_errors": {
-        "heuristic": 301
+        "heuristic": 298
       },
       "boundary_words": {
-        "heuristic": 498
+        "heuristic": 495
       },
       "labelled_other_errors": {
-        "heuristic": 2032
+        "heuristic": 2033
       },
       "labelled_other_words": {
-        "heuristic": 3108
+        "heuristic": 3109
       },
-      "other_errors": 3490,
-      "other_words": 5039,
+      "other_errors": 3493,
+      "other_words": 5042,
       "switch_points": {
-        "heuristic": 276
+        "heuristic": 274
       }
     },
     "del": 2060,
@@ -663,12 +664,12 @@
       "reference": {
         "heuristic": {
           "ambiguous": 188,
-          "en": 642,
+          "en": 640,
           "mix": 50,
           "name": 95,
           "other": 299,
           "tl": 2964,
-          "unknown": 1299
+          "unknown": 1301
         }
       },
       "reference_why": {
@@ -678,7 +679,7 @@
         "en": {
           "context": 5,
           "en-inflection": 48,
-          "english-contraction": 14,
+          "english-contraction": 12,
           "lexicon-en": 575
         },
         "mix": {
@@ -704,7 +705,7 @@
         },
         "unknown": {
           "affix+unlisted-stem": 150,
-          "apostrophe-no-match": 20,
+          "apostrophe-no-match": 22,
           "no-match": 1129
         }
       }
@@ -727,7 +728,7 @@
           "mix": 1,
           "other": 6,
           "tl": 56,
-          "unknown": 73
+          "unknown": 72
         },
         "mix": {
           "en": 1,
@@ -763,7 +764,7 @@
           "mix": 4,
           "other": 12,
           "tl": 195,
-          "unknown": 221
+          "unknown": 222
         }
       }
     },
@@ -783,6 +784,7 @@
     }
   },
   "inputs": {
+    "adjudication_conflicts": 0,
     "adjudications_given": 0,
     "adjudications_unused": 0,
     "annotators": [],
@@ -849,17 +851,17 @@
     },
     "liva-en-tl-C_001_015": {
       "categories": {
-        "boundary_error": 44,
+        "boundary_error": 41,
         "deleted_speech": 416,
         "en_to_tl_substitution": 15,
         "enclitic_particle": 51,
         "morphology_error": 8,
         "other_deletion": 65,
         "other_insertion": 4,
-        "other_substitution": 428,
+        "other_substitution": 430,
         "proper_noun_error": 18,
         "spelling_variant": 5,
-        "tl_to_en_substitution": 43
+        "tl_to_en_substitution": 44
       },
       "del": 490,
       "errors": 1097,
@@ -903,7 +905,7 @@
     },
     "lexicon-names.txt": {
       "entries": 151,
-      "sha256": "ad2db326e05585a0172376483a162b25c46304218c25219f05d1de04fad1a4cf",
+      "sha256": "dd970d1031443d2c5a46fd0cb8994b28c371fc5aa169269736d81c221e7373b4",
       "source": "written for this project by Claude (an AI model); no native-speaker review"
     },
     "lexicon-other.txt": {

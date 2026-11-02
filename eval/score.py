@@ -89,7 +89,9 @@ def main() -> int:
         return 1
 
     entries = json.loads(args.manifest.read_text())
-    if args.taxonomy_out is not None and any(str(e.get("ref", "")).endswith((".tagged.txt", ".json")) for e in entries):
+    guarded = entries["items"] if isinstance(entries, dict) and "items" in entries else entries
+    if args.taxonomy_out is not None and any(
+            isinstance(e, dict) and str(e.get("ref", "")).endswith((".tagged.txt", ".json")) for e in guarded):
         print("stop: this manifest has tagged-text or JSON references. This scorer reads a reference as plain "
               "text and would count the tags and the JSON syntax as words. Use eval/taxonomy.py report with a "
               "manifest of its own for those.", file=sys.stderr)

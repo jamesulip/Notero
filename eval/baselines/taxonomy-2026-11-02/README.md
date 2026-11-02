@@ -21,8 +21,9 @@ lock; this folder re-reads their saved output and decodes nothing.
 
 **The tie-break folders show how far the categories move.** The total of each decode is the same in all three
 folders; the split into substitutions, deletions and insertions, and some categories, are not (Liva Best
-`other_insertion` 52, 87, 106; `morphology_error` 44, 28, 28; Balanced `tl_to_en_substitution` 158, 148, 147).
-Read no difference of less than about 40 words in one category.
+`other_insertion` 52, 87, 106; `morphology_error` 44, 28, 28; Balanced `tl_to_en_substitution` 159, 148, 147).
+The largest move is 67 words (Balanced `other_substitution` 1258, 1210, 1191). Read no difference of less
+than about 70 words in one category.
 
 Every language label in `liva*` and `fleurs*` is **heuristic**. No reference has word-level tags, so
 there is no `verified` count. Do not read a category count as a measurement of the speech.

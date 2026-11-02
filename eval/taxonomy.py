@@ -392,18 +392,21 @@ def analyze_item(ref: tio.Reference, hyp: tio.Hypothesis, lex: tlx.Lexicon, cfg:
                                e.category))
     applied = 0
     keys_used: set[str] = set()
+    conflicts = 0
     if adjudications:
         for e in events:
             keys = [f"r{i}" for i in e.ref_idx] + [f"h{j}" for j in e.hyp_idx]
             matched = [k for k in keys if k in adjudications]
             keys_used.update(matched)
             if matched:
+                if len({adjudications[k] for k in matched}) > 1:
+                    conflicts += 1          # two lines decide one event differently: the first wins
                 hit = adjudications[matched[0]]
                 e.adjudicated_from = e.category
                 e.category, e.subtype, e.basis = hit[0], hit[1] or "adjudicated", "verified"
                 applied += 1
 
-    counts = _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, applied, len(keys_used))
+    counts = _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, applied, len(keys_used), conflicts)
     return counts, events, {"ops": ops, "ref_labels": rl, "hyp_labels": hl}
 
 
@@ -485,7 +488,8 @@ def _mixed_subtype(ref_word: str, hyp_word: str, lex: tlx.Lexicon) -> str:
 
 # ------------------------------------------------------------------ counting
 
-def _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, adjudicated, keys_used=0) -> dict:
+def _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, adjudicated, keys_used=0,
+                conflicts=0) -> dict:
     n = len(ref.tokens)
     s = sum(1 for op, _, _ in ops if op == "sub")
     d = sum(1 for op, _, _ in ops if op == "del")
@@ -493,7 +497,8 @@ def _count_item(ref, hyp, ops, events, rl, hl, bound, points, intervals, cfg, ad
     pooled_s, pooled_d, pooled_i = pooled.levenshtein([t.text for t in ref.tokens], [t.text for t in hyp.tokens])
     c: dict = {"items": 1, "ref_words": n, "hyp_words": len(hyp.tokens), "sub": s, "del": d, "ins": i,
                "errors": s + d + i, "standard_policy_errors": pooled_s + pooled_d + pooled_i,
-               "adjudications_applied": adjudicated, "adjudication_keys_used": keys_used, "categories": {}}
+               "adjudications_applied": adjudicated, "adjudication_keys_used": keys_used, "adjudication_conflicts": conflicts,
+               "categories": {}}
     for e in events:
         cat = c["categories"].setdefault(e.category, {"events": 0, "error_words": 0, "basis": {}, "subtypes": {},
                                                       "flags": {}})
@@ -618,6 +623,8 @@ def load_adjudications(path: Path | None) -> dict[str, dict]:
         parts = line.split("\t")
         if len(parts) < 3 or parts[2] not in CATEGORIES or not parts[1][:1] in ("r", "h") or not parts[1][1:].isdigit():
             raise SystemExit(f"{path}:{n}: expected item<TAB>r12|h7<TAB>category[<TAB>subtype[<TAB>note]] with a known category")
+        if parts[1] in out.get(parts[0], {}):
+            raise SystemExit(f"{path}:{n}: {parts[0]} {parts[1]} is decided twice; keep one line")
         out.setdefault(parts[0], {})[parts[1]] = (parts[2], parts[3] if len(parts) > 3 else "")
     return out
 
@@ -639,7 +646,7 @@ def run_items(items: list[dict], base: Path, hyp_dir: Path, lex, cfg, adjudicati
         raise SystemExit(f"duplicate item ids in the manifest: {dup[:5]}")
     failed: dict[str, str] = {}
     adj_given = sum(len(v) for v in (adjudications or {}).values())
-    adj_used = 0
+    adj_used = adj_conflicts = 0
     odd_tags = 0
     for entry in sorted(items, key=lambda e: e["id"]):
         item_id = entry["id"]
@@ -648,14 +655,21 @@ def run_items(items: list[dict], base: Path, hyp_dir: Path, lex, cfg, adjudicati
         if not ref_path.exists() or hyp_path is None:
             missing.append(item_id)
             continue
+        # Only reading the two files is guarded: a malformed file is reported and skipped. An error in
+        # the analysis itself is a bug and must stop the run, not be filed as a bad item.
         try:
             ref = tio.load_reference(ref_path)
             hyp = tio.load_hypothesis(hyp_path)
-            counts, events, side = analyze_item(ref, hyp, lex, cfg, (adjudications or {}).get(item_id))
-        except (KeyError, TypeError, ValueError, OSError, IndexError, TooLarge) as exc:
+        except (KeyError, TypeError, ValueError, OSError, IndexError, AttributeError) as exc:
             failed[item_id] = f"{type(exc).__name__}: {exc}"
             continue
+        try:
+            counts, events, side = analyze_item(ref, hyp, lex, cfg, (adjudications or {}).get(item_id))
+        except TooLarge as exc:
+            failed[item_id] = f"TooLarge: {exc}"
+            continue
         adj_used += counts["adjudication_keys_used"]
+        adj_conflicts += counts["adjudication_conflicts"]
         odd_tags += ref.odd_tags
         formats[ref.format] = formats.get(ref.format, 0) + 1
         hyp_formats[hyp_path.suffix.lstrip(".")] = hyp_formats.get(hyp_path.suffix.lstrip("."), 0) + 1
@@ -671,7 +685,7 @@ def run_items(items: list[dict], base: Path, hyp_dir: Path, lex, cfg, adjudicati
     adj_unused = adj_given - adj_used
     meta = {"items_scored": len(per_item), "items_missing_hypothesis_or_reference": sorted(missing),
             "items_failed": dict(sorted(failed.items())), "tagged_words_with_an_unrecognised_tag": odd_tags,
-            "adjudications_given": adj_given,
+            "adjudications_given": adj_given, "adjudication_conflicts": adj_conflicts,
             "reference_formats": dict(sorted(formats.items())), "hypothesis_formats": dict(sorted(hyp_formats.items())),
             "items_with_word_tags": tagged_items, "word_tagged_reference_tokens": tagged_tokens,
             "annotators": sorted(annotators), "language_spans_that_did_not_match_text": skipped_spans,
@@ -731,16 +745,22 @@ def caveats(corpus: dict, meta: dict, cfg: dict) -> list[str]:
         out.append(f"{len(meta['items_failed'])} item(s) could not be read and are not in any count: "
                    + "; ".join(f"{k} ({v})" for k, v in list(meta["items_failed"].items())[:3]) + ".")
     if meta.get("tagged_words_with_an_unrecognised_tag"):
-        out.append(f"{meta['tagged_words_with_an_unrecognised_tag']} word(s) in tagged references end in "
-                   "`/letters` that is not a tag (tl, en, mix, ne, oth). They stayed in the text as words, "
+        out.append(f"{meta['tagged_words_with_an_unrecognised_tag']} word(s) in tagged references contain a slash "
+                   "that is not part of a tag (tl, en, mix, ne, oth). They stayed in the text as words, "
                    "which changes the reference length. Check for a mistyped tag.")
+    if meta.get("adjudication_conflicts"):
+        out.append(f"{meta['adjudication_conflicts']} event(s) were named by two adjudication lines that decide "
+                   "differently. The first line (by reference index, then hypothesis index) was used.")
     if meta.get("adjudications_unused"):
         out.append(f"{meta['adjudications_unused']} of {meta['adjudications_given']} adjudication line(s) matched "
                    "no event (wrong item, index or a second line for an event that was already decided).")
-    out.append("The category counts depend on which of several equal-cost alignments is chosen (this tool "
-               "uses the same tie-break as eval/langscore.py). The total never changes, but a category of a "
-               "few dozen words can move by tens of words under another tie-break: do not read a "
-               "difference of less than about 40 words in one category.")
+    tie = cfg.get("tieBreak", "default")
+    out.append("The category counts depend on which of several equal-cost alignments is chosen. This report used "
+               f"the `{tie}` tie-break" + (" (the one of eval/langscore.py, which the older tools use)"
+                                           if tie == "default" else " (not the default)") + ". The total never "
+               "changes, but a category can move by tens of words under another tie-break (`--tie-break`; "
+               "67 words at most in the Liva check): do not read a difference of less than about 70 words "
+               "in one category.")
     out.append("Hypothesis words are never tagged by a person, so tl_to_en / en_to_tl substitutions rest on a "
                "heuristic label for the hypothesis word even when the reference word is verified.")
     out.append("The word lists are small and were written by an AI model (Claude) without a native "
@@ -809,7 +829,8 @@ def render_markdown(report: dict) -> str:
     w("")
     w("## Inputs")
     w("")
-    w(f"- corpus: `{meta['corpusId']}`, manifest SHA-256 `{(meta['manifestSha256'] or 'n/a')[:16]}…`")
+    w(f"- corpus: `{meta['corpusId']}`, manifest SHA-256 `{(meta['manifestSha256'] or 'n/a')[:16]}…`; "
+      f"alignment tie-break `{report['tool']['tieBreak']}`")
     w(f"- items scored: {meta['items_scored']}; missing a hypothesis or reference: "
       f"{len(meta['items_missing_hypothesis_or_reference'])}")
     w(f"- reference formats: {meta['reference_formats']}; hypothesis formats: {meta['hypothesis_formats']}")
@@ -1039,6 +1060,10 @@ def command_report(args) -> int:
     c = report["corpus"]
     print(f"{args.label}: {c.get('errors', 0)} errors over {c.get('ref_words', 0)} reference words "
           f"-> {args.out_dir}/taxonomy.json, taxonomy.md")
+    failed = report["inputs"]["items_failed"]
+    if failed:
+        print(f"warning: {len(failed)} item(s) could not be read and are not counted: {', '.join(sorted(failed)[:5])}",
+              file=sys.stderr)
     return 0
 
 
@@ -1052,6 +1077,7 @@ def command_pair(args) -> int:
            "meta": {"items_scored": 1, "items_missing_hypothesis_or_reference": [],
                     "reference_formats": {ref.format: 1}, "hypothesis_formats": {Path(args.hypothesis).suffix.lstrip("."): 1},
                     "items_failed": {}, "tagged_words_with_an_unrecognised_tag": ref.odd_tags, "adjudications_given": 0,
+                    "adjudication_conflicts": 0,
                     "items_with_word_tags": 1 if ref.tagged_tokens else 0,
                     "word_tagged_reference_tokens": ref.tagged_tokens, "annotators": [],
                     "language_spans_that_did_not_match_text": ref.skipped_spans, "adjudications_unused": 0}}

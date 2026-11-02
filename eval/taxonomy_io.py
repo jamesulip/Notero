@@ -96,7 +96,7 @@ class Reference:
     tokens: list[Token]
     annotation: dict = field(default_factory=dict)
     skipped_spans: int = 0           # utterances whose languageSpans did not match their text
-    odd_tags: int = 0                # tagged-text words that end in "/letters" that is not a tag
+    odd_tags: int = 0                # tagged-text words that contain a slash that is not part of a tag
     cased: bool = False              # the text has both upper- and lower-case letters
 
     @property
@@ -172,8 +172,9 @@ def parse_tagged_line(line: str) -> tuple[dict, str, list[str | None], int]:
     """(header attributes, text without tags, one tag per whitespace chunk, odd-tag count).
 
     A leading `[...]` is a header only when every part of it is `key=value`; "[laughing]" is
-    text. A tag is matched without regard to case. A word ending in `/letters` that is not a
-    tag ("and/or") stays in the text and is counted, so a mistyped tag is reported."""
+    text. A tag is matched without regard to case. Any other word that contains a slash ("and/or",
+    "natin/xx", "natin /tl", "natin/tl2") stays in the text and is counted, so a mistyped tag is
+    reported."""
     attrs: dict[str, str] = {}
     m = _HEADER_RE.match(line)
     if m and m.group("attrs").split() and all("=" in p for p in m.group("attrs").split()):
@@ -188,7 +189,7 @@ def parse_tagged_line(line: str) -> tuple[dict, str, list[str | None], int]:
             words.append(tm.group("word") + tm.group("tail"))
             tags.append(tm.group("tag").lower())
         else:
-            odd += 1 if tm else 0
+            odd += 1 if "/" in chunk else 0
             words.append(chunk)
             tags.append(None)
     return attrs, " ".join(words), tags, odd

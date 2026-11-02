@@ -79,7 +79,7 @@ downloads that package.
 /tmp/notero-venv/bin/python -m pytest tests --ignore=tests/test_protocol.py
 ```
 
-There are 575 tests in this run: 468 for the older tools and 107 in
+There are 595 tests in this run: 468 for the older tools and 127 in
 `tests/test_taxonomy.py` for the Taglish error taxonomy. `tests/test_protocol.py`
 tests the legacy server. It needs the models and the network, so leave it out.
 The other tests need no model, no audio and no network. The taxonomy tests use

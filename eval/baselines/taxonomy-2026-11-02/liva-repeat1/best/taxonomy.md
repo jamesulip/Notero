@@ -6,7 +6,7 @@ Optional report on top of the headline WER (`eval/taxonomy.py`, schema `notero-t
 
 ## Inputs
 
-- corpus: `liva-en-tl-overlapping-51b5d0b`, manifest SHA-256 `9c088855bbb9b42b…`
+- corpus: `liva-en-tl-overlapping-51b5d0b`, manifest SHA-256 `9c088855bbb9b42b…`; alignment tie-break `default`
 - items scored: 4; missing a hypothesis or reference: 0
 - reference formats: {'json': 4}; hypothesis formats: {'json': 4}
 - reference items with word-level language tags: 0 (0 tokens); annotators: none recorded
@@ -22,7 +22,7 @@ Optional report on top of the headline WER (`eval/taxonomy.py`, schema `notero-t
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `tl_to_en_substitution` | 67 | 67 | 1.8% | 0 | 67 | 0 |
 | `en_to_tl_substitution` | 25 | 25 | 0.7% | 0 | 25 | 0 |
-| `boundary_error` | 163 | 163 | 4.5% | 0 | 163 | 0 |
+| `boundary_error` | 160 | 160 | 4.4% | 0 | 160 | 0 |
 | `mixed_word_error` | 12 | 17 | 0.5% | 0 | 17 | 0 |
 | `morphology_error` | 39 | 39 | 1.1% | 0 | 39 | 0 |
 | `proper_noun_error` | 34 | 34 | 0.9% | 0 | 34 | 0 |
@@ -30,7 +30,7 @@ Optional report on top of the headline WER (`eval/taxonomy.py`, schema `notero-t
 | `deleted_speech` | 220 | 1385 | 38.1% | 0 | 0 | 1385 |
 | `enclitic_particle` | 170 | 170 | 4.7% | 0 | 170 | 0 |
 | `spelling_variant` | 22 | 38 | 1.0% | 0 | 38 | 0 |
-| `other_substitution` | 1231 | 1231 | 33.8% | 0 | 1231 | 0 |
+| `other_substitution` | 1234 | 1234 | 33.9% | 0 | 1234 | 0 |
 | `other_deletion` | 298 | 298 | 8.2% | 0 | 0 | 298 |
 | `other_insertion` | 55 | 55 | 1.5% | 0 | 0 | 55 |
 
@@ -45,8 +45,8 @@ Definitions: `tl_to_en_substitution` a Tagalog reference word replaced by an Eng
 | `boundary_error` | `anticipation` | 13 | 13 | 0 | 13 | 0 |
 | `boundary_error` | `carry_over` | 23 | 23 | 0 | 23 | 0 |
 | `boundary_error` | `deleted` | 21 | 21 | 0 | 21 | 0 |
-| `boundary_error` | `same_language` | 44 | 44 | 0 | 44 | 0 |
-| `boundary_error` | `unresolved` | 62 | 62 | 0 | 62 | 0 |
+| `boundary_error` | `same_language` | 43 | 43 | 0 | 43 | 0 |
+| `boundary_error` | `unresolved` | 60 | 60 | 0 | 60 | 0 |
 | `mixed_word_error` | `affix_changed` | 4 | 4 | 0 | 4 | 0 |
 | `mixed_word_error` | `affix_dropped` | 1 | 1 | 0 | 1 | 0 |
 | `mixed_word_error` | `both_wrong` | 5 | 10 | 0 | 10 | 0 |
@@ -71,7 +71,7 @@ Definitions: `tl_to_en_substitution` a Tagalog reference word replaced by an Eng
 | `spelling_variant` | `spacing` | 13 | 29 | 0 | 29 | 0 |
 | `spelling_variant` | `variant-table` | 9 | 9 | 0 | 9 | 0 |
 | `other_substitution` | `near_miss` | 191 | 191 | 0 | 191 | 0 |
-| `other_substitution` | `unrelated` | 1040 | 1040 | 0 | 1040 | 0 |
+| `other_substitution` | `unrelated` | 1043 | 1043 | 0 | 1043 | 0 |
 | `other_deletion` | `isolated` | 298 | 298 | 0 | 0 | 298 |
 | `other_insertion` | `isolated` | 55 | 55 | 0 | 0 | 55 |
 
@@ -83,8 +83,8 @@ Definitions: `tl_to_en_substitution` a Tagalog reference word replaced by an Eng
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | `tl_to_en_substitution` | `short_reference_word` | 55 | 55 | 0 | 55 | 0 |
 | `en_to_tl_substitution` | `short_reference_word` | 19 | 19 | 0 | 19 | 0 |
-| `boundary_error` | `at_boundary` | 163 | 163 | 0 | 163 | 0 |
-| `boundary_error` | `short_reference_word` | 114 | 114 | 0 | 114 | 0 |
+| `boundary_error` | `at_boundary` | 160 | 160 | 0 | 160 | 0 |
+| `boundary_error` | `short_reference_word` | 111 | 111 | 0 | 111 | 0 |
 | `morphology_error` | `at_boundary` | 2 | 2 | 0 | 2 | 0 |
 | `morphology_error` | `root_unlisted` | 18 | 18 | 0 | 18 | 0 |
 | `hallucination` | `inside_reference_speech` | 4 | 13 | 0 | 0 | 13 |
@@ -92,8 +92,8 @@ Definitions: `tl_to_en_substitution` a Tagalog reference word replaced by an Eng
 | `deleted_speech` | `at_boundary` | 47 | 348 | 0 | 0 | 348 |
 | `enclitic_particle` | `at_boundary` | 11 | 11 | 0 | 11 | 0 |
 | `spelling_variant` | `at_boundary` | 3 | 8 | 0 | 8 | 0 |
-| `other_substitution` | `language_unresolved` | 900 | 900 | 0 | 900 | 0 |
-| `other_substitution` | `short_reference_word` | 797 | 797 | 0 | 797 | 0 |
+| `other_substitution` | `language_unresolved` | 902 | 902 | 0 | 902 | 0 |
+| `other_substitution` | `short_reference_word` | 800 | 800 | 0 | 800 | 0 |
 
 ## Language labels
 
@@ -102,9 +102,9 @@ Definitions: `tl_to_en_substitution` a Tagalog reference word replaced by an Eng
 | basis | tl | en | mix | name | other | ambiguous | unknown | total |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | verified | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| heuristic | 2964 | 642 | 50 | 95 | 299 | 188 | 1299 | 5537 |
+| heuristic | 2964 | 640 | 50 | 95 | 299 | 188 | 1301 | 5537 |
 
-Heuristic tokens that are `unknown` or `ambiguous`: 1487 of 5537 (26.9%). Heuristic tokens labelled `tl` or `en`: 3606 (65.1%).
+Heuristic tokens that are `unknown` or `ambiguous`: 1489 of 5537 (26.9%). Heuristic tokens labelled `tl` or `en`: 3604 (65.1%).
 
 **Hypothesis tokens** (a hypothesis word is never verified)
 
@@ -126,7 +126,7 @@ Heuristic reference labels by rule:
 | tl | `tagalog-clitic-y` | 5 |
 | en | `lexicon-en` | 575 |
 | en | `en-inflection` | 48 |
-| en | `english-contraction` | 14 |
+| en | `english-contraction` | 12 |
 | en | `context` | 5 |
 | mix | `affix+english-stem` | 50 |
 | name | `capitalised-mid-sentence` | 94 |
@@ -138,19 +138,19 @@ Heuristic reference labels by rule:
 | ambiguous | `homograph-list` | 188 |
 | unknown | `no-match` | 1129 |
 | unknown | `affix+unlisted-stem` | 150 |
-| unknown | `apostrophe-no-match` | 20 |
+| unknown | `apostrophe-no-match` | 22 |
 
 ## Substitutions by language (reference row, hypothesis column)
 
 | reference basis | reference label | tl | en | mix | name | other | ambiguous | unknown |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | heuristic | tl | 422 | 91 | 5 | 1 | 28 | 22 | 245 |
-| heuristic | en | 48 | 44 | 0 | 0 | 10 | 7 | 71 |
+| heuristic | en | 48 | 44 | 0 | 0 | 10 | 7 | 70 |
 | heuristic | mix | 4 | 5 | 1 | 0 | 0 | 0 | 4 |
 | heuristic | name | 8 | 3 | 0 | 0 | 2 | 0 | 17 |
 | heuristic | other | 42 | 12 | 1 | 0 | 10 | 3 | 26 |
 | heuristic | ambiguous | 17 | 9 | 0 | 0 | 2 | 1 | 13 |
-| heuristic | unknown | 202 | 52 | 4 | 0 | 21 | 13 | 233 |
+| heuristic | unknown | 202 | 52 | 4 | 0 | 21 | 13 | 234 |
 
 The hypothesis column is always a heuristic label. This matrix covers every substitution; the `tl_to_en_substitution` / `en_to_tl_substitution` categories hold only those no earlier rule claimed.
 
@@ -159,24 +159,24 @@ The hypothesis column is always a heuristic label. This matrix covers every subs
 | basis | label | words | substitutions | deletions | error rate (S+D)/words |
 | --- | --- | ---: | ---: | ---: | ---: |
 | heuristic | tl | 2964 | 814 | 878 | 57.1% |
-| heuristic | en | 642 | 180 | 219 | 62.1% |
+| heuristic | en | 640 | 179 | 218 | 62.0% |
 | heuristic | mix | 50 | 14 | 11 | 50.0% |
 | heuristic | name | 95 | 30 | 30 | 63.2% |
 | heuristic | other | 299 | 94 | 117 | 70.6% |
 | heuristic | ambiguous | 188 | 42 | 73 | 61.2% |
-| heuristic | unknown | 1299 | 525 | 431 | 73.6% |
+| heuristic | unknown | 1301 | 526 | 432 | 73.6% |
 
 Inserted words by (heuristic) language: ambiguous 3, en 106, mix 1, other 3, tl 42, unknown 24.
 
 ## Code-switch points
 
-Switch points (adjacent clearly-Tagalog and clearly-English words in one utterance): verified 0, heuristic 276.
+Switch points (adjacent clearly-Tagalog and clearly-English words in one utterance): verified 0, heuristic 274.
 
 | word position | words | errors (S+D) | rate |
 | --- | ---: | ---: | ---: |
-| at a heuristic switch point | 498 | 285 | 57.2% |
-| elsewhere, labelled `tl` or `en` (heuristic) | 3108 | 1806 | 58.1% |
-| elsewhere, any label | 5039 | 3173 | 63.0% |
+| at a heuristic switch point | 495 | 282 | 57.0% |
+| elsewhere, labelled `tl` or `en` (heuristic) | 3109 | 1807 | 58.1% |
+| elsewhere, any label | 5042 | 3176 | 63.0% |
 
 A switch point needs two words that are clearly Tagalog and English, so the fair comparison is with other words that carry such a label (the first rows). "Any label" includes `unknown`, `ambiguous`, `other` and `name` words, which are wrong more often.
 
@@ -187,7 +187,7 @@ A switch point needs two words that are clearly Tagalog and English, so the fair
 ## Caveats
 
 - No reference token carries a word-level language tag, so every language label in this report is a heuristic guess from small hand-written word lists. Read the heuristic counts as indications, not as measurements of the speech.
-- The category counts depend on which of several equal-cost alignments is chosen (this tool uses the same tie-break as eval/langscore.py). The total never changes, but a category of a few dozen words can move by tens of words under another tie-break: do not read a difference of less than about 40 words in one category.
+- The category counts depend on which of several equal-cost alignments is chosen. This report used the `default` tie-break (the one of eval/langscore.py, which the older tools use). The total never changes, but a category can move by tens of words under another tie-break (`--tie-break`; 67 words at most in the Liva check): do not read a difference of less than about 70 words in one category.
 - Hypothesis words are never tagged by a person, so tl_to_en / en_to_tl substitutions rest on a heuristic label for the hypothesis word even when the reference word is verified.
 - The word lists are small and were written by an AI model (Claude) without a native speaker's review: `unknown` is the largest honest answer for words they do not cover, and the ambiguous/unknown shares are reported rather than hidden.
 - Categories partition the word errors by a first-match rule list; a word that fits two rules is counted under the earlier one. Which rule fired is a design choice, not a linguistic finding.

@@ -701,7 +701,7 @@ def test_a_mistyped_tag_is_counted_and_reported_not_silently_turned_into_words(t
     assert run["meta"]["tagged_words_with_an_unrecognised_tag"] == 1
     rep = tx.build_report(run, label="x", lex=LEX, cfg=CFG, manifest_sha=None, corpus_id=None, include_text=0,
                           hyp_source="h")
-    assert any("not a tag" in c for c in rep["caveats"])
+    assert any("not part of a tag" in c for c in rep["caveats"])
 
 
 def test_adjudication_bookkeeping_counts_every_line_that_matched_nothing(tmp_path):
@@ -798,3 +798,68 @@ def test_the_fixture_does_not_depend_on_the_tie_break():
         assert {k: v["error_words"] for k, v in other["corpus"]["categories"].items()} == \
                {k: v["error_words"] for k, v in base.items()}
         assert other["tool"]["tieBreak"] == tie_break
+
+
+@pytest.mark.parametrize("line", ["natin /tl na", "natin/tl2 na", "natin/ tl na", "natin/tl_ na", "natin/xx na"])
+def test_every_kind_of_broken_tag_is_counted(line, tmp_path):
+    p = tmp_path / "r.tagged.txt"
+    p.write_text(line + "\n")
+    assert tio.load_reference(p).odd_tags == 1
+
+
+def test_an_adjudication_line_cannot_be_given_twice_and_a_conflict_is_reported(tmp_path):
+    twice = tmp_path / "a.tsv"
+    twice.write_text("plain-heuristic\tr8\tspelling_variant\nplain-heuristic\tr8\tother_substitution\n")
+    with pytest.raises(SystemExit):
+        tx.load_adjudications(twice)
+    conflict = tmp_path / "b.tsv"
+    conflict.write_text("plain-heuristic\tr8\tspelling_variant\nplain-heuristic\th8\tother_substitution\n")
+    rep = run_fixture(adjudications=conflict)
+    assert rep["inputs"]["adjudication_conflicts"] == 1
+    assert rep["corpus"]["categories"]["spelling_variant"]["basis"]["verified"]["error_words"] == 1   # the first line won
+    assert any("decide differently" in c for c in rep["caveats"])
+
+
+def test_an_error_in_the_analysis_is_not_filed_as_a_bad_item(monkeypatch):
+    def broken(*args, **kwargs):
+        raise IndexError("a bug, not a bad file")
+    monkeypatch.setattr(tx, "classify", broken)
+    with pytest.raises(IndexError):
+        run_fixture()
+
+
+def test_a_hypothesis_json_that_is_a_list_is_reported_not_a_crash(tmp_path):
+    (tmp_path / "morphology.json").write_text("[1, 2]")
+    run = tx.run_items([{"id": "morphology", "ref": "refs/morphology.txt"}], FIXTURE, tmp_path, LEX, CFG, {})
+    assert list(run["meta"]["items_failed"]) == ["morphology"] and run["meta"]["items_scored"] == 0
+
+
+def test_the_report_names_the_tie_break_it_used(tmp_path):
+    out = tmp_path / "o"
+    assert tx.main(["report", "--manifest", str(FIXTURE / "manifest.json"), "--hyp-dir", str(FIXTURE / "hyp"),
+                    "--label", "f", "--out-dir", str(out), "--tie-break", "ins-del-sub"]) == 0
+    data = json.loads((out / "taxonomy.json").read_text())
+    assert data["tool"]["tieBreak"] == "ins-del-sub"
+    md = (out / "taxonomy.md").read_text()
+    assert "alignment tie-break `ins-del-sub`" in md and "used the `ins-del-sub` tie-break (not the default)" in md
+    default = tx.render_markdown(run_fixture())
+    assert "used the `default` tie-break (the one of eval/langscore.py" in default
+
+
+@pytest.mark.parametrize("word,lang", [("don't", "en"), ("can't", "en"), ("won't", "en"), ("you're", "en"), ("i'm", "en"),
+                                       ("it's", "en"), ("p're", "unknown"), ("kailan't", "unknown"), ("ba't", "unknown"),
+                                       ("hangga't", "unknown")])
+def test_english_contractions_need_an_english_head(word, lang):
+    assert tlx.classify_word(word, LEX).lang == lang
+
+
+def test_score_py_guard_reads_the_dict_manifest_form_too(tmp_path, capsys):
+    manifest = tmp_path / "m.json"
+    manifest.write_text(json.dumps({"schemaVersion": 1, "items": [{"id": "a", "ref": "refs/a.json"}]}))
+    old = sys.argv
+    sys.argv = ["score.py", str(tmp_path), "--manifest", str(manifest), "--taxonomy-out", str(tmp_path / "t")]
+    try:
+        assert pooled.main() == 2
+    finally:
+        sys.argv = old
+    assert "tagged-text or JSON references" in capsys.readouterr().err

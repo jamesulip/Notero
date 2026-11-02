@@ -6,7 +6,7 @@ Optional report on top of the headline WER (`eval/taxonomy.py`, schema `notero-t
 
 ## Inputs
 
-- corpus: `synthetic-taxonomy-fixture-v1`, manifest SHA-256 `b548de9408f2db97…`
+- corpus: `synthetic-taxonomy-fixture-v1`, manifest SHA-256 `b548de9408f2db97…`; alignment tie-break `default`
 - items scored: 5; missing a hypothesis or reference: 0
 - reference formats: {'json': 1, 'tagged': 2, 'txt': 2}; hypothesis formats: {'json': 1, 'txt': 4}
 - reference items with word-level language tags: 3 (112 tokens); annotators: ['Claude, AI model (synthetic text)', 'Claude, AI model (synthetic text; tags written to test the tool, not as linguistic ground truth)']
@@ -160,7 +160,7 @@ Items without it: 4 × reference has no utterance times.
 ## Caveats
 
 - 112 of 169 reference tokens carry a word-level tag supplied by the reference annotation (the tool does not check the annotator). The remaining tokens, and every hypothesis token, are heuristic. The two are kept apart in every table.
-- The category counts depend on which of several equal-cost alignments is chosen (this tool uses the same tie-break as eval/langscore.py). The total never changes, but a category of a few dozen words can move by tens of words under another tie-break: do not read a difference of less than about 40 words in one category.
+- The category counts depend on which of several equal-cost alignments is chosen. This report used the `default` tie-break (the one of eval/langscore.py, which the older tools use). The total never changes, but a category can move by tens of words under another tie-break (`--tie-break`; 67 words at most in the Liva check): do not read a difference of less than about 70 words in one category.
 - Hypothesis words are never tagged by a person, so tl_to_en / en_to_tl substitutions rest on a heuristic label for the hypothesis word even when the reference word is verified.
 - The word lists are small and were written by an AI model (Claude) without a native speaker's review: `unknown` is the largest honest answer for words they do not cover, and the ambiguous/unknown shares are reported rather than hidden.
 - Categories partition the word errors by a first-match rule list; a word that fits two rules is counted under the earlier one. Which rule fired is a design choice, not a linguistic finding.
