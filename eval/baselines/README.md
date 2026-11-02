@@ -11,6 +11,7 @@ numbers), and nothing here is a claim about real Taglish: the fixture is synthet
 | `p6-lead-ab-main-vs-p6-branch.json` | The lead's pre-P6 `main` (addf5f8) against the P6 branch, offline, 6 runs each: main collapsed 4 of 6 runs, the P6 branch gave 24.2% six times | 3 KB |
 | `aa-calibration.json` | The measured false-positive rate of the decision rule on A/A comparisons: resampling from the P6 runs, and real runs where a stream exists | ~10 KB |
 | `import_p6.py` | One-off: how the two `p6-*` files were produced from `/tmp/notero-team/baseline` and `/tmp/notero-team/lead-ab` | |
+| `live-latency-2026-11-02/` | The live-latency experiment (FINDINGS 38): the plans written before each session, the numbers of every run (per-word commit latencies, counters, invariant checks; no audio, no words), the analysis, the report of each session and the decision. Real public audio (Liva AI, AMI, FLEURS), real-time replays under the bench lock | ~1.5 MB |
 | `sessions/` | `report.md` and `report.json` of the regression sessions this cycle ran (the validation of `eval/regress.py`) | |
 
 ## Provenance of `p6-f022c6e-synthetic-taglish.json`
@@ -60,3 +61,17 @@ resamples two arms of 8 runs from the P6 runs of one binary, applies the whole d
 and repeats; `calibrate_aa.py stream` does the same on a real stream of runs
 (`regress.py stream --bin X --runs N`). The seed is fixed, so the committed numbers regenerate
 exactly. `docs/BENCHMARKS.md` ("How often this harness cries wolf") explains how to read it.
+
+## Provenance of `live-latency-2026-11-02/`
+
+* **Code measured:** `transcribe` built from the commit in each plan (`commit`, `binary.sha256`).
+  Release build, Balanced tier, `--live --realtime --live-trace --no-diarize`, language `tl`
+  (`en` for the AMI clips). One binary for both sessions.
+* **Machine:** Mac mini `Mac14,12`, Apple M2 Pro, 16 GB, macOS 26.6.2. Another agent used this
+  Mac during the sessions. Every replay took the bench lock and ran with the network denied. The
+  machine load is sampled during each replay and reported in each session report.
+* **Audio:** excerpts of public corpora (CC BY 4.0), listed without audio or text in
+  `eval/fixtures/live-latency-clips.json` with their SHA-256. `python3 -I eval/live_latency.py prepare`
+  rebuilds them from `/tmp/notero-data`.
+* **Order:** seeded (`SEED = 20261102`); the order of every run is in the plan.
+* **Not here:** the run reports with the words (they stay in the work folder, `/tmp/notero-p2`).
