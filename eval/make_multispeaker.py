@@ -246,6 +246,27 @@ HOLDOUT = [
 ]
 
 
+# The SPEAKER-COUNT set: two to six voices with the same turn mix and some overlap, for
+# reading accuracy against the number of people (eval/diarization_eval.py). Each
+# fixture adds one voice to the one before it, so a change between two neighbours is
+# the extra voice and not a new cast. The voices are the tuning set's separable ones;
+# their distances are measured with `diarbench --probe-ref` and reported, not assumed.
+SPEAKERS = [
+    Fixture(
+        f"n{len(voices)}", voices, 60 + 30 * len(voices), seed=300 + len(voices),
+        weights=(0.15, 0.35, 0.25, 0.25), overlap_chance=0.3, overlap_s=(0.3, 1.2),
+        gains=(1.0, 0.85, 0.95, 0.75, 0.9, 0.8),
+        note=f"{len(voices)} speakers; a short turn sometimes starts up to 1.2 s early.",
+    )
+    for voices in [
+        ("Daniel", "Moira"),
+        ("Daniel", "Moira", "Albert"),
+        ("Daniel", "Moira", "Albert", "Junior"),
+        ("Daniel", "Moira", "Albert", "Junior", "Rishi"),
+        ("Daniel", "Moira", "Albert", "Junior", "Rishi", "Tessa"),
+    ]
+]
+
 # --- audio helpers --------------------------------------------------------------
 
 def render(voice: str, text: str, workdir: Path) -> list[float]:
@@ -415,8 +436,8 @@ def main(argv: list[str] | None = None) -> int:
                         default=Path(__file__).resolve().parent / "audio" / "multispeaker")
     parser.add_argument("--only", action="append", help="fixture name; repeatable")
     parser.add_argument("--list", action="store_true", help="list fixtures and exit")
-    parser.add_argument("--set", choices=["tuning", "holdout"], default="tuning",
-                        help="which fixture set to build (default: the tuning set)")
+    parser.add_argument("--set", choices=["tuning", "holdout", "speakers"], default="tuning",
+                        help="which fixture set to build (default: the tuning set; `speakers` is two to six voices)")
     parser.add_argument("--seed", type=int, default=91,
                         help="seed of a --pair fixture (default 91, the tuning pairs')")
     parser.add_argument("--pair", nargs=2, metavar="VOICE",
@@ -426,7 +447,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="write survey.wav/.rttm with these voices instead of the fixtures")
     args = parser.parse_args(argv)
 
-    pool = HOLDOUT if args.set == "holdout" else FIXTURES
+    pool = {"holdout": HOLDOUT, "speakers": SPEAKERS}.get(args.set, FIXTURES)
     if args.list:
         for f in pool:
             print(f"{f.name:14} {len(f.voices)} voices {f.target_s:4.0f}s  {f.note}")
