@@ -22,9 +22,10 @@ struct DetailView: View {
                 } else if recording.kind == .note {
                     NoteEditorView(recording: recording)
                 } else {
-                    // Keyed by recording so per-recording view state (which
-                    // revision is open, whether the inspector is shown) does
-                    // not carry over when the selection changes.
+                    // Keyed by recording so per-recording view state (whether
+                    // the inspector is shown) does not carry over when the
+                    // selection changes. The open revision is on AppState,
+                    // tagged with its recording and cleared with the route.
                     RecordingDetailView(recording: recording)
                         .id(recording.id)
                 }
@@ -288,7 +289,12 @@ struct RecordingDetailView: View {
     /// the whole transcript a second time.
     @State private var showInspector: Bool?
     /// An earlier transcript revision open for reading. Nil is the latest.
-    @State private var revision: Int?
+    /// It lives on the app state, not here, so Export and Copy write the
+    /// revision on screen.
+    private var revision: Binding<Int?> {
+        Binding(get: { state.openRevision(for: recording) },
+                set: { state.setOpenRevision($0, for: recording) })
+    }
 
     enum InspectorTab: String, CaseIterable, Identifiable {
         case notes, bookmarks, speakers
@@ -305,13 +311,13 @@ struct RecordingDetailView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            RecordingInfoBar(recording: recording, revision: $revision)
+            RecordingInfoBar(recording: recording, revision: revision)
             Divider()
 
             // maxHeight as well as maxWidth. Without it the pane sizes to its
             // content and nothing else is left to hold the column open -- so
             // the whole header sinks to the middle of the window.
-            TranscriptView(recording: recording, revision: revision)
+            TranscriptView(recording: recording, revision: revision.wrappedValue)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if recording.hasAudio {

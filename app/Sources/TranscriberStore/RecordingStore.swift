@@ -427,8 +427,22 @@ public enum RecordingStore {
     // MARK: - Export payload
 
     /// Flattens the graph into the value type the exporters consume.
-    public static func document(for recording: StoredRecording) -> MeetingDocument {
-        let transcript = recording.transcript
+    /// The transcript a revision number names, else the latest.
+    public static func transcript(of recording: StoredRecording,
+                                  revision: Int?) -> StoredTranscript? {
+        if let revision,
+           let older = (recording.transcripts ?? []).first(where: { $0.revision == revision }) {
+            return older
+        }
+        return recording.transcript
+    }
+
+    /// `revision` selects an earlier transcript revision, so an export made
+    /// while an older revision is open holds that revision and not the
+    /// latest. A revision that does not exist falls back to the latest.
+    public static func document(for recording: StoredRecording,
+                                revision: Int? = nil) -> MeetingDocument {
+        let transcript = self.transcript(of: recording, revision: revision)
         let audio = recording.audioFileName
         let segments = (transcript?.orderedSegments ?? []).map { row in
             Segment(
