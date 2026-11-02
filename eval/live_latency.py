@@ -1,0 +1,1094 @@
+"""Controlled experiment on the live path: can text be committed sooner without losing any?
+
+The question (FINDINGS 26, 27, 38): the wait for LocalAgreement, not the decode, is most of a
+word's commit latency. Head-tolerant agreement cut it by 35-43% on two synthetic clips and was
+left off for want of a second session on real audio. This runs that session, and the other
+levers of the live path one at a time, against the production configuration.
+
+    prepare   cut the evaluation clips from real public corpora (Liva AI, AMI, FLEURS)
+    plan      fix arms, clips, rounds, the seeded order, the statistics and the gate -- BEFORE any run
+    run       replay every (round, clip, arm) in real time, offline, under the bench lock; resumable
+    score     one numbers-only record per run (no audio, no words)
+    analyze   paired effects with intervals, the A/A spread, every gate; one session
+    decide    apply the plan's rule to the sessions: change the default, or keep it
+
+One variable at a time. Every arm is the production configuration plus ONE flag set of
+`transcribe --live` (`ARMS` below). The control runs TWICE in every block (C0 and C1): C1 is
+the A/A replicate, so every block carries its own measure of the noise, and the variants are
+compared with the mean of the two controls. A block is one clip in one round; its arms run in a
+seeded random order, back to back, so a slow stretch of the machine lands on all of them.
+
+Data rules (docs/BENCHMARKS.md, eval/REAL-TAGLISH-PROTOCOL.md). The sources are public corpora
+with a licence (CC BY 4.0) already on this Mac under /tmp/notero-data: Liva AI en-tl, AMI,
+FLEURS. They are read, never uploaded, never put in git. Only numbers leave the work folder.
+Nothing here opens a recording of the app, and no transcription service is used. Every
+measured run is serialized by the bench lock and has its network denied. Standard library only;
+run it with `python3 -I`.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+import platform
+import random
+import shutil
+import signal
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+EVAL_DIR = Path(__file__).resolve().parent
+REPO = EVAL_DIR.parent
+sys.path.insert(0, str(EVAL_DIR))
+
+import live_latency_lib as ll  # noqa: E402
+from score import normalize  # noqa: E402
+
+SCHEMA = 1
+SEED = 20261102
+LOCK = Path("/tmp/notero-team/bench-lock.sh")
+WRAP = [str(LOCK), "sandbox-exec", "-p", "(version 1)(allow default)(deny network*)"]
+SAMPLE_RATE = 16_000
+DEFAULT_WORK = Path("/tmp/notero-p2")
+CLIP_FIXTURE = EVAL_DIR / "fixtures" / "live-latency-clips.json"
+
+#: One variable at a time. Every arm is `transcribe --live --realtime --live-trace` with
+#: the production configuration plus these flags. C0 and C1 are the same arm twice.
+ARMS: dict[str, dict] = {
+    "C0": {"flags": [], "variable": "control", "what": "production: context 15 s, hop 1.5 s, pre-roll 1.5 s, boundary 700 ms, LocalAgreement-2"},
+    "C1": {"flags": [], "variable": "control", "what": "the control again: the A/A replicate"},
+    "HT": {"flags": ["--head-tolerance", "3", "--head-min-run", "3"], "variable": "agreement",
+           "what": "head-tolerant agreement: tolerance 3 words, run of 3 (FINDINGS 27)"},
+    "VAD": {"flags": ["--silence-boundary", "500"], "variable": "VAD finalization",
+            "what": "an utterance closes after 500 ms of silence instead of 700 ms"},
+    "PRE": {"flags": ["--pre-roll", "3000"], "variable": "context anchoring",
+            "what": "3 s of committed audio kept in front of the active region instead of 1.5 s"},
+    "HOP": {"flags": ["--hop", "1250"], "variable": "hop scheduling",
+            "what": "a decode every 1.25 s instead of 1.5 s"},
+    "ADA": {"flags": ["--adaptive-hop"], "variable": "hop scheduling",
+            "what": "the hop tracks the last decode (1.5x, between 1.0 and 1.5 s)"},
+    "CTX": {"flags": ["--context", "12000"], "variable": "forced commits",
+            "what": "the active region is capped at 12 s, so a stalled window is forced sooner"},
+}
+CONTROLS = ("C0", "C1")
+
+#: Fixed in the plan before the first run; `analyze` and `decide` read the plan's copy.
+DEFAULT_GATE = {
+    "latency": {
+        "metric": "pooled median of the wall commit latency of every committed word, all clips and rounds of a session",
+        "minRelativeReduction": 0.20,
+        "support": "one-sided randomization test of that statistic, p < 0.05: in a block any of the three runs (C0, C1, the variant) is as likely to be the variant under 'no effect'",
+        "supportAlpha": 0.05,
+        "randomizationResamples": 10000,
+        "interval": "t-interval on the per-block log ratio of median latencies (blocks are the unit); reported, and its one-sided lower bound must also be above 0",
+    },
+    "wer": {
+        "clips": "clips with a word reference",
+        "supportedRegressionAlpha": 0.05,
+        "test": "paired sign-flip on the block differences, one-sided, against the mean of the two controls",
+        "maxMeanIncreasePt": 0.5,
+        "maxClipMeanIncreasePt": 3.0,
+    },
+    "missingSpeech": {
+        "alpha": 0.05,
+        "maxDeletionRateIncreasePt": 0.5,
+        "maxMissingShareIncreasePt": 0.5,
+    },
+    "hallucinations": {"rule": "the variant's total of fillers, loops and invented spans must not exceed the mean of the two controls' totals"},
+    "immutability": {"maxViolations": 0, "scope": "every run of every arm"},
+    "droppedHops": {"maxRelativeIncrease": 0.20, "orAbsolutePp": 1.0},
+    "failures": {"maxFailedRuns": 0, "maxFailedDecodesIncrease": 0},
+    "aa": {"maxAbsEffect": 0.10, "twoSidedRandomizationPMustBeAtLeast": 0.05},
+    "reproducibility": "every rule above holds in session 1 AND in session 2, which runs later, in its own invocation, on the clips of session 1 and the held-out clips",
+    "promotion": {"minSession1Reduction": 0.15, "requiresImmutability": True},
+    "default": "unchanged unless every gate passes; the feature flag stays off otherwise",
+}
+
+
+# --------------------------------------------------------------------------
+# Small helpers
+# --------------------------------------------------------------------------
+
+def sha256_of(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def run_text(cmd: list[str], timeout: float = 30) -> str | None:
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def git(*args: str) -> str:
+    return run_text(["git", "-C", str(REPO), *args]) or ""
+
+
+def hardware() -> dict:
+    def sysctl(key: str) -> str:
+        return run_text(["sysctl", "-n", key]) or ""
+    return {"model": sysctl("hw.model"), "chip": sysctl("machdep.cpu.brand_string"),
+            "cores": int(sysctl("hw.ncpu") or 0),
+            "memoryGB": round(int(sysctl("hw.memsize") or 0) / 2**30), "os": platform.mac_ver()[0]}
+
+
+def pcm_from(path: Path, *, start_s: float | None = None, duration_s: float | None = None) -> bytes:
+    """16 kHz mono s16le samples of any audio file, through ffmpeg (a trusted binary reading
+    untrusted data; the samples are the only thing taken from the file)."""
+    cmd = ["ffmpeg", "-v", "error"]
+    if start_s is not None:
+        cmd += ["-ss", f"{start_s:.3f}"]
+    cmd += ["-i", str(path)]
+    if duration_s is not None:
+        cmd += ["-t", f"{duration_s:.3f}"]
+    cmd += ["-ac", "1", "-ar", str(SAMPLE_RATE), "-f", "s16le", "-"]
+    out = subprocess.run(cmd, capture_output=True)
+    if out.returncode != 0:
+        raise SystemExit(f"ffmpeg failed on {path.name}: {out.stderr.decode(errors='replace')[:200]}")
+    return out.stdout
+
+
+def write_wav(path: Path, pcm: bytes) -> None:
+    import wave
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SAMPLE_RATE)
+        w.writeframes(pcm)
+
+
+def rng_for(*parts) -> random.Random:
+    return random.Random("-".join(str(p) for p in (SEED, *parts)))
+
+
+# --------------------------------------------------------------------------
+# prepare: the clips
+# --------------------------------------------------------------------------
+
+def parse_rttm(path: Path) -> list[tuple[int, int]]:
+    spans = []
+    for line in path.read_text().splitlines():
+        fields = line.split()
+        if len(fields) >= 5 and fields[0] == "SPEAKER":
+            start, duration = float(fields[3]), float(fields[4])
+            spans.append((round(start * 1000), round((start + duration) * 1000)))
+    return ll.merge_spans(spans)
+
+
+def densest_window(weights: list[tuple[int, int]], total_ms: int, window_ms: int, *,
+                   earliest_ms: int, step_ms: int = 30_000) -> int:
+    """Start (a multiple of `step_ms`, not before `earliest_ms`) of the window holding the
+    most reference speech. A rule on the reference alone, written before any decode, so the
+    choice of excerpt cannot depend on how the model did."""
+    best, best_start = -1, earliest_ms
+    start = earliest_ms
+    while start + window_ms <= total_ms:
+        covered = sum(max(0, min(e, start + window_ms) - max(s, start)) for s, e in weights)
+        if covered > best:
+            best, best_start = covered, start
+        start += step_ms
+    return best_start
+
+
+def clip_entry(cid: str, corpus: str, kind: str, language: str, wav: Path, work: Path, *,
+               ref_text: str | None, spans: list[tuple[int, int]], source: dict) -> dict:
+    duration_ms = (wav.stat().st_size - 44) * 1000 // (SAMPLE_RATE * 2)
+    ref_path = None
+    if ref_text is not None:
+        ref_path = work / "refs" / f"{cid}.txt"
+        ref_path.parent.mkdir(parents=True, exist_ok=True)
+        ref_path.write_text(ref_text)
+    span_path = work / "refs" / f"{cid}.spans.json"
+    span_path.parent.mkdir(parents=True, exist_ok=True)
+    span_path.write_text(json.dumps(spans))
+    return {"id": cid, "corpus": corpus, "kind": kind, "language": language, "wav": str(wav),
+            "wavSha256": sha256_of(wav), "durationMs": duration_ms,
+            "refText": str(ref_path) if ref_path else None,
+            "refWords": len(normalize(ref_text)) if ref_text is not None else None,
+            "refSpans": str(span_path), "refSpanCount": len(spans),
+            "refSpansSha256": hashlib.sha256(json.dumps(spans).encode()).hexdigest(),
+            "source": source}
+
+
+def cmd_prepare(args) -> int:
+    work: Path = args.work
+    clips_dir = work / "clips"
+    entries: list[dict] = []
+
+    # FLEURS read Tagalog: the long-form files that eval/fleurs_eval.py constructed (consecutive
+    # sentences, seeded 0.3-1.5 s gaps of digital silence), cut at a part boundary.
+    fleurs_manifest = json.loads((args.fleurs / "manifest.json").read_text())
+    parts_by_lf: dict[str, list[dict]] = {}
+    for part in fleurs_manifest["sets"]["parts"]:
+        parts_by_lf.setdefault(part["longform"], []).append(part)
+    for lf, cid in (("lf1", "fleurs-lf1"), ("lf2", "fleurs-lf2")):
+        parts = sorted(parts_by_lf[lf], key=lambda p: p["start_s"])
+        kept = [p for p in parts if p["end_s"] <= args.fleurs_max_s] or parts[:1]
+        end_s = kept[-1]["end_s"]
+        wav = clips_dir / f"{cid}.wav"
+        write_wav(wav, pcm_from(Path(next(l for l in fleurs_manifest["sets"]["longform"] if l["id"] == lf)["wav"]),
+                                duration_s=end_s))
+        entries.append(clip_entry(
+            cid, "fleurs", "read Tagalog, constructed long-form", "tl", wav, work,
+            ref_text="\n".join(p["ref"] for p in kept),
+            spans=[(round(p["start_s"] * 1000), round(p["end_s"] * 1000)) for p in kept],
+            source={"dataset": "FLEURS fil_ph test", "licence": "CC BY 4.0", "sentences": [p["sent_id"] for p in kept],
+                    "cutAtS": round(end_s, 2)}))
+
+    # Liva AI en-tl: the densest window of reference speech, after the first minute.
+    liva_manifest = json.loads((args.liva / "manifest.json").read_text())
+    liva_items = sorted(liva_manifest["items"], key=lambda i: i["id"])
+    order = list(liva_items)
+    rng_for("liva-files").shuffle(order)
+    for label, item, window_s in (("liva-a", order[0], args.clip_s), ("liva-b", order[1], args.clip_s),
+                                  ("pilot-liva", order[2], args.pilot_s)):
+        ref = json.loads((args.liva / item["ref"]).read_text())
+        utterances = sorted(ref["utterances"], key=lambda u: u["startMs"])
+        wav_src = args.liva / item["audio"]
+        total_ms = int(float(run_text(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                                       "-of", "csv=p=0", str(wav_src)]) or 0) * 1000)
+        window_ms = window_s * 1000
+        weights = [(u["startMs"], u["endMs"]) for u in utterances]
+        start_ms = densest_window(weights, total_ms, window_ms, earliest_ms=60_000)
+        picked = [u for u in utterances if start_ms <= (u["startMs"] + u["endMs"]) // 2 < start_ms + window_ms]
+        wav = clips_dir / f"{label}.wav"
+        write_wav(wav, pcm_from(wav_src, start_s=start_ms / 1000, duration_s=window_s))
+        entries.append(clip_entry(
+            label, "liva", "conversational Taglish, 4-5 friends in a voice chat", "tl", wav, work,
+            ref_text="\n".join(u["text"] for u in picked),
+            spans=[(max(0, u["startMs"] - start_ms), min(window_ms, u["endMs"] - start_ms)) for u in picked],
+            source={"dataset": "Liva AI en-tl (code-switching-asr, rev 51b5d0b)", "licence": "CC BY 4.0",
+                    "file": item["id"], "startMs": start_ms, "windowMs": window_ms,
+                    "utterances": len(picked)}))
+
+    # AMI English meetings: two series chosen by seed, the densest window of speech after two minutes.
+    ami_manifest = json.loads((args.ami / "manifest.json").read_text())
+    by_series: dict[str, list[dict]] = {}
+    for item in ami_manifest["items"]:
+        by_series.setdefault(item["id"].removeprefix("ami-")[:-1], []).append(item)
+    series = sorted(by_series)
+    rng_for("ami-series").shuffle(series)
+    for label, name, window_s in (("ami-a", series[0], args.clip_s), ("ami-b", series[1], args.clip_s),
+                                  ("pilot-ami", series[2], args.pilot_s)):
+        pool = sorted(by_series[name], key=lambda i: i["id"])
+        rng_for("ami-meeting", name).shuffle(pool)
+        item = pool[0]
+        spans = parse_rttm(args.ami / item["ref"])
+        window_ms = window_s * 1000
+        start_ms = densest_window(spans, int(item["durationS"] * 1000), window_ms, earliest_ms=120_000)
+        wav = clips_dir / f"{label}.wav"
+        write_wav(wav, pcm_from(args.ami / item["audio"], start_s=start_ms / 1000, duration_s=window_s))
+        inside = [(max(0, s - start_ms), min(window_ms, e - start_ms)) for s, e in spans
+                  if e > start_ms and s < start_ms + window_ms]
+        entries.append(clip_entry(
+            label, "ami", "English meeting, headset mix (speech activity reference only)", "en", wav, work,
+            ref_text=None, spans=inside,
+            source={"dataset": "AMI Meeting Corpus, test set, Mix-Headset", "licence": "CC BY 4.0",
+                    "meeting": item["id"], "startMs": start_ms, "windowMs": window_ms}))
+
+    manifest = {"schema": SCHEMA, "seed": SEED, "created": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+                "clips": entries}
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "clips.json").write_text(json.dumps(manifest, indent=2))
+
+    # What goes into git: which excerpt of which public recording, its hash and size. No audio, no words.
+    fixture = {"schema": SCHEMA, "seed": SEED,
+               "note": "Descriptions of the clips cut from public corpora by eval/live_latency.py prepare. No audio and no transcript text; the sources are CC BY 4.0 and stay in the work folders outside the repository.",
+               "clips": [{k: c[k] for k in ("id", "corpus", "kind", "language", "durationMs", "wavSha256",
+                                            "refWords", "refSpanCount", "refSpansSha256", "source")}
+                         for c in entries]}
+    CLIP_FIXTURE.parent.mkdir(parents=True, exist_ok=True)
+    CLIP_FIXTURE.write_text(json.dumps(fixture, indent=2) + "\n")
+    for c in entries:
+        print(f"  {c['id']:11s} {c['durationMs'] / 1000:6.1f} s  ref words {c['refWords']}  speech spans {c['refSpanCount']}  {c['wavSha256'][:12]}")
+    print(f"wrote {work / 'clips.json'} and {CLIP_FIXTURE}")
+    return 0
+
+
+# --------------------------------------------------------------------------
+# plan
+# --------------------------------------------------------------------------
+
+def make_schedule(session: int, clips: list[str], arms: list[str], rounds: int) -> list[dict]:
+    """Rounds outermost; inside a round the clips in a seeded order; inside a block the arms in
+    a seeded order. The position of each arm in its block is recorded."""
+    order: list[dict] = []
+    for r in range(1, rounds + 1):
+        clip_order = list(clips)
+        rng_for("s", session, "clips", r).shuffle(clip_order)
+        for clip in clip_order:
+            arm_order = list(arms)
+            rng_for("s", session, "arms", r, clip).shuffle(arm_order)
+            for position, arm in enumerate(arm_order, start=1):
+                order.append({"round": r, "clip": clip, "arm": arm, "position": position})
+    return order
+
+
+def cmd_plan(args) -> int:
+    clips_manifest = json.loads((args.work / "clips.json").read_text())
+    by_id = {c["id"]: c for c in clips_manifest["clips"]}
+    clip_ids = args.clips.split(",")
+    arm_ids = args.arms.split(",")
+    for cid in clip_ids:
+        if cid not in by_id:
+            raise SystemExit(f"unknown clip {cid}")
+    for aid in arm_ids:
+        if aid not in ARMS:
+            raise SystemExit(f"unknown arm {aid}")
+    if not all(c in arm_ids for c in CONTROLS):
+        raise SystemExit("both controls (C0, C1) must be in every session")
+    binary = args.bin.resolve()
+    scratch_bin = args.work / "bin" / "transcribe"
+    scratch_bin.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(binary, scratch_bin)
+    out: Path = args.out
+    out.mkdir(parents=True, exist_ok=True)
+    plan = {
+        "schema": SCHEMA,
+        "session": args.session,
+        "name": args.name,
+        "created": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+        "commit": git("rev-parse", "HEAD"),
+        "dirty": bool(git("status", "--porcelain")),
+        "hardware": hardware(),
+        "binary": {"path": str(scratch_bin), "sha256": sha256_of(scratch_bin), "builtFrom": str(binary)},
+        "tier": "balanced",
+        "wrap": WRAP,
+        "base": ["--no-diarize", "--live", "--realtime", "--live-trace"],
+        "seed": SEED,
+        "rounds": args.rounds,
+        "arms": {a: {**ARMS[a]} for a in arm_ids},
+        "controls": list(CONTROLS),
+        "variants": [a for a in arm_ids if a not in CONTROLS],
+        "clips": [{k: by_id[c][k] for k in ("id", "corpus", "kind", "language", "wav", "wavSha256", "durationMs",
+                                           "refText", "refWords", "refSpans", "refSpansSha256", "source")}
+                  for c in clip_ids],
+        "order": make_schedule(args.session, clip_ids, arm_ids, args.rounds),
+        "gate": DEFAULT_GATE,
+        "statistics": {"seed": SEED, "randomizationResamples": DEFAULT_GATE["latency"]["randomizationResamples"],
+                       "unit": "the block (one clip in one round); words are never resampled",
+                       "controlForVariants": "the mean (or the pool, for latency) of C0 and C1 in the same block",
+                       "aa": "C0 against C1, the same statistics, two-sided",
+                       "whyNotABootstrap": "a bootstrap over 3 to 4 rounds per clip was simulated before the first run: its 95% intervals covered a true null 80% of the time. The randomization test has exact size; the t-interval covered 91-92%."},
+        "notes": args.note or [],
+    }
+    path = out / f"plan-session-{args.session}.json"
+    if path.exists() and not args.force:
+        raise SystemExit(f"{path} exists: a plan is written once, before any run (--force to replace)")
+    path.write_text(json.dumps(plan, indent=2))
+    plan["planSha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    print(f"wrote {path} ({len(plan['order'])} runs, sha256 {plan['planSha256'][:12]})")
+    seconds = sum(by_id[o["clip"]]["durationMs"] for o in plan["order"]) / 1000
+    print(f"audio to replay in real time: {seconds / 60:.0f} min over {len(plan['order'])} runs")
+    return 0
+
+
+# --------------------------------------------------------------------------
+# run
+# --------------------------------------------------------------------------
+
+def descendants(pid: int) -> list[tuple[int, str]]:
+    out = run_text(["ps", "-A", "-o", "pid=,ppid=,comm="]) or ""
+    table: dict[int, list[tuple[int, str]]] = {}
+    for line in out.splitlines():
+        parts = line.split(None, 2)
+        if len(parts) == 3 and parts[0].isdigit() and parts[1].isdigit():
+            table.setdefault(int(parts[1]), []).append((int(parts[0]), parts[2]))
+    found: list[tuple[int, str]] = []
+    stack = [pid]
+    while stack:
+        for child, comm in table.get(stack.pop(), []):
+            found.append((child, comm))
+            stack.append(child)
+    return found
+
+
+def machine_busy_percent() -> float | None:
+    """Whole-machine CPU use (user + system, percent of all cores) over one second, from
+    `top`. The second of its two samples is the instantaneous one."""
+    out = run_text(["top", "-l", "2", "-n", "0", "-s", "1"], timeout=20) or ""
+    lines = [l for l in out.splitlines() if l.startswith("CPU usage:")]
+    if not lines:
+        return None
+    try:
+        parts = lines[-1].removeprefix("CPU usage:").split(",")
+        return float(parts[0].split("%")[0]) + float(parts[1].split("%")[0])
+    except (ValueError, IndexError):
+        return None
+
+
+class LoadSampler(threading.Thread):
+    """While the replay itself runs (not while it waits for the lock), sample how busy the
+    whole machine is. What the replay used is known from its own CPU time; the rest is the
+    other jobs on this Mac, which the lock does not stop."""
+
+    def __init__(self, proc_pid: int, interval_s: float = 30.0):
+        super().__init__(daemon=True)
+        self.pid = proc_pid
+        self.interval = interval_s
+        self.samples: list[float] = []
+        self.started_running: float | None = None
+        self._halt = threading.Event()
+
+    def run(self) -> None:
+        last_sample = -1e9
+        while not self._halt.is_set():
+            running = any(comm.endswith("transcribe") for _, comm in descendants(self.pid))
+            if running:
+                if self.started_running is None:
+                    self.started_running = time.monotonic()
+                if time.monotonic() - last_sample >= self.interval:
+                    last_sample = time.monotonic()
+                    busy = machine_busy_percent()
+                    if busy is not None:
+                        self.samples.append(busy)
+            self._halt.wait(1.0)
+
+    def stop(self) -> None:
+        self._halt.set()
+
+
+def run_id(entry: dict) -> str:
+    return f"r{entry['round']}-{entry['clip']}-{entry['arm']}"
+
+
+def execute(plan: dict, entry: dict, runs_dir: Path, timeout_s: float) -> dict:
+    clip = next(c for c in plan["clips"] if c["id"] == entry["clip"])
+    rid = run_id(entry)
+    report_path = runs_dir / f"{rid}.report.json"
+    stderr_path = runs_dir / f"{rid}.stderr.txt"
+    cmd = [*plan["wrap"], plan["binary"]["path"], "--audio", clip["wav"], "--language", clip["language"],
+           "--tier", plan["tier"], *plan["base"], *plan["arms"][entry["arm"]]["flags"], "--json", str(report_path)]
+    record: dict = {"id": rid, **entry, "cmd": cmd, "planSha256": plan["planSha256"],
+                    "startedUtc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+                    "loadavgAtLaunch": round(os.getloadavg()[0], 2)}
+    began = time.monotonic()
+    with stderr_path.open("w") as stderr_file:
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=stderr_file, start_new_session=True)
+        return _supervise(proc, record, report_path, began, timeout_s)
+
+
+def _supervise(proc, record: dict, report_path: Path, began: float, timeout_s: float) -> dict:
+    sampler = LoadSampler(proc.pid)
+    sampler.start()
+    try:
+        proc.wait(timeout=timeout_s)
+        record["returncode"] = proc.returncode
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGTERM)
+        record["returncode"] = None
+        record["error"] = f"timed out after {timeout_s:.0f} s"
+    sampler.stop()
+    record["wallSecondsWithLockWait"] = round(time.monotonic() - began, 1)
+    record["lockWaitSeconds"] = (round(sampler.started_running - began, 1)
+                                 if sampler.started_running is not None else None)
+    record["machineBusyPercent"] = sampler.samples
+    record["loadavgAtEnd"] = round(os.getloadavg()[0], 2)
+    ok = record.get("returncode") == 0 and report_path.exists()
+    record["ok"] = ok
+    if not ok and "error" not in record:
+        record["error"] = f"exit code {record.get('returncode')}" if record.get("returncode") != 0 else "no report written"
+    return record
+
+
+def cmd_run(args) -> int:
+    plan_path = args.plan
+    plan = json.loads(plan_path.read_text())
+    plan["planSha256"] = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+    if sha256_of(Path(plan["binary"]["path"])) != plan["binary"]["sha256"]:
+        raise SystemExit("the binary changed since the plan was written")
+    for clip in plan["clips"]:
+        if sha256_of(Path(clip["wav"])) != clip["wavSha256"]:
+            raise SystemExit(f"clip {clip['id']} changed since the plan was written")
+    runs_dir = args.work / "runs" / f"session-{plan['session']}"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    todo = [e for e in plan["order"] if not (runs_dir / f"{run_id(e)}.run.json").exists()
+            or not json.loads((runs_dir / f"{run_id(e)}.run.json").read_text()).get("ok")]
+    if args.limit:
+        todo = todo[:args.limit]
+    print(f"session {plan['session']}: {len(plan['order']) - len(todo)} done, {len(todo)} to run")
+    for index, entry in enumerate(todo, start=1):
+        clip = next(c for c in plan["clips"] if c["id"] == entry["clip"])
+        attempts = 0
+        while True:
+            attempts += 1
+            record = execute(plan, entry, runs_dir, timeout_s=clip["durationMs"] / 1000 * 3 + args.lock_budget_s)
+            record["attempt"] = attempts
+            (runs_dir / f"{run_id(entry)}.run.json").write_text(json.dumps(record, indent=2))
+            print(f"[{index}/{len(todo)}] {run_id(entry)} {'ok' if record['ok'] else 'FAILED ' + record.get('error', '')}"
+                  f" ({record['wallSecondsWithLockWait']:.0f} s, lock wait {record['lockWaitSeconds']} s)", flush=True)
+            if record["ok"] or attempts >= 2:
+                break
+    return 0
+
+
+# --------------------------------------------------------------------------
+# score
+# --------------------------------------------------------------------------
+
+def load_clip_reference(clip: dict) -> tuple[list[str] | None, list[list[int]]]:
+    ref_words = normalize(Path(clip["refText"]).read_text()) if clip.get("refText") else None
+    spans = json.loads(Path(clip["refSpans"]).read_text())
+    return ref_words, spans
+
+
+def cmd_score(args) -> int:
+    plan = json.loads(args.plan.read_text())
+    runs_dir = args.work / "runs" / f"session-{plan['session']}"
+    references = {c["id"]: load_clip_reference(c) for c in plan["clips"]}
+    clip_by_id = {c["id"]: c for c in plan["clips"]}
+    records = []
+    for entry in plan["order"]:
+        run_path = runs_dir / f"{run_id(entry)}.run.json"
+        record = {**entry, "id": run_id(entry), "ok": False}
+        if run_path.exists():
+            run = json.loads(run_path.read_text())
+            record.update({k: run.get(k) for k in ("returncode", "attempt", "error", "wallSecondsWithLockWait",
+                                                  "lockWaitSeconds", "loadavgAtLaunch", "loadavgAtEnd",
+                                                  "machineBusyPercent", "startedUtc")})
+            if run.get("ok"):
+                report = json.loads((runs_dir / f"{run_id(entry)}.report.json").read_text())
+                words, spans = references[entry["clip"]]
+                record["metrics"] = ll.run_metrics(report, clip_by_id[entry["clip"]], ref_words=words, ref_spans=spans)
+                record["ok"] = True
+                record["model"] = report.get("model")
+                record["liveConfig"] = report.get("config")
+        records.append(record)
+    out = {"schema": SCHEMA, "session": plan["session"], "planSha256": hashlib.sha256(args.plan.read_bytes()).hexdigest(),
+           "note": "numbers only: no audio, no words. Per-word latencies are integers in ms; `reason` indexes live_latency_lib.REASONS.",
+           "runs": records}
+    args.out.mkdir(parents=True, exist_ok=True)
+    path = args.out / f"results-session-{plan['session']}.json"
+    path.write_text(json.dumps(out, separators=(",", ":")))
+    done = sum(1 for r in records if r["ok"])
+    print(f"scored {done}/{len(records)} runs -> {path} ({path.stat().st_size // 1024} KB)")
+    return 0
+
+
+# --------------------------------------------------------------------------
+# analyze
+# --------------------------------------------------------------------------
+
+def mean(values):
+    values = [v for v in values if v is not None]
+    return sum(values) / len(values) if values else None
+
+
+def blocks_of(plan: dict, results: dict) -> tuple[dict, list[dict]]:
+    """Complete blocks only: every arm of the block ran and scored. Returns the blocks, keyed
+    (clip, round) -> arm -> run, and the list of excluded (incomplete) blocks."""
+    arms = list(plan["arms"])
+    by_block: dict[tuple[str, int], dict[str, dict]] = {}
+    for run in results["runs"]:
+        if run["ok"]:
+            by_block.setdefault((run["clip"], run["round"]), {})[run["arm"]] = run
+    complete, excluded = {}, []
+    for clip in plan["clips"]:
+        for r in range(1, plan["rounds"] + 1):
+            block = by_block.get((clip["id"], r), {})
+            if all(a in block for a in arms):
+                complete[(clip["id"], r)] = block
+            else:
+                excluded.append({"clip": clip["id"], "round": r, "missing": [a for a in arms if a not in block]})
+    return complete, excluded
+
+
+def control_values(block: dict, key: str):
+    vals = [block[c]["metrics"][key] for c in CONTROLS]
+    return None if any(v is None for v in vals) else sum(vals) / len(vals)
+
+
+def paired_deltas(blocks: dict, variant: str, key: str, *, clips: set[str] | None = None,
+                  scale: float = 1.0) -> list[float]:
+    deltas = []
+    for (clip, _), block in blocks.items():
+        if clips is not None and clip not in clips:
+            continue
+        v = block[variant]["metrics"][key]
+        c = control_values(block, key)
+        if v is not None and c is not None:
+            deltas.append((v - c) * scale)
+    return deltas
+
+
+def block_words(blocks: dict, arms: list[str], clip_ids: set[str] | None = None,
+                key: str = "latency_wall_ms") -> list[list[list[int]]]:
+    """For each complete block, the word latencies of each named arm's run, in the order given."""
+    out = []
+    for (clip, _), block in sorted(blocks.items()):
+        if clip_ids is None or clip in clip_ids:
+            out.append([block[a]["metrics"][key] for a in arms])
+    return out
+
+
+def per_clip_effects(blocks: dict, variant: str, clip_ids: list[str]) -> dict:
+    out = {}
+    for clip in clip_ids:
+        rows = [(b["C0"]["metrics"]["latency_wall_ms"] + b["C1"]["metrics"]["latency_wall_ms"],
+                 b[variant]["metrics"]["latency_wall_ms"]) for (c, _), b in blocks.items() if c == clip]
+        if not rows:
+            continue
+        control = [x for r in rows for x in r[0]]
+        var = [x for r in rows for x in r[1]]
+        out[clip] = {"median_control_ms": ll.quantile(control, 0.5), "median_variant_ms": ll.quantile(var, 0.5),
+                     "effect": ll.pooled_median_effect(control, var), "rounds": len(rows)}
+    return out
+
+
+def per_clip_effects_aa(blocks: dict, clip_ids: list[str]) -> dict:
+    out = {}
+    for clip in clip_ids:
+        rows = [(b["C0"]["metrics"]["latency_wall_ms"], b["C1"]["metrics"]["latency_wall_ms"])
+                for (c, _), b in blocks.items() if c == clip]
+        if rows:
+            control = [x for r in rows for x in r[0]]
+            var = [x for r in rows for x in r[1]]
+            out[clip] = {"effect": ll.pooled_median_effect(control, var), "rounds": len(rows)}
+    return out
+
+
+def pooled(blocks: dict, arm: str, key: str, clips: set[str] | None = None):
+    return [x for (clip, _), b in blocks.items() if clips is None or clip in clips for x in b[arm]["metrics"][key]]
+
+
+def analyze_session(plan: dict, results: dict) -> dict:
+    gate = plan["gate"]
+    blocks, excluded = blocks_of(plan, results)
+    clip_ids = [c["id"] for c in plan["clips"]]
+    text_clips = {c["id"] for c in plan["clips"] if c["refWords"]}
+    corpus_of = {c["id"]: c["corpus"] for c in plan["clips"]}
+    resamples = gate["latency"]["randomizationResamples"]
+    seed = plan["seed"]
+
+    runs = [r for r in results["runs"]]
+    failed = [r["id"] for r in runs if not r["ok"]]
+    violations = {r["arm"]: 0 for r in runs}
+    for r in runs:
+        if r["ok"]:
+            violations[r["arm"]] += r["metrics"]["invariant_violations"]
+    mismatched = [r["id"] for r in runs if r["ok"] and not r["metrics"]["tokens_match_commits"]]
+
+    # Machine state during the replays.
+    busy = [x for r in runs if r["ok"] for x in (r.get("machineBusyPercent") or [])]
+    cores = plan["hardware"].get("cores") or 1
+    own_cores = [r["metrics"]["cpu_s_per_audio_min"] / 60 for r in runs if r["ok"]]
+    load = {"machine_busy_cores_median": (ll.quantile(busy, 0.5) / 100 * cores) if busy else None,
+            "machine_busy_cores_p90": (ll.quantile(busy, 0.9) / 100 * cores) if busy else None,
+            "replay_own_cores_median": ll.quantile(own_cores, 0.5) if own_cores else None,
+            "samples": len(busy), "cores": cores,
+            "lock_wait_seconds_median": ll.quantile([r["lockWaitSeconds"] for r in runs
+                                                     if r["ok"] and r.get("lockWaitSeconds") is not None] or [0], 0.5),
+            "loadavg_at_launch_median": ll.quantile([r["loadavgAtLaunch"] for r in runs
+                                                     if r["ok"] and r.get("loadavgAtLaunch") is not None] or [0], 0.5)}
+
+    analysis: dict = {"session": plan["session"], "planSha256": results["planSha256"],
+                      "blocks": len(blocks), "blocksPlanned": len(clip_ids) * plan["rounds"],
+                      "excluded": excluded, "failedRuns": failed, "load": load,
+                      "tokenCommitMismatch": mismatched, "invariantViolationsByArm": violations}
+
+    # Per-arm descriptives, pooled over all words of the session.
+    arms = list(plan["arms"])
+    desc = {}
+    for arm in arms:
+        wall = pooled(blocks, arm, "latency_wall_ms")
+        audio = pooled(blocks, arm, "latency_audio_ms")
+        by_corpus = {}
+        for corpus in sorted(set(corpus_of.values())):
+            ids = {c for c in clip_ids if corpus_of[c] == corpus}
+            w = pooled(blocks, arm, "latency_wall_ms", ids)
+            by_corpus[corpus] = ll.latency_summary(w)
+        reasons = [x for (_, _), b in blocks.items() for x in b[arm]["metrics"]["reason"]]
+        sums = lambda key: sum((b[arm]["metrics"][key] or 0) for b in blocks.values())  # noqa: E731
+        attempts = sums("attempts")
+        errs = {r: {"ok": 0, "sub": 0, "ins": 0} for r in ll.REASONS}
+        for b in blocks.values():
+            e = b[arm]["metrics"].get("errors_by_reason")
+            if e:
+                for r in ll.REASONS:
+                    for op in ("ok", "sub", "ins"):
+                        errs[r][op] += e[r][op]
+        desc[arm] = {
+            "runs": len(blocks), "words": len(wall),
+            "latency_wall": ll.latency_summary(wall), "latency_audio": ll.latency_summary(audio),
+            "latency_wall_by_corpus": by_corpus,
+            "reason_share": {r: (reasons.count(i) / len(reasons) if reasons else None) for i, r in enumerate(ll.REASONS)},
+            "dropped_hops": sums("dropped_hops"), "attempts": attempts,
+            "dropped_rate": sums("dropped_hops") / attempts if attempts else None,
+            "forced_commits": sums("forced_commits"), "empty_hypotheses": sums("empty_hypotheses"),
+            "failed_hops": sums("failed_hops"), "head_skips": sums("head_skips"),
+            "head_skipped_words": sums("head_skipped_words"), "boundaries": sums("boundaries"),
+            "finalizations": sums("finalizations"), "finalizations_abandoned": sums("finalizations_abandoned"),
+            "unagreed_tail_words": sums("unagreed_tail_words"),
+            "hallucinations_critical": sums("hallucinations_critical"),
+            "hallucination_fillers": sums("hallucination_fillers"),
+            "hallucination_loops": sums("hallucination_loops"),
+            "hallucination_invented_spans": sums("hallucination_invented_spans"),
+            "repeats": sums("repeats"), "ghost_words": sums("ghost_words"),
+            "finalization_latency": ll.latency_summary(pooled(blocks, arm, "finalization_latency_ms")),
+            "cpu_s_per_audio_min": mean([b[arm]["metrics"]["cpu_s_per_audio_min"] for b in blocks.values()]),
+            "infer_rtf": mean([b[arm]["metrics"]["infer_rtf"] for b in blocks.values()]),
+            "decodes_per_min": mean([b[arm]["metrics"]["decodes_per_min"] for b in blocks.values()]),
+            "mean_window_ms": mean([b[arm]["metrics"]["mean_window_ms"] for b in blocks.values()]),
+            "decode_wall_median_ms": mean([b[arm]["metrics"]["decode_wall_median_ms"] for b in blocks.values()]),
+            "replay_overrun_ms": mean([b[arm]["metrics"]["replay_overrun_ms"] for b in blocks.values()]),
+            "wer_mean": mean([b[arm]["metrics"]["wer"] for (c, _), b in blocks.items() if c in text_clips]),
+            "deletion_rate_mean": mean([b[arm]["metrics"]["deletion_rate"] for (c, _), b in blocks.items() if c in text_clips]),
+            "missing_share_mean": mean([b[arm]["metrics"]["missing_speech_share"] for b in blocks.values()]),
+            "errors_by_reason": errs,
+        }
+    analysis["arms"] = desc
+
+    # A/A: the control against itself, with the very statistics used for the variants.
+    aa_blocks = block_words(blocks, ["C0", "C1"])
+    aa_test = ll.randomization_test(aa_blocks, 1, quantiles=(0.5, 0.9, 0.95), resamples=resamples, seed=seed,
+                                    two_sided=True)
+    aa_interval = {q: ll.block_reduction_interval(aa_blocks, 1, q) for q in (0.5, 0.9, 0.95)}
+    aa_point = aa_test[0.5]["reduction"]
+    analysis["aa"] = {
+        "median": {"reduction": aa_point, "p_two_sided": aa_test[0.5]["p"], "interval": aa_interval[0.5]},
+        "p90": {"reduction": aa_test[0.9]["reduction"], "p_two_sided": aa_test[0.9]["p"], "interval": aa_interval[0.9]},
+        "p95": {"reduction": aa_test[0.95]["reduction"], "p_two_sided": aa_test[0.95]["p"], "interval": aa_interval[0.95]},
+        "per_clip": per_clip_effects_aa(blocks, clip_ids),
+        "valid": bool(aa_point is not None and abs(aa_point) <= gate["aa"]["maxAbsEffect"]
+                      and aa_test[0.5]["p"] >= gate["aa"]["twoSidedRandomizationPMustBeAtLeast"]),
+        "wer_delta_pt": ll.bootstrap_mean_ci([(b["C1"]["metrics"]["wer"] - b["C0"]["metrics"]["wer"]) * 100
+                                              for (c, _), b in blocks.items()
+                                              if c in text_clips and b["C1"]["metrics"]["wer"] is not None]),
+        "block_median_ratio": [b["C1"]["metrics"]["latency_wall"]["median"] / b["C0"]["metrics"]["latency_wall"]["median"]
+                               for b in blocks.values()
+                               if b["C0"]["metrics"]["latency_wall"] and b["C1"]["metrics"]["latency_wall"]]}
+
+    # Variants against the pooled controls.
+    variants = {}
+    for v in plan["variants"]:
+        arms3 = ["C0", "C1", v]
+        words_blocks = block_words(blocks, arms3)
+        test = ll.randomization_test(words_blocks, 2, quantiles=(0.5, 0.9, 0.95), resamples=resamples, seed=seed)
+        intervals = {q: ll.block_reduction_interval(words_blocks, 2, q) for q in (0.5, 0.9, 0.95)}
+        audio_blocks = block_words(blocks, arms3, key="latency_audio_ms")
+        audio_test = ll.randomization_test(audio_blocks, 2, quantiles=(0.5,), resamples=max(1000, resamples // 5), seed=seed)
+        effects = {name: {"reduction": test[q]["reduction"], "p": test[q]["p"], "interval": intervals[q]}
+                   for name, q in (("median", 0.5), ("p90", 0.9), ("p95", 0.95))}
+        audio_effects = {"reduction": audio_test[0.5]["reduction"], "p": audio_test[0.5]["p"],
+                         "interval": ll.block_reduction_interval(audio_blocks, 2, 0.5)}
+        per_clip = per_clip_effects(blocks, v, clip_ids)
+        by_corpus = {}
+        for corpus in sorted(set(corpus_of.values())):
+            ids = {c for c in clip_ids if corpus_of[c] == corpus}
+            sub = block_words(blocks, arms3, ids)
+            if not sub:
+                continue
+            sub_test = ll.randomization_test(sub, 2, quantiles=(0.5,), resamples=max(1000, resamples // 5), seed=seed)
+            by_corpus[corpus] = {"reduction": sub_test[0.5]["reduction"], "p": sub_test[0.5]["p"],
+                                 "interval": ll.block_reduction_interval(sub, 2, 0.5), "blocks": len(sub)}
+
+        # Safety metrics, paired by block against the mean of the controls.
+        wer_d = [d * 100 for d in paired_deltas(blocks, v, "wer", clips=text_clips)]
+        wer_clip_means = {}
+        for clip in sorted(text_clips):
+            ds = [d * 100 for d in paired_deltas(blocks, v, "wer", clips={clip})]
+            wer_clip_means[clip] = ll.bootstrap_mean_ci(ds)
+        del_d = [d * 100 for d in paired_deltas(blocks, v, "deletion_rate", clips=text_clips)]
+        miss_d = [d * 100 for d in paired_deltas(blocks, v, "missing_speech_share")]
+        wer_p = ll.sign_flip_p(wer_d, alternative="greater")
+        del_p = ll.sign_flip_p(del_d, alternative="greater")
+        miss_p = ll.sign_flip_p(miss_d, alternative="greater")
+        p_adj = ll.holm([wer_p, del_p, miss_p])
+
+        # Hallucinations: totals over the session against the mean of the two controls' totals.
+        hall_v = desc[v]["hallucinations_critical"]
+        hall_c = (desc["C0"]["hallucinations_critical"] + desc["C1"]["hallucinations_critical"]) / 2
+        control_attempts = desc["C0"]["attempts"] + desc["C1"]["attempts"]
+        control_drops = desc["C0"]["dropped_hops"] + desc["C1"]["dropped_hops"]
+        rate_c = control_drops / control_attempts if control_attempts else 0.0
+        rate_v = desc[v]["dropped_rate"] or 0.0
+
+        def paired_mean(key, scale=1.0):
+            return ll.bootstrap_mean_ci(paired_deltas(blocks, v, key, scale=scale))
+
+        g = gate
+        lat = effects["median"]
+        lower = (lat["interval"] or {}).get("lower95_one_sided")
+        gates = {
+            "latency": {"point": lat["reduction"], "p": lat["p"], "lower95_one_sided": lower,
+                        "pass": bool(lat["reduction"] is not None
+                                     and lat["reduction"] >= g["latency"]["minRelativeReduction"]
+                                     and lat["p"] < g["latency"]["supportAlpha"]
+                                     and (lower if lower is not None else -1) > 0)},
+            "wer": {"mean_delta_pt": ll.bootstrap_mean_ci(wer_d), "sign_flip_p": wer_p, "holm_p": p_adj[0],
+                    "clip_means": wer_clip_means,
+                    "pass": bool(wer_d and (p_adj[0] is None or p_adj[0] >= g["wer"]["supportedRegressionAlpha"])
+                                 and sum(wer_d) / len(wer_d) <= g["wer"]["maxMeanIncreasePt"]
+                                 and all((m is None or m["mean"] <= g["wer"]["maxClipMeanIncreasePt"])
+                                         for m in wer_clip_means.values()))},
+            "missingSpeech": {"deletion_rate_delta_pt": ll.bootstrap_mean_ci(del_d), "deletion_p": del_p,
+                              "deletion_holm_p": p_adj[1],
+                              "missing_share_delta_pt": ll.bootstrap_mean_ci(miss_d), "missing_p": miss_p,
+                              "missing_holm_p": p_adj[2],
+                              "pass": bool(del_d and miss_d
+                                           and sum(del_d) / len(del_d) <= g["missingSpeech"]["maxDeletionRateIncreasePt"]
+                                           and sum(miss_d) / len(miss_d) <= g["missingSpeech"]["maxMissingShareIncreasePt"]
+                                           and (p_adj[1] or 1) >= g["missingSpeech"]["alpha"]
+                                           and (p_adj[2] or 1) >= g["missingSpeech"]["alpha"])},
+            "hallucinations": {"variant_total": hall_v, "control_mean_total": hall_c, "pass": hall_v <= hall_c},
+            "immutability": {"violations_variant": violations[v], "violations_controls": violations["C0"] + violations["C1"],
+                             "pass": violations[v] + violations["C0"] + violations["C1"] <= g["immutability"]["maxViolations"]},
+            "droppedHops": {"variant_rate": rate_v, "control_rate": rate_c,
+                            "pass": bool(rate_v <= max(rate_c * (1 + g["droppedHops"]["maxRelativeIncrease"]),
+                                                       rate_c + g["droppedHops"]["orAbsolutePp"] / 100))},
+            "failures": {"failed_runs": len(failed), "failed_hops_variant": desc[v]["failed_hops"],
+                         "failed_hops_controls": desc["C0"]["failed_hops"] + desc["C1"]["failed_hops"],
+                         "pass": len(failed) <= g["failures"]["maxFailedRuns"]
+                         and desc[v]["failed_hops"] <= (desc["C0"]["failed_hops"] + desc["C1"]["failed_hops"]) / 2
+                         + g["failures"]["maxFailedDecodesIncrease"]},
+        }
+        gates["session_valid"] = {"aa_valid": analysis["aa"]["valid"], "pass": analysis["aa"]["valid"]}
+        gates["all_pass"] = all(gates[k]["pass"] for k in gates if k != "all_pass")
+        variants[v] = {
+            "variable": plan["arms"][v]["variable"], "what": plan["arms"][v]["what"], "flags": plan["arms"][v]["flags"],
+            "latency_wall": effects, "latency_audio_median": audio_effects, "per_clip": per_clip, "per_corpus": by_corpus,
+            "clips_faster": sum(1 for x in per_clip.values() if (x["effect"] or 0) > 0),
+            "clips": len(per_clip),
+            "secondary": {
+                "forced_commits_delta": paired_mean("forced_commits"),
+                "empty_hypotheses_delta": paired_mean("empty_hypotheses"),
+                "dropped_hops_delta": paired_mean("dropped_hops"),
+                "repeat_excess_delta": ll.bootstrap_mean_ci(paired_deltas(blocks, v, "repeat_excess", clips=text_clips)),
+                "ghost_words_delta": paired_mean("ghost_words"),
+                "cpu_s_per_audio_min_delta": paired_mean("cpu_s_per_audio_min"),
+                "infer_rtf_delta": paired_mean("infer_rtf"),
+                "decodes_per_min_delta": paired_mean("decodes_per_min"),
+                "mean_window_ms_delta": paired_mean("mean_window_ms"),
+                "finalization_latency_median_ms": {"variant": (desc[v]["finalization_latency"] or {}).get("median"),
+                                                   "controls": ll.quantile(pooled(blocks, "C0", "finalization_latency_ms") + pooled(blocks, "C1", "finalization_latency_ms") or [0], 0.5)},
+            },
+            "gates": gates,
+        }
+    analysis["variants"] = variants
+    return analysis
+
+
+def cmd_analyze(args) -> int:
+    plan = json.loads(args.plan.read_text())
+    results = json.loads((args.out / f"results-session-{plan['session']}.json").read_text())
+    if results["planSha256"] != hashlib.sha256(args.plan.read_bytes()).hexdigest():
+        raise SystemExit("the results were scored against a different plan")
+    analysis = analyze_session(plan, results)
+    path = args.out / f"analysis-session-{plan['session']}.json"
+    path.write_text(json.dumps(analysis, indent=2))
+    (args.out / f"report-session-{plan['session']}.md").write_text(render_session(plan, analysis))
+    print(f"wrote {path}")
+    print(render_session(plan, analysis))
+    return 0
+
+
+def pct(x, digits=1):
+    return "n/a" if x is None else f"{x * 100:.{digits}f}%"
+
+
+def ms(x):
+    return "n/a" if x is None else f"{x:,.0f}"
+
+
+def render_session(plan: dict, a: dict) -> str:
+    L = []
+    L.append(f"# Session {a['session']}: {plan.get('name', '')}")
+    L.append("")
+    L.append(f"Plan sha256 `{a['planSha256'][:16]}`, commit `{plan['commit'][:10]}`, binary `{plan['binary']['sha256'][:12]}`. "
+             f"{a['blocks']} of {a['blocksPlanned']} blocks complete; {len(a['failedRuns'])} failed runs.")
+    ld = a["load"]
+    L.append("")
+    L.append(f"Machine during the replays: median {ld['machine_busy_cores_median']:.1f} of {ld['cores']} cores busy in total "
+             f"(p90 {ld['machine_busy_cores_p90']:.1f}); the replay itself used a median {ld['replay_own_cores_median']:.2f} cores; "
+             f"lock wait median {ld['lock_wait_seconds_median']:.0f} s." if ld["machine_busy_cores_median"] is not None
+             else "Machine load was not sampled.")
+    L.append("")
+    L.append("## Commit latency by arm (every committed word, wall clock, ms)")
+    L.append("")
+    L.append("| arm | words | median | p90 | p95 | audio-clock median | dropped hops | forced | empty | failed hops | critical halluc. | invariant breaks |")
+    L.append("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    for arm, d in a["arms"].items():
+        w, au = d["latency_wall"], d["latency_audio"]
+        L.append(f"| {arm} | {w['n']} | {ms(w['median'])} | {ms(w['p90'])} | {ms(w['p95'])} | {ms(au['median'])} | "
+                 f"{d['dropped_hops']} ({pct(d['dropped_rate'])}) | {d['forced_commits']} | {d['empty_hypotheses']} | {d['failed_hops']} | "
+                 f"{d['hallucinations_critical']} | {a['invariantViolationsByArm'].get(arm, 0)} |")
+    L.append("")
+    L.append("## A/A: the control against itself")
+    L.append("")
+    aa = a["aa"]
+    def iv(x):
+        return f"[{pct(x['ci95'][0])}, {pct(x['ci95'][1])}]" if x else "n/a"
+    L.append(f"C1 against C0, commit latency reduction: median {pct(aa['median']['reduction'])} {iv(aa['median']['interval'])} "
+             f"(two-sided p {aa['median']['p_two_sided']:.3f}), p90 {pct(aa['p90']['reduction'])}, p95 {pct(aa['p95']['reduction'])}. "
+             f"Session {'valid' if aa['valid'] else 'NOT VALID for timing'}. "
+             f"Per-block median ratios C1/C0: {', '.join(f'{x:.2f}' for x in aa['block_median_ratio'])}.")
+    if aa["wer_delta_pt"]:
+        w = aa["wer_delta_pt"]
+        L.append(f"WER, C1 minus C0, over {w['n']} blocks: {w['mean']:+.2f} points, 95% interval {w['ci95'][0]:+.2f} to {w['ci95'][1]:+.2f}.")
+    L.append("")
+    L.append("## Variants against the controls")
+    for v, d in a["variants"].items():
+        L.append("")
+        L.append(f"### {v}: {d['variable']}. {d['what']}")
+        L.append("")
+        m, p90, p95 = d["latency_wall"]["median"], d["latency_wall"]["p90"], d["latency_wall"]["p95"]
+        def ci(x):
+            i = x.get("interval")
+            return f"[{pct(i['ci95'][0])}, {pct(i['ci95'][1])}]" if i else ""
+        L.append(f"* Commit latency reduction (wall): median {pct(m['reduction'])} {ci(m)} (randomization p {m['p']:.4f}), "
+                 f"p90 {pct(p90['reduction'])} {ci(p90)} (p {p90['p']:.4f}), p95 {pct(p95['reduction'])} {ci(p95)} (p {p95['p']:.4f}); "
+                 f"audio clock median {pct(d['latency_audio_median']['reduction'])}. Faster on {d['clips_faster']} of {d['clips']} clips: "
+                 + ", ".join(f"{c} {pct(x['effect'])}" for c, x in d["per_clip"].items()))
+        L.append("* By corpus (median): " + ", ".join(f"{c} {pct(x['reduction'])} {ci(x)}" for c, x in d["per_corpus"].items()))
+        gt = d["gates"]
+        w = gt["wer"]["mean_delta_pt"]
+        L.append(f"* WER, variant minus control (blocks with a word reference): {w['mean']:+.2f} points {('[' + format(w['ci95'][0], '+.2f') + ', ' + format(w['ci95'][1], '+.2f') + ']') if w else ''}, "
+                 f"sign-flip p {gt['wer']['sign_flip_p']:.3f} (Holm {gt['wer']['holm_p']:.3f})" if w else "* WER: no blocks with a word reference")
+        ms_ = gt["missingSpeech"]
+        if ms_["deletion_rate_delta_pt"]:
+            dd, mm = ms_["deletion_rate_delta_pt"], ms_["missing_share_delta_pt"]
+            L.append(f"* Deletion rate {dd['mean']:+.2f} points (p {ms_['deletion_p']:.3f}); missing speech share {mm['mean']:+.2f} points (p {ms_['missing_p']:.3f}).")
+        s = d["secondary"]
+        def sm(x, fmt="{:+.2f}"):
+            return "n/a" if x is None else fmt.format(x["mean"])
+        L.append(f"* Per block, variant minus control: forced commits {sm(s['forced_commits_delta'])}, dropped hops {sm(s['dropped_hops_delta'])}, "
+                 f"empty hypotheses {sm(s['empty_hypotheses_delta'])}, repeat excess {sm(s['repeat_excess_delta'])}, "
+                 f"CPU {sm(s['cpu_s_per_audio_min_delta'], '{:+.2f}')} s per audio minute, infer RTF {sm(s['infer_rtf_delta'], '{:+.3f}')}, "
+                 f"decodes/min {sm(s['decodes_per_min_delta'], '{:+.1f}')}, mean window {sm(s['mean_window_ms_delta'], '{:+.0f}')} ms.")
+        L.append("* Gates: " + ", ".join(f"{k} {'PASS' if v_['pass'] else 'FAIL'}" for k, v_ in gt.items() if isinstance(v_, dict) and 'pass' in v_)
+                 + f" -> **{'all pass' if gt['all_pass'] else 'not all pass'}**")
+    L.append("")
+    return "\n".join(L)
+
+
+# --------------------------------------------------------------------------
+# decide
+# --------------------------------------------------------------------------
+
+def promote(plan: dict, analysis: dict) -> list[str]:
+    rule = plan["gate"]["promotion"]
+    out = []
+    for v, d in analysis["variants"].items():
+        point = d["latency_wall"]["median"]["reduction"]
+        if point is not None and point >= rule["minSession1Reduction"] and d["gates"]["immutability"]["pass"]:
+            out.append(v)
+    return out
+
+
+def cmd_promote(args) -> int:
+    plan = json.loads(args.plan.read_text())
+    analysis = json.loads((args.out / f"analysis-session-{plan['session']}.json").read_text())
+    print(",".join(promote(plan, analysis)))
+    return 0
+
+
+def cmd_decide(args) -> int:
+    sessions = []
+    for number in args.sessions:
+        plan = json.loads((args.out / f"plan-session-{number}.json").read_text())
+        analysis = json.loads((args.out / f"analysis-session-{number}.json").read_text())
+        sessions.append((plan, analysis))
+    gate = sessions[0][0]["gate"]
+    candidates = sorted({v for _, a in sessions for v in a["variants"]})
+    verdicts = {}
+    for v in candidates:
+        per_session = {}
+        for plan, analysis in sessions:
+            d = analysis["variants"].get(v)
+            per_session[plan["session"]] = None if d is None else {
+                "reduction": d["latency_wall"]["median"]["reduction"], "all_pass": d["gates"]["all_pass"],
+                "failed": [k for k, g in d["gates"].items() if isinstance(g, dict) and not g.get("pass", True)]}
+        ran_all = all(per_session.get(plan["session"]) is not None for plan, _ in sessions)
+        passed = ran_all and all(s["all_pass"] for s in per_session.values())
+        verdicts[v] = {"per_session": per_session, "ran_in_every_session": ran_all, "meets_every_gate": passed}
+    change = [v for v, x in verdicts.items() if x["meets_every_gate"]]
+    decision = {"schema": SCHEMA, "created": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+                "rule": gate["default"], "reproducibility": gate["reproducibility"], "verdicts": verdicts,
+                "changeDefaultTo": change, "productionConfigurationChanged": bool(change)}
+    (args.out / "decision.json").write_text(json.dumps(decision, indent=2))
+    lines = ["# Decision", "", f"Rule: {gate['default']}.", "", f"Reproducibility: {gate['reproducibility']}.", ""]
+    for v, x in verdicts.items():
+        lines.append(f"* **{v}**: " + "; ".join(
+            f"session {s}: " + ("not run" if r is None else f"latency {pct(r['reduction'])}, "
+                                + ("every gate passes" if r["all_pass"] else "fails " + ", ".join(r["failed"])))
+            for s, r in x["per_session"].items()) + f" -> {'MEETS EVERY GATE' if x['meets_every_gate'] else 'default stays'}")
+    lines += ["", f"**Production configuration {'CHANGED to ' + ', '.join(change) if change else 'UNCHANGED'}.**", ""]
+    (args.out / "DECISION.md").write_text("\n".join(lines))
+    print("\n".join(lines))
+    return 0
+
+
+# --------------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    a = sub.add_parser("prepare", help="cut the clips from the public corpora")
+    a.add_argument("--work", type=Path, default=DEFAULT_WORK)
+    a.add_argument("--fleurs", type=Path, default=Path("/tmp/notero-data/fleurs-eval"))
+    a.add_argument("--liva", type=Path, default=Path("/tmp/notero-data/tiers/liva"))
+    a.add_argument("--ami", type=Path, default=Path("/tmp/notero-data/diar/ami"))
+    a.add_argument("--clip-s", type=int, default=180)
+    a.add_argument("--pilot-s", type=int, default=75)
+    a.add_argument("--fleurs-max-s", type=float, default=190.0)
+    a.set_defaults(fn=cmd_prepare)
+
+    a = sub.add_parser("plan", help="write the plan before any run")
+    a.add_argument("--work", type=Path, default=DEFAULT_WORK)
+    a.add_argument("--bin", type=Path, default=REPO / "app/.build/release/transcribe")
+    a.add_argument("--session", type=int, required=True)
+    a.add_argument("--name", default="")
+    a.add_argument("--clips", required=True)
+    a.add_argument("--arms", required=True)
+    a.add_argument("--rounds", type=int, required=True)
+    a.add_argument("--out", type=Path, required=True)
+    a.add_argument("--note", action="append")
+    a.add_argument("--force", action="store_true")
+    a.set_defaults(fn=cmd_plan)
+
+    a = sub.add_parser("run", help="replay every planned run not yet done")
+    a.add_argument("--plan", type=Path, required=True)
+    a.add_argument("--work", type=Path, default=DEFAULT_WORK)
+    a.add_argument("--limit", type=int, default=0)
+    a.add_argument("--lock-budget-s", type=float, default=4 * 3600, help="how long one run may wait for the bench lock")
+    a.set_defaults(fn=cmd_run)
+
+    for name, fn, helptext in (("score", cmd_score, "numbers-only record per run"),
+                               ("analyze", cmd_analyze, "paired statistics and gates for one session")):
+        a = sub.add_parser(name, help=helptext)
+        a.add_argument("--plan", type=Path, required=True)
+        a.add_argument("--work", type=Path, default=DEFAULT_WORK)
+        a.add_argument("--out", type=Path, required=True)
+        a.set_defaults(fn=fn)
+
+    a = sub.add_parser("promote", help="which variants session 1 sends on to session 2")
+    a.add_argument("--plan", type=Path, required=True)
+    a.add_argument("--out", type=Path, required=True)
+    a.set_defaults(fn=cmd_promote)
+
+    a = sub.add_parser("decide", help="apply the plan's rule across sessions")
+    a.add_argument("--out", type=Path, required=True)
+    a.add_argument("--sessions", type=int, nargs="+", required=True)
+    a.set_defaults(fn=cmd_decide)
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,169 @@
+{
+  "schema": 1,
+  "seed": 20261102,
+  "note": "Descriptions of the clips cut from public corpora by eval/live_latency.py prepare. No audio and no transcript text; the sources are CC BY 4.0 and stay in the work folders outside the repository.",
+  "clips": [
+    {
+      "id": "fleurs-lf1",
+      "corpus": "fleurs",
+      "kind": "read Tagalog, constructed long-form",
+      "language": "tl",
+      "durationMs": 164220,
+      "wavSha256": "eb0457c23384a6fc8d396a6d32487e4eaace656f9b2da054ffad00093d635a71",
+      "refWords": 253,
+      "refSpanCount": 8,
+      "refSpansSha256": "dcc4f5ab9959a0328ea585385cb4e774bba8ed41955bd043e7a8a736ee0e1e6d",
+      "source": {
+        "dataset": "FLEURS fil_ph test",
+        "licence": "CC BY 4.0",
+        "sentences": [
+          1662,
+          1663,
+          1664,
+          1665,
+          1666,
+          1667,
+          1668,
+          1669
+        ],
+        "cutAtS": 164.22
+      }
+    },
+    {
+      "id": "fleurs-lf2",
+      "corpus": "fleurs",
+      "kind": "read Tagalog, constructed long-form",
+      "language": "tl",
+      "durationMs": 179137,
+      "wavSha256": "79e963a49972a0007e920b4d950900d01b7627c27c02772c45fc6cde63144995",
+      "refWords": 256,
+      "refSpanCount": 7,
+      "refSpansSha256": "cb6b09119f5d071793387108c070c40b5dd5bd0663a02ed937dc80c707c2d5d3",
+      "source": {
+        "dataset": "FLEURS fil_ph test",
+        "licence": "CC BY 4.0",
+        "sentences": [
+          1782,
+          1783,
+          1784,
+          1785,
+          1786,
+          1787,
+          1788
+        ],
+        "cutAtS": 179.14
+      }
+    },
+    {
+      "id": "liva-a",
+      "corpus": "liva",
+      "kind": "conversational Taglish, 4-5 friends in a voice chat",
+      "language": "tl",
+      "durationMs": 180000,
+      "wavSha256": "eab915e7c49fd52ce632de7306f859e460d86ca4b764b2e69c6969564a43f06d",
+      "refWords": 473,
+      "refSpanCount": 101,
+      "refSpansSha256": "b398682298f66e5c2ea2039873973db906af390ec19b99e9dbcd6fa43b60a937",
+      "source": {
+        "dataset": "Liva AI en-tl (code-switching-asr, rev 51b5d0b)",
+        "licence": "CC BY 4.0",
+        "file": "liva-en-tl-C_001_015",
+        "startMs": 420000,
+        "windowMs": 180000,
+        "utterances": 101
+      }
+    },
+    {
+      "id": "liva-b",
+      "corpus": "liva",
+      "kind": "conversational Taglish, 4-5 friends in a voice chat",
+      "language": "tl",
+      "durationMs": 180000,
+      "wavSha256": "af7947a2d0d032b99e06f5f6b825f26e81aa35cec37f51149c597f19e7b9b471",
+      "refWords": 510,
+      "refSpanCount": 127,
+      "refSpansSha256": "fce737eb89cdd5ef92045306c65b53f9444e1c523aa4536e4fd3cdcd379e32cf",
+      "source": {
+        "dataset": "Liva AI en-tl (code-switching-asr, rev 51b5d0b)",
+        "licence": "CC BY 4.0",
+        "file": "liva-en-tl-C_001_016",
+        "startMs": 120000,
+        "windowMs": 180000,
+        "utterances": 127
+      }
+    },
+    {
+      "id": "pilot-liva",
+      "corpus": "liva",
+      "kind": "conversational Taglish, 4-5 friends in a voice chat",
+      "language": "tl",
+      "durationMs": 75000,
+      "wavSha256": "21c11616957cbaf5c3b9bf0aaeb55028e52be1d640cd3d2a7d5430014a2de752",
+      "refWords": 176,
+      "refSpanCount": 37,
+      "refSpansSha256": "49453e8fa332bfd20e954fa42be8da81c291c66a5577bccdab305bdfd2c02ad3",
+      "source": {
+        "dataset": "Liva AI en-tl (code-switching-asr, rev 51b5d0b)",
+        "licence": "CC BY 4.0",
+        "file": "liva-en-tl-C_001_007",
+        "startMs": 360000,
+        "windowMs": 75000,
+        "utterances": 37
+      }
+    },
+    {
+      "id": "ami-a",
+      "corpus": "ami",
+      "kind": "English meeting, headset mix (speech activity reference only)",
+      "language": "en",
+      "durationMs": 180000,
+      "wavSha256": "60be9a0e48422b9a6ba479d00a58516af0798b374dc4abd1cad45cc73ecc129f",
+      "refWords": null,
+      "refSpanCount": 19,
+      "refSpansSha256": "ad636f177aeae11042ca96513be4220c01b283efc5386e93b73529d4e2db69d7",
+      "source": {
+        "dataset": "AMI Meeting Corpus, test set, Mix-Headset",
+        "licence": "CC BY 4.0",
+        "meeting": "ami-TS3003d",
+        "startMs": 360000,
+        "windowMs": 180000
+      }
+    },
+    {
+      "id": "ami-b",
+      "corpus": "ami",
+      "kind": "English meeting, headset mix (speech activity reference only)",
+      "language": "en",
+      "durationMs": 180000,
+      "wavSha256": "ba7dde86a461cf02753efd33847ee93780d5976a9114def640a71ed1ffdb41d3",
+      "refWords": null,
+      "refSpanCount": 11,
+      "refSpansSha256": "9ca1e65e8ba8c12fa6b795d67e3a04443af460ba9b6ecd3d6d77e87b9697a393",
+      "source": {
+        "dataset": "AMI Meeting Corpus, test set, Mix-Headset",
+        "licence": "CC BY 4.0",
+        "meeting": "ami-EN2002b",
+        "startMs": 210000,
+        "windowMs": 180000
+      }
+    },
+    {
+      "id": "pilot-ami",
+      "corpus": "ami",
+      "kind": "English meeting, headset mix (speech activity reference only)",
+      "language": "en",
+      "durationMs": 75000,
+      "wavSha256": "92aef2e91014d6dd515388ebafcc99fce2f44e59cb1b22262149c04647af576e",
+      "refWords": null,
+      "refSpanCount": 1,
+      "refSpansSha256": "01e0873a281d305083b6ecb61dea47a636fff3ff82b179d445b7719cdb6025b3",
+      "source": {
+        "dataset": "AMI Meeting Corpus, test set, Mix-Headset",
+        "licence": "CC BY 4.0",
+        "meeting": "ami-IS1009b",
+        "startMs": 300000,
+        "windowMs": 75000
+      }
+    }
+  ]
+}
