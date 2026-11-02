@@ -1496,6 +1496,90 @@ meeting was measured. The word lists have no native-speaker review. The alignmen
 (40 million cells) is a guard, not a measured bound. Reference times are per utterance, so the
 timestamp report is an upper bound. It has not been run on the Swift side (`transcribe --score`).
 
+## 38. Head-tolerant agreement does not cut the median on real audio; no variant clears 20% in two sessions; the default stays (2026-11-02)
+
+FINDINGS 27 left head-tolerant agreement (HT) implemented and off, "wanting a second session, preferably on
+real audio". This is that session, and five other levers, one at a time, against the production configuration.
+**Verified from code and `SessionConfigDefaultsTests`:** the app builds `SessionConfig(language:prompt:useNeuralVAD:)`,
+so it runs context 15 s, hop 1.5 s, pre-roll 1.5 s, boundary 700 ms, agreement 2, adaptive hop off, head
+tolerance 0. Nothing in the docs was trusted for that.
+
+**Design** (plans committed before each session: `eval/baselines/live-latency-2026-11-02/`). Six excerpts of public
+audio under CC BY 4.0, 164-180 s each: conversational Taglish (Liva AI), English meetings (AMI, speech activity only,
+so no WER there) and read Tagalog (FLEURS long form). Real-time replays, under the bench lock, network denied. A
+block is one clip in one round; its arms ran back to back in a seeded random order, and **the control ran twice**
+(C0 and C1) so that every block carries its own A/A. Session 1: 3 clips, 3 rounds, 8 arms, 72 runs. Session 2: the
+3 other clips, 3 rounds, C0, C1, the one promoted variant (ADA) and HT, 36 runs. Is this "real consented evaluation
+audio"? It is real speech under a licence that allows the use, with the publishers' statement that the speakers
+agreed to the release (not checked here). Nobody agreed to this project's use in writing, so it is not what
+BENCHMARKS "What real data is needed" asks for, and it is not a meeting of this app's users.
+
+**Results** (median commit latency, wall clock, reduction against the controls, 95% interval over blocks):
+
+| | session 1 | session 2 | p90 / p95, session 1 | gate |
+|---|---|---|---|---|
+| A/A (C1 against C0) | 0.2% [-3.1, 3.4] | -7.7% [-18.5, 2.2] | | |
+| HT | 0.6% [-14.6, 13.7] | 14.5% [2.5, 25.0] | 27% / 24% | no |
+| ADA (adaptive hop) | 17.1% [6.5, 26.4] | 16.7% [1.2, 29.8] | 18% / 11% | no |
+| HOP 1.3 s | 10.0% | not run | 16% / 15% | no |
+| CTX 12 s | 8.2% | not run | 18% / 18% | no |
+| VAD 500 ms | -1.4% | not run | 0% / -3% | no |
+| PRE 3 s | -10.3% | not run | -8% / -8% | no |
+
+**The median is two different problems.** On AMI and FLEURS it is about 3.4 s: the floor of LocalAgreement-2
+at a 1.5 s hop, which FINDINGS 26 found on the easiest synthetic clip. On Liva it is about 17 s, the 15 s window
+cap: decodes ran a median 1.3-1.5 s there with a p90 above 4 s (the retry ladder), 35% of hops were dropped in the
+pilot, and 23-25% of all words of the controls in session 1 came from forced commits. A variant moves the median
+only by moving Liva, and only the 12 s cap did (24%), by committing without agreement more often: 16 critical
+hallucinations against a control mean of 10, and a latency anchored on the reference segment ends that was 7% worse.
+
+**HT does not cut the median; it cuts the tail.** Session 1: median 0.6%, p90 27%, p95 24%. Forced commits fell
+from 115 and 130 (controls) to 89, and the share of forced words from 23-25% to 16%. Session 2: 62 against 92 and
+106, the share from 16-19% to 10%, the median 14.5%. The two controls of session 2 differed by 25% on `ami-b` in all
+three rounds, and HT's 28% on that clip is inside it. Pooled over both sessions (not in the plan): 7.8% [-1.3, 16.1]
+on the median, 17.8% on p90. The 35-43% of FINDINGS 27 came from two clips whose agreement stalled on a `say`
+voice; on real audio the stall is not what sets the median. HT also failed its safety gates in both sessions, by
+small margins that are inside the A/A spread (deletion rate +0.9 point; 3 critical hallucinations against 2.5). It
+stays off.
+
+**ADA is the near miss.** 17.1% and 16.7%, faster on all 6 clips, pooled 16.9% [8.8, 24.2], and in session 2 it
+passed every gate except the 20% bar. It is under the bar, it costs 19-26% more decodes (infer RTF 0.61 to 0.64
+and 0.62 to 0.66; CPU did not rise), its p90 and p95 did not improve in session 2, and in session 1 it failed the
+missing-speech and ghost-word gates (deletion +1.0 point, omitted turns +1.7 points, ghost words 7 against 4.5).
+FINDINGS 11 rejected it on an older build. Not enabled.
+
+**VAD 500 ms** shortened the utterance close (finalization latency 1.12 s against 1.35 s) and left the median where
+it was; the median-word gate cannot credit it, and no result says it is worth the earlier unagreed commits.
+**PRE 3 s** was worse (-10%, deletion rate +8.0 points, p = 0.023): more context in front is not free. **HOP 1.3 s**
+gave 10%, with more dropped hops per block (+4.7).
+
+**Safety held everywhere.** The append-only invariant (`CommitInvariantMonitor`, on every delivery) held in all 108
+runs over 33,937 committed words: no word rewritten, dropped, repeated, reordered or stamped past the audio, for
+every arm. No decode failed. The other jobs on this Mac used a median 0.7 of 10 cores while the replays ran; three
+blocks (of 18) were shared with them, and every gate was also evaluated without those blocks. The verdicts are the same.
+
+**What the harness taught.** (1) A pooled median of words over clips that differ by 5x is unstable: a pilot gave C0
+3.9 s and C1 6.9 s, because the pool's median sits in the gap. The statistic is the per-block geometric mean of
+median ratios. (2) A bootstrap over 3-4 rounds per clip covered a true null only 80% of the time in simulation; the
+randomization test has exact size, and the interval is a t-interval over blocks. (3) The A/A replicate in every block is
+worth its cost: one block of identical configurations differs by 10% (standard deviation of the log ratio over 18
+blocks 0.098), and one clip by 25%. FINDINGS 15's non-determinism shows up in the live path as a run-level
+shift that no per-word statistic sees. (4) An independent review of the harness before any result was read found
+that the first `decide` accepted one session, the hallucination gate would usually read 0 <= 0, and the
+missing-speech check could not see an omitted turn under 2 s; all three were fixed first. (5) `--realtime` slept
+100 ms after each chunk and drifted; it now follows one absolute clock.
+
+**Decision.** Production unchanged; `headTolerance` stays 0 and `SessionConfigDefaultsTests` still pins it. No
+candidate met every gate in both sessions (`eval/live_latency.py decide`). The gates are in the plan and were
+not changed after the first run.
+
+**Not shown, and next.** Nothing here says anything about real Taglish meetings, far-field rooms or another Mac.
+AMI has no word reference. Session 2 used three held-out clips and not all six. The cheapest next experiments, in
+order: an adaptive hop with a shorter floor and a cap on the number of decodes (ADA's gain without 25% more
+decodes); a cap on the temperature-fallback ladder for live hops (WhisperEngine), because the Liva median is a
+decode-time problem as much as an agreement one; HT for its tail only, with a gate that is about p95 and not
+the median.
+
 ## Caveat: the audio was synthetic
 
 macOS ships no Filipino voice, so the fixture uses the Indonesian one reading a

@@ -1455,6 +1455,146 @@ pass 1, collar 0.25 s, overlap scored):
 
 Evidence: [`eval/baselines/diarization-2026-11-02/`](../eval/baselines/diarization-2026-11-02/).
 
+## Live commit latency, 2026-11-02
+
+**Decision: the live configuration does not change, and the feature flag stays off.** No variant
+reduced the median commit latency by 20% in both sessions, and none passed every gate.
+`eval/live_latency.py` ran six variants, one at a time, against the production configuration. It
+replayed real public audio in real time. [FINDINGS.md](FINDINGS.md) entry 38 gives the reasoning.
+The plans, the numbers of every run, the analyses and the decision are in
+[`eval/baselines/live-latency-2026-11-02/`](../eval/baselines/live-latency-2026-11-02/).
+
+**What the audio is.** Six excerpts of public recordings under CC BY 4.0, 164 to 180 seconds each,
+on this Mac and not in git. `eval/fixtures/live-latency-clips.json` lists them with a SHA-256 and
+no audio or text.
+
+| Corpus | Excerpts | What it is | Reference |
+| --- | --- | --- | --- |
+| Liva AI `en-tl` | `liva-a`, `liva-b` | Conversational Taglish: a group of friends in a voice chat, 4 to 5 speakers on one track | Vendor transcripts, 473 and 539 words, with utterance times |
+| AMI test set, Mix-Headset | `ami-a`, `ami-b` | English meetings (series TS3003 and EN2002) | Speech activity for each speaker only. **No word reference, so no WER on AMI** |
+| FLEURS `fil_ph`, constructed long form | `fleurs-lf1`, `fleurs-lf2` | Read Tagalog, consecutive sentences with seeded gaps of 0.3 to 1.5 s of digital silence | 253 and 256 words, with sentence times |
+
+The rule that chose each excerpt used the reference only: the 3-minute window with the most
+reference speech. No decode result was used.
+
+**Is this "real consented evaluation audio"?** Partly, and the limits are these.
+
+- The audio is real speech by real people. It is not synthetic.
+- Each corpus is published under CC BY 4.0, which allows this use. The publishers state that the
+  speakers agreed to the release (published, and this project did not check it). For Liva AI the
+  licence and the vendor's statement are the only evidence on this Mac.
+- Nobody agreed to **this project's** use as an evaluation reference in writing. The protocol in
+  [What real data is needed](#what-real-data-is-needed) asks for that, and this set does not meet it.
+  The audio and the references stayed on the local disk, and nothing was uploaded.
+- It is not a meeting of the users of this app. Liva AI is a voice chat of friends. AMI is English.
+  FLEURS is read speech. **No real Taglish meeting was measured.**
+
+**The method.**
+
+- **Arms.** The control is the production configuration (context 15 s, hop 1.5 s, pre-roll 1.5 s,
+  silence boundary 700 ms, LocalAgreement-2). Each variant changes one setting:
+  `HT` head-tolerant agreement (tolerance 3, run of 3); `VAD` boundary 500 ms; `PRE` pre-roll
+  3 s; `HOP` hop 1.3 s; `ADA` adaptive hop; `CTX` context 12 s.
+- **Blocks.** A block is one clip in one round. Every arm ran in the block, back to back, in a
+  seeded random order. **The control ran twice (`C0` and `C1`).** `C1` is the A/A replicate: a
+  measure of the noise in every block. A variant is compared with the mean of the two controls.
+- **Run.** `transcribe --live --realtime --live-trace --no-diarize`, Balanced tier, under the
+  bench lock, with the network denied. The replay follows one absolute clock.
+- **Statistic.** For each block, the median commit latency of the variant run divided by the mean of
+  the two control medians. The reduction is 1 minus the geometric mean of these ratios over the
+  blocks. A pooled median of all words is not used: pooled over a 3 s clip and a 17 s clip it sits in
+  the gap between the two and moves by seconds (the pilot showed it).
+- **Test.** A randomization test with exact size: in each block any of the three runs is as likely to
+  be the variant if the arm has no effect. An interval is a t-interval over the blocks. A bootstrap
+  over 3 or 4 rounds per clip was simulated first. It covered a true null 80% of the time, so it
+  was not used.
+- **Gates**, fixed in the plan before the first run: a median reduction of 20% or more, with
+  p < 0.05 and the lower bound above 0, no p90 or p95 more than 5% worse, no clip more than 10%
+  slower, and a 10% reduction in the time from the end of each reference segment to the commit of
+  its last word; WER at most 0.5 point worse, with no supported regression; no increase in
+  deletions, missing speech or omitted speaker turns; no more hallucinations or ghost words than
+  the controls; no broken commit invariant in any run; no material increase in dropped hops; the
+  same in both sessions.
+- **Session 1** (screening): 3 clips, 3 rounds, 8 arms, 72 runs, 3.5 hours. **Session 2** (independent,
+  held-out clips): `fleurs-lf2`, `liva-b`, `ami-b`, 3 rounds, `C0`, `C1`, `ADA` and `HT`, 36 runs.
+
+**Results.** Median commit latency, wall clock, reduction against the controls (positive is faster).
+The interval is the 95% t-interval over blocks. The last column is the p90 and p95 reduction.
+
+| Variant | Session 1: median [95%] | p | Session 2: median [95%] | p | p90 / p95, session 1 | p90 / p95, session 2 |
+| --- | --- | ---: | --- | ---: | --- | --- |
+| `C1` against `C0` (A/A) | 0.2% [-3.1, 3.4] | 0.92 | -7.7% [-18.5, 2.2] | 0.16 | -7.5% / -3.3% | -1.4% / -1.5% |
+| `HT` | 0.6% [-14.6, 13.7] | 0.58 | 14.5% [2.5, 25.0] | 0.0007 | 27.3% / 23.6% | 7.0% / 3.3% |
+| `VAD` | -1.4% [-9.9, 6.4] | 0.71 | not run | | -0.1% / -2.9% | |
+| `PRE` | -10.3% [-21.6, -0.1] | 1.00 | not run | | -7.5% / -7.7% | |
+| `HOP` | 10.0% [2.6, 16.9] | 0.0003 | not run | | 15.6% / 15.1% | |
+| `ADA` | 17.1% [6.5, 26.4] | 0.0003 | 16.7% [1.2, 29.8] | 0.003 | 18.2% / 10.8% | -2.6% / -1.5% |
+| `CTX` | 8.2% [-3.2, 18.3] | 0.03 | not run | | 18.2% / 18.2% | |
+
+Median commit latency of all words, by corpus and arm, session 1 (ms):
+
+| Arm | AMI | FLEURS | Liva |
+| --- | ---: | ---: | ---: |
+| `C0` | 3,468 | 3,612 | 17,442 |
+| `C1` | 3,443 | 3,634 | 17,387 |
+| `HT` | 3,158 | 3,664 | 16,866 |
+| `ADA` | 2,603 | 2,799 | 17,106 |
+| `CTX` | 3,498 | 3,706 | 13,662 |
+
+- **Where the latency is.** On the AMI and FLEURS excerpts the median is about 3.4 s, the floor of
+  LocalAgreement-2 at a 1.5 s hop (FINDINGS 26). On the Liva excerpts it is about 17 s, which is the
+  15 s window cap. In session 1, 23% to 25% of all words of the controls were committed by a forced
+  commit. A variant that moves the median must move Liva, and only `CTX` did (24%).
+- **`HT` cuts the tail and not the median.** Forced commits fell from 115 and 130 in the controls
+  to 89 in session 1, and from 92 and 106 to 62 in session 2. The share of words committed by a
+  forced commit fell from 23% to 25% to 16% in session 1, and from 16% to 19% to 10% in session 2.
+  The median did not move in session 1 (0.6%). In session 2 it fell 14.5%, but the two controls
+  differed from each other by 25% on `ami-b` (`C1` was slower than `C0` in all 3 rounds), and the
+  gain on that clip (28%) is inside that spread. Pooled over both sessions (not in the plan): 7.8%
+  [-1.3, 16.1].
+- **`ADA` gave about 17% in both sessions,** faster on all 6 clips (pooled over both sessions, not in
+  the plan: 16.9% [8.8, 24.2]). It is under the 20% bar. It costs 19% to 26% more decodes (the controls ran 30.2 and 31.3 a minute in session 1 and
+  31.2 and 31.5 in session 2, `ADA` 38.7 and 37.3) and its infer RTF rose from 0.61 to 0.64 and from 0.62 to 0.66. CPU time did not
+  rise (11.7 to 11.1 and 11.8 to 11.9 s per audio minute). FINDINGS 11 measured it first, with other
+  results.
+- **`PRE` was worse** on latency and on missing speech (deletion rate +8.0 points, p = 0.023).
+  **`VAD`** closed utterances sooner (finalization latency 1.12 s against 1.35 s) and did not move
+  the median. **`HOP`** gave 10%. **`CTX`** gave 8% with more critical hallucinations (16 against a
+  control mean of 10) and a latency anchored on the reference segments that was 6.8% worse.
+- **Safety, all arms.** The append-only invariant held in all 108 runs and over 33,937 committed
+  words: no word was rewritten, dropped, repeated, reordered or timestamped past the audio.
+  No decode failed. WER differences were inside the A/A spread (two identical controls differed by up to 4.4 WER points
+  in one block of 12).
+- **Conditions.** The other jobs on this Mac used a median 0.7 of 10 cores (p90 1.2 and 1.0)
+  while the replays ran, and the replay itself used a median 0.16 and 0.18 cores. The lock
+  wait was a median 1 s. Two blocks of session 1 and one of session 2 were shared with other jobs
+  (more than 2 other cores at p90). Every gate was also evaluated without them. The verdicts agree.
+
+| Gate | `HT` session 1 | `HT` session 2 | `ADA` session 1 | `ADA` session 2 |
+| --- | --- | --- | --- | --- |
+| Median reduction of 20% or more | fail (0.6%) | fail (14.5%) | fail (17.1%) | fail (16.7%) |
+| WER | pass | pass | pass | pass |
+| Missing speech and omitted turns | fail (deletion +0.9 pt, omitted +0.6 pt) | fail (deletion +0.9 pt) | fail (deletion +1.0 pt, omitted +1.7 pt) | pass |
+| Hallucinations and ghost words | pass | fail (3 against 2.5) | fail (ghost words 7 against 4.5) | pass |
+| Immutable commits | pass | pass | pass | pass |
+| Dropped hops | pass | pass | pass | pass |
+| Reproducible | no | | no | |
+
+**Limits.**
+
+- **Three clips and three rounds in session 1.** The A/A spread of one block is about 10%
+  (the standard deviation of the log ratio over 18 blocks is 0.098) and up to 25% on one clip.
+  Only an effect of 15% or more is seen reliably.
+- **Two controls and one variant per block** make the controls the better-measured side.
+- **Session 2 did not use the session 1 clips.** The plan said six clips and used the three that
+  session 1 had not used. They are independent clips, not a repeat of the same ones.
+- **AMI has no WER**, and the missing-speech check there is time-based.
+- **Contention.** Another agent used this Mac. It was sampled, flagged and tested, not removed.
+- **One machine.** Mac mini M2 Pro, 16 GB. No other Mac was measured.
+- **Latency is measured from the model's own word end times.** A second check, anchored on the
+  reference segment ends, is in the gate. It disagrees with the first for `CTX` (8% faster by the
+  model's times, 6.8% slower by the reference's).
+
 ## Limitations
 
 1. **One machine at a time.** The tables above the dated baseline come from one
