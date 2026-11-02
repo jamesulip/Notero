@@ -1,0 +1,68 @@
+[
+ {
+  "arm": "pyannote",
+  "exit": 0,
+  "item": "ami-EN2002c",
+  "maxAllCategoriesMB": 1761.0,
+  "maxFootprintMB": 1652.5,
+  "maxGraphicsMB": 33.0,
+  "maxNeuralMB": 0.2,
+  "run": 1,
+  "samples": 41
+ },
+ {
+  "arm": "nemotron3",
+  "exit": 0,
+  "item": "ami-EN2002c",
+  "maxAllCategoriesMB": 401.0,
+  "maxFootprintMB": 89.3,
+  "maxGraphicsMB": 5.6,
+  "maxNeuralMB": 212.6,
+  "run": 1,
+  "samples": 16
+ },
+ {
+  "arm": "nemotron3-fast128",
+  "exit": 0,
+  "item": "ami-EN2002c",
+  "maxAllCategoriesMB": 381.4,
+  "maxFootprintMB": 81.5,
+  "maxGraphicsMB": 3.9,
+  "maxNeuralMB": 199.3,
+  "run": 1,
+  "samples": 20
+ },
+ {
+  "arm": "pyannote",
+  "exit": 0,
+  "item": "ami-EN2002c",
+  "maxAllCategoriesMB": 1767.4,
+  "maxFootprintMB": 1658.9,
+  "maxGraphicsMB": 33.0,
+  "maxNeuralMB": 0.2,
+  "run": 2,
+  "samples": 41
+ },
+ {
+  "arm": "nemotron3",
+  "exit": 0,
+  "item": "ami-EN2002c",
+  "maxAllCategoriesMB": 400.2,
+  "maxFootprintMB": 85.8,
+  "maxGraphicsMB": 5.6,
+  "maxNeuralMB": 212.6,
+  "run": 2,
+  "samples": 16
+ },
+ {
+  "arm": "nemotron3-fast128",
+  "exit": 0,
+  "item": "ami-EN2002c",
+  "maxAllCategoriesMB": 388.0,
+  "maxFootprintMB": 87.1,
+  "maxGraphicsMB": 3.9,
+  "maxNeuralMB": 199.3,
+  "run": 2,
+  "samples": 20
+ }
+]

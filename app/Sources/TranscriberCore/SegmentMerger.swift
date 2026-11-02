@@ -53,7 +53,10 @@ public enum SegmentMerger {
             let overlap = candidate.overlapMs(startMs: startMs, endMs: endMs)
             if overlap > 0 { totals[candidate.speakerId, default: 0] += overlap }
         }
-        guard let best = totals.max(by: { $0.value < $1.value }) else { return nil }
+        // A tie (two speakers over the whole of a word, which an overlapping
+        // diarizer produces) goes to the lower label. `Dictionary` order changes
+        // from one process to the next, so `max` alone made the choice random.
+        guard let best = totals.max(by: { ($0.value, $1.key) < ($1.value, $0.key) }) else { return nil }
         let share = Double(best.value) / Double(span)
         return share >= minShare ? (best.key, share) : nil
     }

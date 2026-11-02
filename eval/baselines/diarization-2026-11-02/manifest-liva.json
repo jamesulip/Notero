@@ -1,0 +1,57 @@
+{
+ "card": {
+  "attribution": "Liva AI, Code-Switching ASR (en-tl), CC BY 4.0. Audio resampled to 16 kHz mono.",
+  "licence": "CC BY 4.0 (dataset card)",
+  "name": "Liva AI Code-Switching ASR, en-tl sample, revision 51b5d0b419e4e96cbc658603fc728a76b53be5fc",
+  "reference": "vendor speaker-labelled transcripts made from channel-separated audio; lines with only event tags are left out",
+  "speech": "conversational Taglish, one group of friends in a gaming voice chat, mixed to one track"
+ },
+ "corpus": "liva",
+ "items": [
+  {
+   "audio": "audio/liva-C_001_007.wav",
+   "audioSha256": "bc8da98d6d2b77562cb59fd8554212f1ba05352b2116c859996dd402e768b469",
+   "corpus": "liva",
+   "durationS": 600.0,
+   "id": "liva-C_001_007",
+   "ref": "refs/liva-C_001_007.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 306.9,
+   "sourceSha256": "4dcb6188295b5228ba2694e742b31de5c3773db905b0b3f0c1385b8aa183d524"
+  },
+  {
+   "audio": "audio/liva-C_001_009.wav",
+   "audioSha256": "834f722e020097a491b45f3564144c9f462974add603604f24e2369932819bea",
+   "corpus": "liva",
+   "durationS": 600.0,
+   "id": "liva-C_001_009",
+   "ref": "refs/liva-C_001_009.rttm",
+   "refSpeakers": 5,
+   "refSpeechS": 438.47,
+   "sourceSha256": "8718674b7ff3bb0ba14f2598a8fb849e9a1be999130f2fd6413e0121e5443870"
+  },
+  {
+   "audio": "audio/liva-C_001_015.wav",
+   "audioSha256": "a1d9cd9fa92d08b0fa0ba25b2f1c07e67f023a6d93842ef58621673d6aa40440",
+   "corpus": "liva",
+   "durationS": 600.0,
+   "id": "liva-C_001_015",
+   "ref": "refs/liva-C_001_015.rttm",
+   "refSpeakers": 5,
+   "refSpeechS": 441.55,
+   "sourceSha256": "48077950a052879bf022555d0e277f5baa17258d06950803c4a03d53a9050c81"
+  },
+  {
+   "audio": "audio/liva-C_001_016.wav",
+   "audioSha256": "697dc693ce6583524f26bf830e25d7757b4a9c3cd0fdfd86bd733ba3664a7612",
+   "corpus": "liva",
+   "durationS": 600.0,
+   "id": "liva-C_001_016",
+   "ref": "refs/liva-C_001_016.rttm",
+   "refSpeakers": 5,
+   "refSpeechS": 516.04,
+   "sourceSha256": "188109e2a93bd46f534ccce4a2a9421be36f45f77c115eeeddd07cf3b4bd9c5b"
+  }
+ ],
+ "schemaVersion": 1
+}

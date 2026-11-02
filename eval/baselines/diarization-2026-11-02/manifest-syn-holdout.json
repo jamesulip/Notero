@@ -1,0 +1,61 @@
+{
+ "card": {
+  "licence": "generated on this machine with macOS `say`",
+  "name": "SYNTHETIC: eval/make_multispeaker.py fixtures from /tmp/notero-data/diar/synthetic-holdout",
+  "speech": "text-to-speech voices on one timeline, exact boundaries. Not a claim about real meetings."
+ },
+ "corpus": "synth-holdout",
+ "items": [
+  {
+   "audio": "audio/h-four-voices.wav",
+   "audioSha256": "de8c4f994511d8fe039b1ce5f6d08c23cd50a276245a2cdad3cd05230ab091ed",
+   "corpus": "synth-holdout",
+   "durationS": 161.501,
+   "id": "synth-holdout-h-four-voices",
+   "ref": "refs/h-four-voices.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 130.372
+  },
+  {
+   "audio": "audio/h-three-overlap.wav",
+   "audioSha256": "88636235b881957834b62f1dc48d0946dc1cdc38b03c0b5731a0b7702fca4407",
+   "corpus": "synth-holdout",
+   "durationS": 91.587,
+   "id": "synth-holdout-h-three-overlap",
+   "ref": "refs/h-three-overlap.rttm",
+   "refSpeakers": 3,
+   "refSpeechS": 84.364
+  },
+  {
+   "audio": "audio/h-three-voices.wav",
+   "audioSha256": "23d1a0e45ccc076a2d2c3fa1e95884d9786e67f9f0196c9d0b2eb7de68cbd62d",
+   "corpus": "synth-holdout",
+   "durationS": 133.01,
+   "id": "synth-holdout-h-three-voices",
+   "ref": "refs/h-three-voices.rttm",
+   "refSpeakers": 3,
+   "refSpeechS": 116.128
+  },
+  {
+   "audio": "audio/h-two-distinct.wav",
+   "audioSha256": "6e70848fbf33a6ecf2ebe1c2d7a6fb756ebf271d3debc2f8c0761d95049aa051",
+   "corpus": "synth-holdout",
+   "durationS": 91.508,
+   "id": "synth-holdout-h-two-distinct",
+   "ref": "refs/h-two-distinct.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 76.678
+  },
+  {
+   "audio": "audio/h-two-short-turns.wav",
+   "audioSha256": "a215966a259810841b634ec1b14cb3cdd04a99ac63d6d05bd1f11d57a94b892d",
+   "corpus": "synth-holdout",
+   "durationS": 111.212,
+   "id": "synth-holdout-h-two-short-turns",
+   "ref": "refs/h-two-short-turns.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 87.192
+  }
+ ],
+ "schemaVersion": 1
+}

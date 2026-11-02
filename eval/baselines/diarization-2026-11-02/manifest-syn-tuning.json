@@ -1,0 +1,81 @@
+{
+ "card": {
+  "licence": "generated on this machine with macOS `say`",
+  "name": "SYNTHETIC: eval/make_multispeaker.py fixtures from /tmp/notero-data/diar/synthetic-tuning",
+  "speech": "text-to-speech voices on one timeline, exact boundaries. Not a claim about real meetings."
+ },
+ "corpus": "synth-tuning",
+ "items": [
+  {
+   "audio": "audio/chunk-fusion.wav",
+   "audioSha256": "e89f5c3082634e50b68e408a622dacf26b587d93ac2c26c3622f549907f45a8c",
+   "corpus": "synth-tuning",
+   "durationS": 83.812,
+   "id": "synth-tuning-chunk-fusion",
+   "ref": "refs/chunk-fusion.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 65.404
+  },
+  {
+   "audio": "audio/four-voices.wav",
+   "audioSha256": "addf1917fd10e9ecae90a862a66fc4b857c62b87956abfd75ac0b077b3bbfdac",
+   "corpus": "synth-tuning",
+   "durationS": 164.064,
+   "id": "synth-tuning-four-voices",
+   "ref": "refs/four-voices.rttm",
+   "refSpeakers": 4,
+   "refSpeechS": 143.337
+  },
+  {
+   "audio": "audio/three-overlap.wav",
+   "audioSha256": "d90e4ea707696f8f9290acbd0406dda4600c4444414c80b67f9b291404b2c78a",
+   "corpus": "synth-tuning",
+   "durationS": 93.243,
+   "id": "synth-tuning-three-overlap",
+   "ref": "refs/three-overlap.rttm",
+   "refSpeakers": 3,
+   "refSpeechS": 85.814
+  },
+  {
+   "audio": "audio/three-voices.wav",
+   "audioSha256": "07d12c5ee3cfc7bfc04f31812f4c72fff4b2c9d5fe8e75866e0dc2bf1e01bbd2",
+   "corpus": "synth-tuning",
+   "durationS": 125.545,
+   "id": "synth-tuning-three-voices",
+   "ref": "refs/three-voices.rttm",
+   "refSpeakers": 3,
+   "refSpeechS": 111.395
+  },
+  {
+   "audio": "audio/two-distinct.wav",
+   "audioSha256": "504b228ecb64042196667e45cd4f022ad21137b49b7865818542a9c7bd7a4635",
+   "corpus": "synth-tuning",
+   "durationS": 101.988,
+   "id": "synth-tuning-two-distinct",
+   "ref": "refs/two-distinct.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 86.105
+  },
+  {
+   "audio": "audio/two-short-turns.wav",
+   "audioSha256": "0ee8869af042b56c95b032361856479fe0016946f5436fd2d8711da907505016",
+   "corpus": "synth-tuning",
+   "durationS": 101.078,
+   "id": "synth-tuning-two-short-turns",
+   "ref": "refs/two-short-turns.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 79.26
+  },
+  {
+   "audio": "audio/two-similar.wav",
+   "audioSha256": "78da4519dc20f1978eacbac1cd3f15690093997ee0732af8e091c17c8cb31f89",
+   "corpus": "synth-tuning",
+   "durationS": 101.642,
+   "id": "synth-tuning-two-similar",
+   "ref": "refs/two-similar.rttm",
+   "refSpeakers": 2,
+   "refSpeechS": 84.025
+  }
+ ],
+ "schemaVersion": 1
+}

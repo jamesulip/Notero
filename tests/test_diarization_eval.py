@@ -328,3 +328,21 @@ def test_identity_summary_pools_by_seconds():
     s = de.identity_summary(rows, "a")
     assert s["carry"]["wrong"] == pytest.approx(2.5)
     assert s["runs"] == 2
+
+
+def test_rescore_reads_other_references_by_meeting_name(tmp_path):
+    out = tmp_path / "run"
+    (out / "runs" / "a").mkdir(parents=True)
+    (out / "runs" / "a" / "ami-M1.r1.json").write_text(json.dumps(
+        {"spans": [{"start": 0, "end": 10, "speaker": "S1"}]}))
+    refs = tmp_path / "refs"
+    refs.mkdir()
+    der.write_rttm([S(0, 10, "x")], refs / "M1.rttm", "M1")
+    plan = {"arms": [{"label": "a"}], "items": [{"id": "ami-M1", "corpus": "ami"}],
+            "rules": {"primary": dm.Rules().as_dict(), "secondary": []}}
+    (out / "plan.json").write_text(json.dumps(plan))
+    assert de.main(["rescore", "--plan", str(out / "plan.json"), "--corpus", "ami",
+                    "--refs", str(refs), "--label", "alt"]) == 0
+    result = json.loads((out / "rescore-alt.json").read_text())
+    assert result["pooled"]["a"][0]["der"] == 0
+    assert result["references"][0]["item"] == "ami-M1"

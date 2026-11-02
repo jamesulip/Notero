@@ -6,6 +6,10 @@
     plan               fix arms, items, run order, scoring rules and the gate, before any run
     run                run every (item, arm, repeat) not yet done; resumable
     score              metrics for every output (eval/diarization_metrics.py)
+    rescore            score the same outputs of one corpus against another reference set
+                       (secondary: the plan's references stay the primary ones)
+    residency          sample `footprint(1)` from outside each arm on one file: Neural Engine
+                       and GPU memory, which the process footprint leaves out
     identity           re-run each arm on changed audio with `--carry-from` its first run, and
                        count speech that a carried name would put under the wrong person
     decide             apply the gate written in the plan
@@ -514,6 +518,123 @@ def repeat_pairs(rows: list[dict], arm: str) -> list[tuple[dict, dict]]:
     return [(runs[1], runs[2]) for runs in by.values() if 1 in runs and 2 in runs]
 
 
+def cmd_rescore(args) -> int:
+    """Score outputs that already exist against other references, by meeting name."""
+    out = args.plan.resolve().parent
+    plan = json.loads(args.plan.read_text())
+    rules = [dm.Rules(**plan["rules"]["primary"])] + [dm.Rules(**r) for r in plan["rules"]["secondary"]]
+    labels = [a["label"] for a in plan["arms"]]
+    results: dict = {a: {k: [] for k in range(len(rules))} for a in labels}
+    used = []
+    for item in plan["items"]:
+        if item["corpus"] != args.corpus:
+            continue
+        name = item["id"].split("-", 1)[1]
+        ref_path = args.refs / f"{name}.rttm"
+        if not ref_path.exists():
+            print(f"error: no {ref_path}", file=sys.stderr)
+            return 2
+        ref = der.read_rttm(ref_path)
+        used.append({"item": item["id"], "ref": str(ref_path), "sha256": sha256(ref_path)})
+        for a in labels:
+            hyp = der.read_spans_json(output_path(out, a, item["id"], 1))
+            for k, r in enumerate(rules):
+                results[a][k].append(dm.evaluate(ref, hyp, r))
+    head = [f"collar {r.collar} s, overlap {'skipped' if r.skip_overlap else 'scored'}" for r in rules]
+    lines = [f"# {args.corpus} against {args.label}", "", f"References: `{args.refs}`. {args.note or ''}", "",
+             "| Arm | " + " | ".join(f"DER, {h}" for h in head) + " | Missed | False alarm | Confusion | Merged |",
+             "| --- |" + " ---: |" * (len(rules) + 4)]
+    summary = {}
+    for a in labels:
+        pooled = [dm.pooled(results[a][k]) for k in range(len(rules))]
+        summary[a] = pooled
+        p = pooled[0]
+        lines.append(f"| {a} | " + " | ".join(pct(x["der"]) for x in pooled)
+                     + f" | {pct(p['missed'])} | {pct(p['false_alarm'])} | {pct(p['confusion'])} | "
+                     f"{p['merged_ref_speakers']} |")
+    (out / f"rescore-{args.label}.json").write_text(json.dumps(
+        {"references": used, "rules": [r.as_dict() for r in rules], "pooled": summary},
+        indent=1, sort_keys=True) + "\n")
+    (out / f"rescore-{args.label}.md").write_text("\n".join(lines) + "\n")
+    print("\n".join(lines))
+    return 0
+
+
+# --- residency -------------------------------------------------------------------
+
+def footprint_sample(pid: int) -> dict:
+    """`footprint -j` of one process, in MB: the total, the Neural Engine
+    categories and the graphics (IOAccelerator / IOSurface) categories, every column."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as directory:
+        target = Path(directory) / "fp.json"
+        proc = subprocess.run(["footprint", "-p", str(pid), "-j", str(target)],
+                              capture_output=True, text=True)
+        if proc.returncode != 0 or not target.exists():
+            return {}
+        try:
+            doc = json.loads(target.read_text())
+        except json.JSONDecodeError:
+            return {}
+    procs = doc.get("processes") or []
+    if not procs:
+        return {}
+    cats = procs[0].get("categories") or {}
+
+    def total(match) -> float:
+        return sum(sum(c.get(k, 0) for k in ("dirty", "clean", "swapped"))
+                   for name, c in cats.items() if match(name.lower())) / 2**20
+    return {"footprintMB": procs[0].get("footprint", 0) / 2**20,
+            "neuralMB": total(lambda n: "neural" in n),
+            "graphicsMB": total(lambda n: "ioaccelerator" in n or "iosurface" in n or "gpu" in n),
+            "allCategoriesMB": total(lambda n: True)}
+
+
+def cmd_residency(args) -> int:
+    out = args.plan.resolve().parent
+    plan = json.loads(args.plan.read_text())
+    item = next(i for i in plan["items"] if i["id"] == args.item)
+    results = []
+    for repeat in range(1, args.runs + 1):
+        for arm in plan["arms"]:
+            target = out / "residency" / f"{arm['label']}.{item['id']}.r{repeat}.json"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            argv = [a.replace("{audio}", item["audio"]).replace("{json}", str(target))
+                     .replace("{label}", arm["label"]) for a in arm["argv"]]
+            # The lock is taken by a wrapper around this sampler's whole run, so
+            # the sampled process is the diarizer itself.
+            proc = subprocess.Popen(plan["wrap"][1:] + argv if plan["wrap"][:1] == [DEFAULT_WRAP[0]]
+                                    else plan["wrap"] + argv)
+            peak: dict = {}
+            samples = 0
+            while proc.poll() is None:
+                for pid in child_pids(proc.pid) + [proc.pid]:
+                    got = footprint_sample(pid)
+                    if got:
+                        samples += 1
+                        for k, v in got.items():
+                            peak[k] = max(peak.get(k, 0.0), v)
+                time.sleep(args.interval)
+            results.append({"arm": arm["label"], "item": item["id"], "run": repeat,
+                            "exit": proc.returncode, "samples": samples,
+                            **{f"max{k[0].upper()}{k[1:]}": round(v, 1) for k, v in peak.items()}})
+            print(json.dumps(results[-1], sort_keys=True), flush=True)
+    (out / "residency.json").write_text(json.dumps(results, indent=1, sort_keys=True) + "\n")
+    return 0 if all(r["exit"] == 0 and r["samples"] for r in results) else 1
+
+
+def child_pids(pid: int) -> list[int]:
+    """Every descendant of `pid` (sandbox-exec execs in place, but a wrapper may not)."""
+    found, frontier = [], [pid]
+    while frontier:
+        parent = frontier.pop()
+        proc = subprocess.run(["pgrep", "-P", str(parent)], capture_output=True, text=True)
+        kids = [int(x) for x in proc.stdout.split()]
+        found += kids
+        frontier += kids
+    return found
+
+
 # --- identity --------------------------------------------------------------------
 
 IDENTITY_VARIANTS = ("mute-opener", "trim-head", "noise40", "aac64")
@@ -715,6 +836,12 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--out", type=Path, required=True)
     for name in ("run", "score", "identity", "decide"):
         s = sub.add_parser(name); s.add_argument("--plan", type=Path, required=True)
+    q = sub.add_parser("residency"); q.add_argument("--plan", type=Path, required=True)
+    q.add_argument("--item", required=True); q.add_argument("--runs", type=int, default=2)
+    q.add_argument("--interval", type=float, default=0.5)
+    r = sub.add_parser("rescore"); r.add_argument("--plan", type=Path, required=True)
+    r.add_argument("--corpus", required=True); r.add_argument("--refs", type=Path, required=True)
+    r.add_argument("--label", required=True); r.add_argument("--note")
     args = p.parse_args(argv)
     if args.cmd == "prepare-ami":
         return prepare_ami(args.src, args.work)
@@ -723,7 +850,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "prepare-synthetic":
         return prepare_synthetic(args.fixtures, args.work, args.corpus)
     return {"plan": cmd_plan, "run": cmd_run, "score": cmd_score,
-            "identity": cmd_identity, "decide": cmd_decide}[args.cmd](args)
+            "identity": cmd_identity, "decide": cmd_decide, "rescore": cmd_rescore,
+            "residency": cmd_residency}[args.cmd](args)
 
 
 if __name__ == "__main__":
