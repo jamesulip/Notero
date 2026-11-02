@@ -1528,8 +1528,8 @@ BENCHMARKS "What real data is needed" asks for, and it is not a meeting of this 
 
 **The median is two different problems.** On AMI and FLEURS it is about 3.4 s: the floor of LocalAgreement-2
 at a 1.5 s hop, which FINDINGS 26 found on the easiest synthetic clip. On Liva it is about 17 s, the 15 s window
-cap: decodes ran a median 1.3-1.5 s there with a p90 above 4 s (the retry ladder), 35% of hops were dropped in the
-pilot, and 23-25% of all words of the controls in session 1 came from forced commits. A variant moves the median
+cap: in the pilot (not evidence) decodes on Liva ran a median 1.3-1.5 s with a p90 above 4 s (the retry
+ladder) and 31-38% of hops were dropped; and 23-25% of all words of the controls in session 1 came from forced commits. A variant moves the median
 only by moving Liva, and only the 12 s cap did (24%), by committing without agreement more often: 16 critical
 hallucinations against a control mean of 10, and a latency anchored on the reference segment ends that was 7% worse.
 
