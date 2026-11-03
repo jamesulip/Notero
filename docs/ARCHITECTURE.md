@@ -47,7 +47,8 @@ sees all three.
 Pure logic and no framework. It holds `LocalAgreement` (the commit policy),
 `SegmentMerger` (transcript and speaker spans into turns), `Exporter` (the five
 formats), the search index, `RingBuffer`, `HighPassFilter`, `WordErrorRate`,
-`Benchmark`, and the `PCMSource` protocol. `Catalogues.swift` holds the model
+`Benchmark`, `CommitInvariantMonitor` (it checks that committed text is only
+ever appended to), and the `PCMSource` protocol. `Catalogues.swift` holds the model
 catalogue, the language catalogue, `ModelTier` and `DiarizationMode`.
 
 `Evaluation/` is the evaluation framework: text normalization, word and
@@ -73,7 +74,10 @@ the microphone, the audio of this Mac through `SystemAudioTap`, or both.
 `SpeakerEngine` wrap WhisperKit and FluidAudio. `LiveDecoder` and `LiveSession`
 run the live path. `OfflinePipeline` runs the whole-file path.
 `TranscriptionQueue` runs the background jobs. `EngineHost` owns the models.
-`BenchmarkRunner` measures the tiers.
+`BenchmarkRunner` measures the tiers. `LiveReplayRecorder` watches a
+`LiveDecoder` during a replay and records every decode, dropped hop, utterance
+end and commit, with the reason of each commit. `transcribe --live` uses it,
+and `eval/live_latency.py` reads what it records.
 
 ### `Transcriber`
 

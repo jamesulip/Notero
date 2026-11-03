@@ -1,0 +1,694 @@
+{
+  "schema": 1,
+  "session": 1,
+  "name": "screening: every variant against the control, three clips",
+  "created": "2026-11-02T18:34:21+08:00",
+  "commit": "cab57f7308bb01e4d862badc72e3a316e9557676",
+  "dirty": false,
+  "hardware": {
+    "model": "Mac14,12",
+    "chip": "Apple M2 Pro",
+    "cores": 10,
+    "memoryGB": 16,
+    "os": "26.6.2"
+  },
+  "binary": {
+    "path": "/tmp/notero-p2/bin/transcribe",
+    "sha256": "93f6b23deb9e7a522fe2f91a2dcc5a364c513fe9858f4b9dfa38d6dd02661f27",
+    "builtFrom": "/Users/server/.t3/worktrees/Notero/t3-db100cb8/app/.build/arm64-apple-macosx/release/transcribe"
+  },
+  "tier": "balanced",
+  "wrap": [
+    "/tmp/notero-team/bench-lock.sh",
+    "sandbox-exec",
+    "-p",
+    "(version 1)(allow default)(deny network*)"
+  ],
+  "base": [
+    "--no-diarize",
+    "--live",
+    "--realtime",
+    "--live-trace"
+  ],
+  "seed": 20261102,
+  "rounds": 3,
+  "arms": {
+    "C0": {
+      "flags": [],
+      "variable": "control",
+      "what": "production: context 15 s, hop 1.5 s, pre-roll 1.5 s, boundary 700 ms, LocalAgreement-2"
+    },
+    "C1": {
+      "flags": [],
+      "variable": "control",
+      "what": "the control again: the A/A replicate"
+    },
+    "HT": {
+      "flags": [
+        "--head-tolerance",
+        "3",
+        "--head-min-run",
+        "3"
+      ],
+      "variable": "agreement",
+      "what": "head-tolerant agreement: tolerance 3 words, run of 3 (FINDINGS 27)"
+    },
+    "VAD": {
+      "flags": [
+        "--silence-boundary",
+        "500"
+      ],
+      "variable": "VAD finalization",
+      "what": "an utterance closes after 500 ms of silence instead of 700 ms"
+    },
+    "PRE": {
+      "flags": [
+        "--pre-roll",
+        "3000"
+      ],
+      "variable": "context anchoring",
+      "what": "3 s of committed audio kept in front of the active region instead of 1.5 s (the ring holds context + pre-roll, so the active region is still capped at 15 s)"
+    },
+    "HOP": {
+      "flags": [
+        "--hop",
+        "1300"
+      ],
+      "variable": "hop scheduling",
+      "what": "a decode every 1.3 s instead of 1.5 s (the replay hands over 100 ms chunks, so a hop is a whole number of chunks)"
+    },
+    "ADA": {
+      "flags": [
+        "--adaptive-hop"
+      ],
+      "variable": "hop scheduling",
+      "what": "the hop tracks the last decode (1.5x, between 1.0 and 1.5 s)"
+    },
+    "CTX": {
+      "flags": [
+        "--context",
+        "12000"
+      ],
+      "variable": "forced commits",
+      "what": "the active region is capped at 12 s, so a stalled window is forced sooner"
+    }
+  },
+  "controls": [
+    "C0",
+    "C1"
+  ],
+  "variants": [
+    "HT",
+    "VAD",
+    "PRE",
+    "HOP",
+    "ADA",
+    "CTX"
+  ],
+  "clips": [
+    {
+      "id": "fleurs-lf1",
+      "corpus": "fleurs",
+      "kind": "read Tagalog, constructed long-form",
+      "language": "tl",
+      "wav": "/tmp/notero-p2/clips/fleurs-lf1.wav",
+      "wavSha256": "eb0457c23384a6fc8d396a6d32487e4eaace656f9b2da054ffad00093d635a71",
+      "durationMs": 164220,
+      "refText": "/tmp/notero-p2/refs/fleurs-lf1.txt",
+      "refWords": 253,
+      "refSpans": "/tmp/notero-p2/refs/fleurs-lf1.spans.json",
+      "refSpansSha256": "dcc4f5ab9959a0328ea585385cb4e774bba8ed41955bd043e7a8a736ee0e1e6d",
+      "source": {
+        "dataset": "FLEURS fil_ph test",
+        "licence": "CC BY 4.0",
+        "sentences": [
+          1662,
+          1663,
+          1664,
+          1665,
+          1666,
+          1667,
+          1668,
+          1669
+        ],
+        "cutAtS": 164.22
+      }
+    },
+    {
+      "id": "liva-a",
+      "corpus": "liva",
+      "kind": "conversational Taglish, 4-5 friends in a voice chat",
+      "language": "tl",
+      "wav": "/tmp/notero-p2/clips/liva-a.wav",
+      "wavSha256": "eab915e7c49fd52ce632de7306f859e460d86ca4b764b2e69c6969564a43f06d",
+      "durationMs": 180000,
+      "refText": "/tmp/notero-p2/refs/liva-a.txt",
+      "refWords": 473,
+      "refSpans": "/tmp/notero-p2/refs/liva-a.spans.json",
+      "refSpansSha256": "b398682298f66e5c2ea2039873973db906af390ec19b99e9dbcd6fa43b60a937",
+      "source": {
+        "dataset": "Liva AI en-tl (code-switching-asr, rev 51b5d0b)",
+        "licence": "CC BY 4.0",
+        "file": "liva-en-tl-C_001_015",
+        "startMs": 420000,
+        "windowMs": 180000,
+        "utterances": 101
+      }
+    },
+    {
+      "id": "ami-a",
+      "corpus": "ami",
+      "kind": "English meeting, headset mix (speech activity reference only)",
+      "language": "en",
+      "wav": "/tmp/notero-p2/clips/ami-a.wav",
+      "wavSha256": "60be9a0e48422b9a6ba479d00a58516af0798b374dc4abd1cad45cc73ecc129f",
+      "durationMs": 180000,
+      "refText": null,
+      "refWords": null,
+      "refSpans": "/tmp/notero-p2/refs/ami-a.spans.json",
+      "refSpansSha256": "530498fe0e8becbd562197eb1916dd321a75a511851ea65aedc337e34b630704",
+      "source": {
+        "dataset": "AMI Meeting Corpus, test set, Mix-Headset",
+        "licence": "CC BY 4.0",
+        "meeting": "ami-TS3003d",
+        "startMs": 360000,
+        "windowMs": 180000
+      }
+    }
+  ],
+  "order": [
+    {
+      "round": 1,
+      "clip": "liva-a",
+      "arm": "ADA",
+      "position": 1
+    },
+    {
+      "round": 1,
+      "clip": "liva-a",
+      "arm": "CTX",
+      "position": 2
+    },
+    {
+      "round": 1,
+      "clip": "liva-a",
+      "arm": "HT",
+      "position": 3
+    },
+    {
+      "round": 1,
+      "clip": "liva-a",
+      "arm": "C0",
+      "position": 4
+    },
+    {
+      "round": 1,
+      "clip": "liva-a",
+      "arm": "C1",
+      "position": 5
+    },
+    {
+      "round": 1,
+      "clip": "liva-a",
+      "arm": "VAD",
+      "position": 6
+    },
+    {
+      "round": 1,
+      "clip": "liva-a",
+      "arm": "HOP",
+      "position": 7
+    },
+    {
+      "round": 1,
+      "clip": "liva-a",
+      "arm": "PRE",
+      "position": 8
+    },
+    {
+      "round": 1,
+      "clip": "fleurs-lf1",
+      "arm": "HOP",
+      "position": 1
+    },
+    {
+      "round": 1,
+      "clip": "fleurs-lf1",
+      "arm": "C1",
+      "position": 2
+    },
+    {
+      "round": 1,
+      "clip": "fleurs-lf1",
+      "arm": "C0",
+      "position": 3
+    },
+    {
+      "round": 1,
+      "clip": "fleurs-lf1",
+      "arm": "PRE",
+      "position": 4
+    },
+    {
+      "round": 1,
+      "clip": "fleurs-lf1",
+      "arm": "ADA",
+      "position": 5
+    },
+    {
+      "round": 1,
+      "clip": "fleurs-lf1",
+      "arm": "HT",
+      "position": 6
+    },
+    {
+      "round": 1,
+      "clip": "fleurs-lf1",
+      "arm": "VAD",
+      "position": 7
+    },
+    {
+      "round": 1,
+      "clip": "fleurs-lf1",
+      "arm": "CTX",
+      "position": 8
+    },
+    {
+      "round": 1,
+      "clip": "ami-a",
+      "arm": "C0",
+      "position": 1
+    },
+    {
+      "round": 1,
+      "clip": "ami-a",
+      "arm": "VAD",
+      "position": 2
+    },
+    {
+      "round": 1,
+      "clip": "ami-a",
+      "arm": "ADA",
+      "position": 3
+    },
+    {
+      "round": 1,
+      "clip": "ami-a",
+      "arm": "HOP",
+      "position": 4
+    },
+    {
+      "round": 1,
+      "clip": "ami-a",
+      "arm": "HT",
+      "position": 5
+    },
+    {
+      "round": 1,
+      "clip": "ami-a",
+      "arm": "C1",
+      "position": 6
+    },
+    {
+      "round": 1,
+      "clip": "ami-a",
+      "arm": "PRE",
+      "position": 7
+    },
+    {
+      "round": 1,
+      "clip": "ami-a",
+      "arm": "CTX",
+      "position": 8
+    },
+    {
+      "round": 2,
+      "clip": "fleurs-lf1",
+      "arm": "CTX",
+      "position": 1
+    },
+    {
+      "round": 2,
+      "clip": "fleurs-lf1",
+      "arm": "PRE",
+      "position": 2
+    },
+    {
+      "round": 2,
+      "clip": "fleurs-lf1",
+      "arm": "VAD",
+      "position": 3
+    },
+    {
+      "round": 2,
+      "clip": "fleurs-lf1",
+      "arm": "HOP",
+      "position": 4
+    },
+    {
+      "round": 2,
+      "clip": "fleurs-lf1",
+      "arm": "HT",
+      "position": 5
+    },
+    {
+      "round": 2,
+      "clip": "fleurs-lf1",
+      "arm": "C1",
+      "position": 6
+    },
+    {
+      "round": 2,
+      "clip": "fleurs-lf1",
+      "arm": "ADA",
+      "position": 7
+    },
+    {
+      "round": 2,
+      "clip": "fleurs-lf1",
+      "arm": "C0",
+      "position": 8
+    },
+    {
+      "round": 2,
+      "clip": "ami-a",
+      "arm": "PRE",
+      "position": 1
+    },
+    {
+      "round": 2,
+      "clip": "ami-a",
+      "arm": "ADA",
+      "position": 2
+    },
+    {
+      "round": 2,
+      "clip": "ami-a",
+      "arm": "C0",
+      "position": 3
+    },
+    {
+      "round": 2,
+      "clip": "ami-a",
+      "arm": "HOP",
+      "position": 4
+    },
+    {
+      "round": 2,
+      "clip": "ami-a",
+      "arm": "CTX",
+      "position": 5
+    },
+    {
+      "round": 2,
+      "clip": "ami-a",
+      "arm": "VAD",
+      "position": 6
+    },
+    {
+      "round": 2,
+      "clip": "ami-a",
+      "arm": "C1",
+      "position": 7
+    },
+    {
+      "round": 2,
+      "clip": "ami-a",
+      "arm": "HT",
+      "position": 8
+    },
+    {
+      "round": 2,
+      "clip": "liva-a",
+      "arm": "C0",
+      "position": 1
+    },
+    {
+      "round": 2,
+      "clip": "liva-a",
+      "arm": "VAD",
+      "position": 2
+    },
+    {
+      "round": 2,
+      "clip": "liva-a",
+      "arm": "CTX",
+      "position": 3
+    },
+    {
+      "round": 2,
+      "clip": "liva-a",
+      "arm": "ADA",
+      "position": 4
+    },
+    {
+      "round": 2,
+      "clip": "liva-a",
+      "arm": "HT",
+      "position": 5
+    },
+    {
+      "round": 2,
+      "clip": "liva-a",
+      "arm": "C1",
+      "position": 6
+    },
+    {
+      "round": 2,
+      "clip": "liva-a",
+      "arm": "PRE",
+      "position": 7
+    },
+    {
+      "round": 2,
+      "clip": "liva-a",
+      "arm": "HOP",
+      "position": 8
+    },
+    {
+      "round": 3,
+      "clip": "fleurs-lf1",
+      "arm": "CTX",
+      "position": 1
+    },
+    {
+      "round": 3,
+      "clip": "fleurs-lf1",
+      "arm": "HOP",
+      "position": 2
+    },
+    {
+      "round": 3,
+      "clip": "fleurs-lf1",
+      "arm": "HT",
+      "position": 3
+    },
+    {
+      "round": 3,
+      "clip": "fleurs-lf1",
+      "arm": "PRE",
+      "position": 4
+    },
+    {
+      "round": 3,
+      "clip": "fleurs-lf1",
+      "arm": "VAD",
+      "position": 5
+    },
+    {
+      "round": 3,
+      "clip": "fleurs-lf1",
+      "arm": "C1",
+      "position": 6
+    },
+    {
+      "round": 3,
+      "clip": "fleurs-lf1",
+      "arm": "ADA",
+      "position": 7
+    },
+    {
+      "round": 3,
+      "clip": "fleurs-lf1",
+      "arm": "C0",
+      "position": 8
+    },
+    {
+      "round": 3,
+      "clip": "liva-a",
+      "arm": "C1",
+      "position": 1
+    },
+    {
+      "round": 3,
+      "clip": "liva-a",
+      "arm": "HT",
+      "position": 2
+    },
+    {
+      "round": 3,
+      "clip": "liva-a",
+      "arm": "HOP",
+      "position": 3
+    },
+    {
+      "round": 3,
+      "clip": "liva-a",
+      "arm": "CTX",
+      "position": 4
+    },
+    {
+      "round": 3,
+      "clip": "liva-a",
+      "arm": "C0",
+      "position": 5
+    },
+    {
+      "round": 3,
+      "clip": "liva-a",
+      "arm": "ADA",
+      "position": 6
+    },
+    {
+      "round": 3,
+      "clip": "liva-a",
+      "arm": "PRE",
+      "position": 7
+    },
+    {
+      "round": 3,
+      "clip": "liva-a",
+      "arm": "VAD",
+      "position": 8
+    },
+    {
+      "round": 3,
+      "clip": "ami-a",
+      "arm": "HOP",
+      "position": 1
+    },
+    {
+      "round": 3,
+      "clip": "ami-a",
+      "arm": "PRE",
+      "position": 2
+    },
+    {
+      "round": 3,
+      "clip": "ami-a",
+      "arm": "HT",
+      "position": 3
+    },
+    {
+      "round": 3,
+      "clip": "ami-a",
+      "arm": "C0",
+      "position": 4
+    },
+    {
+      "round": 3,
+      "clip": "ami-a",
+      "arm": "VAD",
+      "position": 5
+    },
+    {
+      "round": 3,
+      "clip": "ami-a",
+      "arm": "ADA",
+      "position": 6
+    },
+    {
+      "round": 3,
+      "clip": "ami-a",
+      "arm": "C1",
+      "position": 7
+    },
+    {
+      "round": 3,
+      "clip": "ami-a",
+      "arm": "CTX",
+      "position": 8
+    }
+  ],
+  "gate": {
+    "latency": {
+      "metric": "the geometric mean, over the blocks of a session, of (the variant run's median wall commit latency / the mean of the two control runs' medians in the same block); the reduction is 1 minus that. A block is one clip in one round. Not a pooled median of words: pooled over clips that differ by 5x it sits in the gap of a bimodal mixture and moves by seconds on a few words.",
+      "minRelativeReduction": 0.2,
+      "support": "one-sided randomization test of that statistic, p < 0.05: in a block any of the three runs (C0, C1, the variant) is as likely to be the variant under 'no effect'",
+      "supportAlpha": 0.05,
+      "randomizationResamples": 10000,
+      "interval": "t-interval on the per-block log ratio of median latencies (blocks are the unit); reported, and its one-sided lower bound must also be above 0",
+      "tailGuard": {
+        "minReduction": -0.05,
+        "what": "the p90 and the p95 commit latency must not be more than 5% worse, by the same statistic"
+      },
+      "perClipGuard": {
+        "minReduction": -0.1,
+        "what": "no clip may get more than 10% slower (its reduction, as a geometric mean over its rounds)"
+      },
+      "referenceAnchor": {
+        "minReduction": 0.1,
+        "what": "the same statistic on the time from the end of each reference segment (a speaker turn, an utterance, a read sentence) to the commit of the last word inside it must fall by at least 10%: a variant that only shifts the model's own word timestamps cannot pass"
+      }
+    },
+    "wer": {
+      "clips": "clips with a word reference",
+      "supportedRegressionAlpha": 0.05,
+      "test": "paired randomization over blocks (variant minus the mean of the two controls, one-sided), Holm-adjusted over the four safety metrics",
+      "maxMeanIncreasePt": 0.5,
+      "maxClipMeanIncreasePt": 3.0
+    },
+    "missingSpeech": {
+      "alpha": 0.05,
+      "maxDeletionRateIncreasePt": 0.5,
+      "maxMissingShareIncreasePt": 0.5,
+      "maxOmittedSegmentsIncreasePt": 0.5,
+      "what": "deletion rate (word-reference clips); share of reference speech time with no word within 1 s; share of reference segments of 1 s or more (one speaker's turn, one utterance) with no word overlapping them, 300 ms either side. The last two on every clip, AMI included."
+    },
+    "hallucinations": {
+      "rule": "the variant's total of critical hallucinations (invented filler phrases, loops of 4 repeats or more, runs of 6 or more inserted words on clean references, and a 4-word phrase committed again within 30 words, each net of the reference's own) must not exceed the mean of the two controls' totals; the same for ghost words (words more than 1 s from any reference speech)"
+    },
+    "immutability": {
+      "maxViolations": 0,
+      "scope": "every run of every arm of the session, and the monitor's word count must equal the words committed"
+    },
+    "droppedHops": {
+      "maxRelativeIncrease": 0.2,
+      "orAbsolutePp": 1.0
+    },
+    "failures": {
+      "maxFailedRuns": 0,
+      "maxFailedDecodesIncrease": 0
+    },
+    "aa": {
+      "maxAbsEffect": 0.1,
+      "twoSidedRandomizationPMustBeAtLeast": 0.05
+    },
+    "contention": {
+      "otherCoresP90Above": 2.0,
+      "minBlocksForSensitivity": 4,
+      "what": "a run is shared when the other jobs on the Mac used more than 2 cores at the 90th percentile of the samples taken during it; its whole block is then shared. Every gate is evaluated on all blocks AND, when 4 or more blocks are not shared, on those alone; both must pass."
+    },
+    "reproducibility": "every rule above holds in session 1 AND in session 2, which runs later, in its own invocation, on the clips of session 1 and the held-out clips",
+    "promotion": {
+      "minSession1Reduction": 0.15,
+      "requiresImmutability": true
+    },
+    "default": "unchanged unless every gate passes; the feature flag stays off otherwise"
+  },
+  "statistics": {
+    "seed": 20261102,
+    "randomizationResamples": 10000,
+    "unit": "the block (one clip in one round); words are never resampled",
+    "controlForVariants": "the mean (or the pool, for latency) of C0 and C1 in the same block",
+    "aa": "C0 against C1, the same statistics, two-sided",
+    "whyNotABootstrap": "a bootstrap over 3 to 4 rounds per clip was simulated before the first run: its 95% intervals covered a true null 80% of the time. The randomization test has exact size; the t-interval covered 91-92%.",
+    "whyNotAPooledMedian": "the pilot (not evidence) showed C0 at 3.9 s and C1 at 6.9 s pooled over a 3 s clip and a 17 s clip: a bimodal pool has a median in the gap"
+  },
+  "notes": [
+    "A pilot of 6 runs on two short clips outside this set (pilot-liva, pilot-ami; harness check, not evidence) preceded this plan. It showed that a pooled median of words over a 3 s clip and a 17 s clip is unstable, so the latency statistic is the per-block geometric mean of median ratios.",
+    "An independent read-only review of the harness code ran after four measured runs of an earlier version of this plan had finished. None of their results was read or scored, and they were deleted with their binary. The review led to the amendments in this plan: a tail guard, a per-clip guard and a reference-anchored latency check; omitted turns, repeated phrases and ghost words; contention flagged per block with a sensitivity analysis; a paired randomization for the per-run metrics; the hop arm at 1.3 s.",
+    "Session 2 is planned after this session. Its clips are fixed now: all six clips of eval/fixtures/live-latency-clips.json. Its arms are C0, C1 and every variant that clears the promotion rule.",
+    "The binary is a copy of app/.build/release/transcribe built from the commit above; the plan records its sha256 and run refuses a different one."
+  ]
+}

@@ -46,6 +46,13 @@ struct Options {
     var preRollMs = SessionConfig().preRollMs
     var contextMs = SessionConfig().contextMs
     var adaptiveHop = false
+    var minHopMs = SessionConfig().minHopMs
+    var silenceBoundaryMs = SessionConfig().silenceBoundaryMs
+    var headTolerance = SessionConfig().headTolerance
+    var headMinRun = SessionConfig().headMinRun
+    /// Live only: add the replay trace (every decode, drop, boundary and commit, with the
+    /// commit-invariant check) to the JSON report. Numbers only, no words.
+    var liveTrace = false
     // Capture smoke test.
     var record = false
     var micCheck = false
@@ -108,6 +115,12 @@ func parse() -> Options {
         case "--live": options.live = true
         case "--realtime": options.realtime = true
         case "--adaptive-hop": options.adaptiveHop = true
+        case "--min-hop": options.minHopMs = value().flatMap(Int.init) ?? options.minHopMs
+        case "--silence-boundary":
+            options.silenceBoundaryMs = value().flatMap(Int.init) ?? options.silenceBoundaryMs
+        case "--head-tolerance": options.headTolerance = value().flatMap(Int.init) ?? options.headTolerance
+        case "--head-min-run": options.headMinRun = value().flatMap(Int.init) ?? options.headMinRun
+        case "--live-trace": options.liveTrace = true
         case "--record": options.record = true
         case "--mic-check": options.micCheck = true
         case "--source":
@@ -144,7 +157,8 @@ func parse() -> Options {
                        [--language tl] [--prompt "Maria, Jose"] [--style-hint]
                        [--fast-diarize | --no-diarize] [--room-mode]
                        [--format txt|markdown|srt|vtt|json] [--out FILE] [--json FILE]
-                       [--live [--realtime] [--hop MS] [--pre-roll MS] [--context MS] [--adaptive-hop]]
+                       [--live [--realtime] [--hop MS] [--pre-roll MS] [--context MS] [--adaptive-hop [--min-hop MS]]
+                              [--silence-boundary MS] [--head-tolerance N [--head-min-run N]] [--live-trace]]
             transcribe --record [--source microphone|systemAudio|both] [--device UID]
                        [--seconds N] [--out FILE.m4a] [--gui]
             transcribe --mic-check [--device UID] [--seconds N] [--gui]
@@ -223,6 +237,9 @@ struct RunReport: Codable {
     /// With `--reference`: the evaluation framework's score of `transcript`.
     /// `wer` above stays the legacy scorer's number.
     var evaluation: ItemScore?
+    /// Live with `--live-trace` only: every decode, dropped hop, boundary and commit, the CPU
+    /// the replay used and the commit-invariant check. Numbers only (`eval/live_latency.py`).
+    var liveTrace: LiveReplayTrace?
     /// What produced this run: model, revision, machine, settings.
     var provenance: RunProvenance?
     /// Whole-file RTF, live latency, process footprint and model residency, apart.
@@ -372,6 +389,7 @@ var windowSpans: [WindowSpan] = []
 var offlineRegions: [SpeechRegion]?
 var liveStats: SessionStats?
 var liveConfig: SessionConfig?
+var liveReplayTrace: LiveReplayTrace?
 var commitLatency = CommitLatencyTracker()
 var commitLatencyWall = CommitLatencyTracker()
 let decodeStarted = Date()
@@ -380,8 +398,11 @@ if options.live {
     // The live path, fed from the file. Same decoder, same schedule, same
     // commit policy as a recording -- minus the microphone.
     let config = SessionConfig(
-        contextMs: options.contextMs, hopMs: options.hopMs, language: options.language,
-        prompt: prompt, preRollMs: options.preRollMs, adaptiveHop: options.adaptiveHop
+        contextMs: options.contextMs, hopMs: options.hopMs,
+        silenceBoundaryMs: options.silenceBoundaryMs, language: options.language,
+        prompt: prompt, preRollMs: options.preRollMs, adaptiveHop: options.adaptiveHop,
+        minHopMs: options.minHopMs, headTolerance: options.headTolerance,
+        headMinRun: options.headMinRun
     )
     liveConfig = config
     await vad.reset()
@@ -390,8 +411,10 @@ if options.live {
     // `ingest`, so a word committed during that call is measured against the
     // audio that had arrived and not the audio before it.
     var fedMs = 0
-    let replayStarted = Date()
-    decoder.onCommitted = { committed in
+    var replayStarted = Date()
+    // Always installed: it checks that committed text was only ever appended to, on every
+    // live replay, and the report carries its numbers when `--live-trace` is given.
+    let recorder = LiveReplayRecorder(decoder: decoder, realtime: options.realtime) { committed in
         tokens += committed
         commitLatency.record(committed, atMs: fedMs)
         if options.realtime {
@@ -401,23 +424,37 @@ if options.live {
     }
     log("live replay: hop \(config.hopMs) ms, pre-roll \(config.preRollMs) ms, context "
         + "\(config.contextMs) ms\(config.adaptiveHop ? ", adaptive hop" : "")"
+        + ", silence boundary \(config.silenceBoundaryMs) ms"
+        + (config.headTolerance > 0
+            ? ", head tolerance \(config.headTolerance) (run \(config.headMinRun))" : "")
         + "\(options.realtime ? ", real-time pacing" : ", every decode awaited")")
 
     let chunkMs = 100
     var cursor = 0
+    // Real-time pacing follows one absolute clock, so a slow iteration is made up and the
+    // replay does not drift by the cost of each chunk. A chunk is handed over when its last
+    // sample has been "captured", as a microphone tap delivers it.
+    let paceClock = ContinuousClock()
+    replayStarted = Date()
+    let paceStart = paceClock.now
+    recorder.begin()
     while cursor < source.durationMs {
         let end = min(source.durationMs, cursor + chunkMs)
+        if options.realtime {
+            try? await Task.sleep(until: paceStart + .milliseconds(end), clock: paceClock)
+        }
         fedMs = end
+        recorder.noteFed(end)
         decoder.ingest(PCM.data(from: source.floats(msRange: cursor..<end)))
         cursor = end
-        if options.realtime {
-            try? await Task.sleep(for: .milliseconds(chunkMs))
-        } else {
+        if !options.realtime {
             await decoder.drain()
         }
     }
     fedMs = source.durationMs
+    recorder.noteFed(source.durationMs)
     await decoder.finish()
+    liveReplayTrace = recorder.finish()
     let stats = decoder.stats
     liveStats = stats
     detectedLanguage = options.language
@@ -425,8 +462,13 @@ if options.live {
         + "\(stats.forcedCommits) forced, \(stats.boundaries) boundaries "
         + "(\(stats.finalizations) final decodes, \(stats.finalizationsAbandoned) abandoned), "
         + "\(stats.unagreedTailCommits) unagreed tail words, \(stats.finalFlushOnEmpty) empty finals, "
-        + "\(stats.duplicatesDropped) deduplicated, "
-        + "mean RTF \(String(format: "%.3f", stats.meanRtf))")
+        + "\(stats.duplicatesDropped) deduplicated, \(stats.headSkips) head skips "
+        + "(\(stats.headSkippedWords) words), mean RTF \(String(format: "%.3f", stats.meanRtf))")
+    if let invariants = liveReplayTrace?.invariants {
+        log(invariants.holds
+            ? "commit invariant: held over \(invariants.words) words in \(invariants.batches) batches"
+            : "COMMIT INVARIANT VIOLATED: \(invariants.violations.map { "\($0.kind): \($0.detail)" }.joined(separator: "; "))")
+    }
     if stats.failedHops > 0 {
         log("  WARNING \(stats.failedHops) decode(s) failed: \(stats.lastError ?? "")")
     }
@@ -560,6 +602,10 @@ if let config = liveConfig {
     settings["contextMs"] = String(config.contextMs)
     settings["preRollMs"] = String(config.preRollMs)
     settings["adaptiveHop"] = String(config.adaptiveHop)
+    settings["minHopMs"] = String(config.minHopMs)
+    settings["silenceBoundaryMs"] = String(config.silenceBoundaryMs)
+    settings["headTolerance"] = String(config.headTolerance)
+    settings["headMinRun"] = String(config.headMinRun)
 }
 let provenance = RunProvenance(
     label: options.label ?? modelId,
@@ -642,6 +688,7 @@ if let jsonURL = options.json {
         memory: memory,
         windows: windowSpans.isEmpty ? nil : windowSpans,
         evaluation: evaluation,
+        liveTrace: options.liveTrace ? liveReplayTrace : nil,
         provenance: provenance,
         performance: performance
     )

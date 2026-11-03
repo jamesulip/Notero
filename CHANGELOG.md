@@ -10,6 +10,29 @@
   when the selection changes, and the export sheet says which revision it will write when that
   is not the latest. Ported from the first part of #10.
 
+### Live latency
+
+- **A controlled experiment on the live path** (`eval/live_latency.py`) tested six variants, one at a
+  time, against the production configuration, on real public audio (Liva AI, AMI, FLEURS), in real time,
+  with the control run twice in every block as an A/A. **No variant met every gate, and the live
+  configuration does not change.** Head-tolerant agreement stays off: its median commit latency gain was
+  0.6% and 14.5% in the two sessions (7.8% pooled, with an interval that includes 0), and its p90 gain of
+  27% in the first session did not repeat (7%). The adaptive hop gave about 17% in both sessions, under the
+  20% bar. [BENCHMARKS.md](docs/BENCHMARKS.md#live-commit-latency-2026-11-02)
+  and finding 38 in [FINDINGS.md](docs/FINDINGS.md) give the numbers. The plans, every run's numbers and the
+  decision are in `eval/baselines/live-latency-2026-11-02/`. No audio and no words are in the repository.
+- **`transcribe --live` checks that committed text is only ever appended to,** on every replay
+  (`CommitInvariantMonitor`). It reports `commit invariant: held over N words`, or names what broke.
+  The check held over 33,937 words in 108 replays.
+- **New `transcribe --live` options:** `--head-tolerance`, `--head-min-run`, `--silence-boundary`,
+  `--min-hop` and `--live-trace`, which adds every decode, dropped hop, utterance end and commit, with its
+  reason and the CPU used, to the JSON report (numbers only). `LiveReplayRecorder` records them.
+- **`--realtime` now follows one absolute clock** and hands each 100 ms chunk over when its last sample
+  would have been captured. It no longer drifts by the cost of each chunk.
+- **Tests:** 22 Swift tests (the invariant monitor, the recorder, and a property test that runs the
+  invariant over every variant on random scripted sessions) and 67 Python tests for the experiment's
+  metrics, statistics and gate.
+
 ### Evaluation framework
 
 - **`transcribe --score` scores saved transcripts with one written method,** and loads no model,

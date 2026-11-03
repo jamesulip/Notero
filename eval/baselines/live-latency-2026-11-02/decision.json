@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "created": "2026-11-03T00:03:11+08:00",
+  "rule": "unchanged unless every gate passes; the feature flag stays off otherwise",
+  "reproducibility": "every rule above holds in session 1 AND in session 2, which runs later, in its own invocation, on the clips of session 1 and the held-out clips",
+  "problems": [],
+  "verdicts": {
+    "ADA": {
+      "per_session": {
+        "1": {
+          "reduction": 0.1705832558423911,
+          "all_pass": false,
+          "failed": [
+            "latency",
+            "missingSpeech",
+            "hallucinations",
+            "uncontended"
+          ]
+        },
+        "2": {
+          "reduction": 0.16678297936834685,
+          "all_pass": false,
+          "failed": [
+            "latency",
+            "uncontended"
+          ]
+        }
+      },
+      "ran_in_every_session": true,
+      "meets_every_gate": false
+    },
+    "CTX": {
+      "per_session": {
+        "1": {
+          "reduction": 0.08160715733105772,
+          "all_pass": false,
+          "failed": [
+            "latency",
+            "wer",
+            "missingSpeech",
+            "hallucinations",
+            "uncontended"
+          ]
+        },
+        "2": null
+      },
+      "ran_in_every_session": false,
+      "meets_every_gate": false
+    },
+    "HOP": {
+      "per_session": {
+        "1": {
+          "reduction": 0.10034639455410221,
+          "all_pass": false,
+          "failed": [
+            "latency",
+            "missingSpeech",
+            "hallucinations",
+            "uncontended"
+          ]
+        },
+        "2": null
+      },
+      "ran_in_every_session": false,
+      "meets_every_gate": false
+    },
+    "HT": {
+      "per_session": {
+        "1": {
+          "reduction": 0.005638956684942187,
+          "all_pass": false,
+          "failed": [
+            "latency",
+            "missingSpeech",
+            "uncontended"
+          ]
+        },
+        "2": {
+          "reduction": 0.1450864071393526,
+          "all_pass": false,
+          "failed": [
+            "latency",
+            "missingSpeech",
+            "hallucinations",
+            "uncontended"
+          ]
+        }
+      },
+      "ran_in_every_session": true,
+      "meets_every_gate": false
+    },
+    "PRE": {
+      "per_session": {
+        "1": {
+          "reduction": -0.10314873340804653,
+          "all_pass": false,
+          "failed": [
+            "latency",
+            "wer",
+            "missingSpeech",
+            "hallucinations",
+            "uncontended"
+          ]
+        },
+        "2": null
+      },
+      "ran_in_every_session": false,
+      "meets_every_gate": false
+    },
+    "VAD": {
+      "per_session": {
+        "1": {
+          "reduction": -0.014334030796871344,
+          "all_pass": false,
+          "failed": [
+            "latency",
+            "wer",
+            "hallucinations",
+            "uncontended"
+          ]
+        },
+        "2": null
+      },
+      "ran_in_every_session": false,
+      "meets_every_gate": false
+    }
+  },
+  "meetEveryGate": [],
+  "changeDefaultTo": [],
+  "productionConfigurationChanged": false,
+  "note": "only one variable is ever changed at once; combinations were not tested"
+}
